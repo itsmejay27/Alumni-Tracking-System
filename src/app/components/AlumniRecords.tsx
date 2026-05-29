@@ -1,6 +1,6 @@
 import { mockRecords } from './csvRecords';
 import React, { useState } from 'react';
-import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle } from 'lucide-react';
+import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X } from 'lucide-react';
 
 interface AlumniRecord {
   id: string;
@@ -251,72 +251,127 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             </div>
           </div>
 
-          {/* Records Table */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted/50 border-b border-border/70">
-                  <tr>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Student ID</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Name</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Course</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Batch</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Current Position</th>
-                    <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {filteredRecords.map((record) => (
-                    <tr key={record.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-6 py-4 font-mono text-sm text-primary font-bold">{record.studentId}</td>
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-foreground">{record.givenName} {record.lastName}</div>
-                        <div className="text-xs text-muted-foreground">{record.email}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-xs px-2.5 py-1 bg-muted rounded-lg border border-border/40">{record.course}</span>
-                      </td>
-                      <td className="px-6 py-4 font-medium">{record.batch}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                            record.status === 'Employed'
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                              : record.status === 'Self-Employed'
-                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                              : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                          }`}
-                        >
-                          {record.status}
+          {/* Records View (Mobile-responsive cards or Desktop Table) */}
+          <div className="space-y-4">
+            {/* Mobile Cards (visible on mobile only) */}
+            <div className="block md:hidden space-y-4">
+              {filteredRecords.map((record) => (
+                <div key={record.id} className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <span className="font-mono text-xs text-primary font-bold">{record.studentId}</span>
+                      <h4 className="font-bold text-foreground text-base mt-0.5">{record.givenName} {record.lastName}</h4>
+                      <p className="text-xs text-muted-foreground break-all">{record.email}</p>
+                    </div>
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border shrink-0 ${
+                        record.status === 'Employed'
+                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                          : record.status === 'Self-Employed'
+                          ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                          : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                      }`}
+                    >
+                      {record.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-muted/40 p-3 rounded-lg border border-border/50">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Course</span>
+                      <span className="font-bold text-foreground">{record.course}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Batch</span>
+                      <span className="font-bold text-foreground">{record.batch}</span>
+                    </div>
+                    {record.status !== 'Unemployed' && (
+                      <div className="col-span-2 border-t border-border/30 pt-2 mt-1">
+                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Current Job</span>
+                        <span className="font-semibold text-foreground text-xs block mt-0.5 leading-snug">
+                          {record.currentPosition} <span className="text-muted-foreground">at</span> {record.currentCompany}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {record.status !== 'Unemployed' ? (
-                          <div className="text-xs">
-                            <p className="font-semibold text-foreground truncate max-w-[180px]">{record.currentPosition}</p>
-                            <p className="text-muted-foreground truncate max-w-[180px]">{record.currentCompany}</p>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Actively seeking work</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setSelectedRecord(record)}
-                          className="px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs rounded-lg transition-all"
-                        >
-                          Details
-                        </button>
-                      </td>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedRecord(record)}
+                    className="w-full py-2.5 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs rounded-lg transition-all text-center border border-primary/20 hover:border-transparent"
+                  >
+                    View Full Details
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table (visible on desktop only) */}
+            <div className="hidden md:block bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted/50 border-b border-border/70">
+                    <tr>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Student ID</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Name</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Course</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Batch</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Current Position</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {filteredRecords.map((record) => (
+                      <tr key={record.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-6 py-4 font-mono text-sm text-primary font-bold">{record.studentId}</td>
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-foreground">{record.givenName} {record.lastName}</div>
+                          <div className="text-xs text-muted-foreground">{record.email}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-bold text-xs px-2.5 py-1 bg-muted rounded-lg border border-border/40">{record.course}</span>
+                        </td>
+                        <td className="px-6 py-4 font-medium">{record.batch}</td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                              record.status === 'Employed'
+                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                : record.status === 'Self-Employed'
+                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                                : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                            }`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {record.status !== 'Unemployed' ? (
+                            <div className="text-xs">
+                              <p className="font-semibold text-foreground truncate max-w-[180px]">{record.currentPosition}</p>
+                              <p className="text-muted-foreground truncate max-w-[180px]">{record.currentCompany}</p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Actively seeking work</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedRecord(record)}
+                            className="px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs rounded-lg transition-all"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {filteredRecords.length === 0 && (
-              <div className="text-center py-16">
+              <div className="bg-card border border-border rounded-xl text-center py-16 shadow-sm">
                 <Filter className="mx-auto mb-3 text-muted-foreground/60" size={48} />
                 <h4 className="font-bold text-lg mb-0.5">No Records Found</h4>
                 <p className="text-muted-foreground text-sm max-w-sm mx-auto">Try refining your filters or query to locate alumni profiles.</p>
@@ -393,22 +448,31 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 
 function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-card border border-border rounded-xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-card border border-border rounded-xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
         
+        {/* Close Button Top Right */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground p-1.5 hover:bg-muted rounded-lg transition-colors z-10"
+          aria-label="Close modal"
+        >
+          <X size={20} />
+        </button>
+
         {/* Main Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-border">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-border pr-8">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-primary/10 text-primary border border-primary/20 rounded-lg flex items-center justify-center font-bold text-xl uppercase shadow-inner shrink-0">
               {record.givenName[0]}{record.lastName[0]}
             </div>
             <div>
-              <h3 className="text-2xl font-black text-foreground">{record.givenName} {record.lastName}</h3>
+              <h3 className="text-xl sm:text-2xl font-black text-foreground leading-tight">{record.givenName} {record.lastName}</h3>
               <p className="text-sm font-mono text-primary font-bold mt-0.5">Student ID: {record.studentId}</p>
             </div>
           </div>
           <span
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold border shrink-0 text-center ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold border shrink-0 text-center self-start sm:self-auto ${
               record.status === 'Employed'
                 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                 : record.status === 'Self-Employed'
@@ -429,7 +493,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Email Contact</p>
-                <p className="font-bold text-foreground truncate mt-0.5">{record.email}</p>
+                <p className="font-bold text-foreground break-all mt-0.5">{record.email}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Mobile No.</p>
@@ -437,8 +501,8 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Facebook Profile</p>
-                <div className="flex items-center gap-1 text-blue-600 font-bold mt-0.5">
-                  <Facebook size={14} />
+                <div className="flex items-center gap-1 text-blue-600 font-bold mt-0.5 break-all">
+                  <Facebook size={14} className="shrink-0" />
                   <span>{record.facebookName}</span>
                 </div>
               </div>
@@ -454,11 +518,11 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
                 <p className="text-xs text-muted-foreground font-semibold">Civil Status</p>
                 <p className="font-bold text-foreground mt-0.5">{record.civilStatus}</p>
               </div>
-              <div className="sm:col-span-3 border-t border-border/40 pt-3 mt-1">
+              <div className="col-span-full border-t border-border/40 pt-3 mt-1">
                 <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Present Address</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.presentAddress}</p>
               </div>
-              <div className="sm:col-span-3">
+              <div className="col-span-full">
                 <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Permanent Address</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.permanentAddress}</p>
               </div>

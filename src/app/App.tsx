@@ -283,9 +283,11 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 2. MOBILE MENU HEADER & DRAWER */}
-      <div className="md:hidden flex flex-col w-full h-full min-h-0">
-        <header className="flex items-center justify-between px-6 py-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
+      {/* Main container wrapping the Mobile Header & unified viewport */}
+      <div className="flex-1 flex flex-col w-full h-full min-h-0 overflow-hidden">
+        
+        {/* 2. MOBILE MENU HEADER */}
+        <header className="md:hidden flex items-center justify-between px-6 py-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="w-9 h-9 bg-white border border-border rounded-full flex items-center justify-center overflow-hidden p-0.5">
               <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
@@ -378,8 +380,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Mobile Page Content Viewport */}
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        {/* 3. UNIFIED CONTENT VIEWPORT */}
+        <main className="flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8 min-w-0">
           {isAdmin ? (
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
@@ -401,29 +403,6 @@ export default function App() {
           )}
         </main>
       </div>
-
-      {/* 3. DESKTOP MAIN VIEWPORT */}
-      <main className="hidden md:block flex-1 overflow-y-auto px-8 py-8">
-        {isAdmin ? (
-          <>
-            {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
-            {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
-            {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-            {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
-            {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
-          </>
-        ) : (
-          <>
-            {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} />}
-            {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
-            {activeTab === 'officials' && <CollegeOfficialsDirectory />}
-            {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-            {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
-            {activeTab === 'contact' && <ContactView />}
-            {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
-          </>
-        )}
-      </main>
 
       <Toaster position="top-right" closeButton richColors />
     </div>

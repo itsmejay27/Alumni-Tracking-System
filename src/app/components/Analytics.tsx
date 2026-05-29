@@ -239,7 +239,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pie Chart Distribution */}
-            <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01]">
+            <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01] min-w-0">
               <h3 className="text-lg font-extrabold text-foreground mb-6">Status Distribution ({selectedBatch === 'all' ? 'All Batches' : `Batch ${selectedBatch}`})</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -249,7 +249,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                     cy="50%"
                     labelLine={false}
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
+                    outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -271,7 +271,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
             </div>
 
             {/* Trend Line Chart */}
-            <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01]">
+            <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01] min-w-0">
               <h3 className="text-lg font-extrabold text-foreground mb-6">Employment Rate Trend % across Batches</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={trendData}>
@@ -286,7 +286,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
           </div>
 
           {/* Comparison Bar Chart */}
-          <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01]">
+          <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-lg shadow-black/[0.01] min-w-0">
             <h3 className="text-lg font-extrabold text-foreground mb-6">
               {selectedBatch === 'all' 
                 ? 'Status Comparison by Graduation Batch' 
@@ -306,12 +306,48 @@ export function Analytics({ userRole }: AnalyticsProps) {
             </ResponsiveContainer>
           </div>
 
-          {/* Batch Summary Table */}
+          {/* Batch Summary (Mobile Cards or Desktop Table) */}
           <div className="bg-card border border-border/80 rounded-2xl overflow-hidden shadow-lg shadow-black/[0.01]">
             <div className="p-6 border-b border-border/80 bg-muted/20">
               <h3 className="text-lg font-extrabold text-foreground">Accreditation Batch Summary</h3>
             </div>
-            <div className="overflow-x-auto">
+            
+            {/* Mobile View - Cards */}
+            <div className="block md:hidden divide-y divide-border/60">
+              {batchData.map((batch, index) => {
+                const total = batch.employed + batch.unemployed + batch.notTracked;
+                const rate = total > 0 ? Math.round((batch.employed / total) * 100) : 0;
+                return (
+                  <div key={index} className="p-5 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-base text-foreground">Batch {batch.batch}</span>
+                      <span className="font-black text-primary text-xs bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20">{rate}% Employment</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-muted/30 p-3 rounded-lg border border-border/50">
+                      <div>
+                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Total Graduates</span>
+                        <span className="font-bold text-foreground text-sm">{total}</span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-600 block text-[10px] uppercase font-semibold">Employed</span>
+                        <span className="font-bold text-emerald-600 text-sm">{batch.employed}</span>
+                      </div>
+                      <div>
+                        <span className="text-amber-600 block text-[10px] uppercase font-semibold">Unemployed</span>
+                        <span className="font-bold text-amber-600 text-sm">{batch.unemployed}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase font-semibold">Not Tracked</span>
+                        <span className="font-bold text-slate-500 text-sm">{batch.notTracked}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View - Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-muted/50 border-b border-border/70">
                   <tr>

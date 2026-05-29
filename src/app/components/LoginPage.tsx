@@ -110,12 +110,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 hover:bg-blue-500/10 transition-colors">
                 <p className="font-bold text-primary mb-1">Super Admin Account</p>
-                <p className="text-muted-foreground">Email: <span className="font-mono select-all">admin@omsc.edu.ph</span></p>
+                <p className="text-muted-foreground">Email: <span className="font-mono select-all break-all">admin@omsc.edu.ph</span></p>
                 <p className="text-muted-foreground">Password: <span className="font-mono">admin123</span></p>
               </div>
               <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 hover:bg-emerald-500/10 transition-colors">
                 <p className="font-bold text-emerald-600 mb-1">Alumni Account</p>
-                <p className="text-muted-foreground">Email: <span className="font-mono">name@omsc.edu.ph</span></p>
+                <p className="text-muted-foreground">Email: <span className="font-mono break-all">name@omsc.edu.ph</span></p>
                 <p className="text-muted-foreground">Password: <span className="font-mono">any password</span></p>
               </div>
               <div className="col-span-1 sm:col-span-2 bg-amber-500/5 border border-amber-500/10 rounded-xl p-3">
@@ -123,11 +123,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   <BookOpen size={12} /> Course Admins (Course Specific access)
                 </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground">
-                  <div>BSIT: <span className="text-foreground">admin.bsit / bsit123</span></div>
-                  <div>BEED: <span className="text-foreground">admin.beed / beed123</span></div>
-                  <div>BSOA: <span className="text-foreground">admin.bsoa / bsoa123</span></div>
-                  <div>BSBA-FM: <span className="text-foreground text-[9px]">admin.bsba-fm / bsbafm123</span></div>
-                  <div>BSBA-OM: <span className="text-foreground text-[9px]">admin.bsba-om / bsbaom123</span></div>
+                  <div>BSIT: <span className="text-foreground break-all">admin.bsit / bsit123</span></div>
+                  <div>BEED: <span className="text-foreground break-all">admin.beed / beed123</span></div>
+                  <div>BSOA: <span className="text-foreground break-all">admin.bsoa / bsoa123</span></div>
+                  <div>BSBA-FM: <span className="text-foreground text-[9px] break-all">admin.bsba-fm / bsbafm123</span></div>
+                  <div>BSBA-OM: <span className="text-foreground text-[9px] break-all">admin.bsba-om / bsbaom123</span></div>
                 </div>
                 <p className="text-[10px] text-amber-500/70 mt-1.5">Suffix all emails with @omsc.edu.ph</p>
               </div>
