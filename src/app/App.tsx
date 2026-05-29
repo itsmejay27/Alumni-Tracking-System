@@ -198,7 +198,7 @@ export default function App() {
   const menuItems = isAdmin ? adminMenuItems : alumniMenuItems;
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-background text-foreground overflow-hidden font-sans">
       
       {/* 1. SIDEBAR NAVIGATION - DESKTOP */}
       <aside 
@@ -284,7 +284,7 @@ export default function App() {
       </aside>
 
       {/* 2. MOBILE MENU HEADER & DRAWER */}
-      <div className="md:hidden flex flex-col w-full h-screen">
+      <div className="md:hidden flex flex-col w-full h-full min-h-0">
         <header className="flex items-center justify-between px-6 py-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
           <div className="flex items-center gap-3.5">
             <div className="w-9 h-9 bg-white border border-border rounded-full flex items-center justify-center overflow-hidden p-0.5">
