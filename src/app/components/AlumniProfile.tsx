@@ -1,60 +1,115 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Briefcase, GraduationCap, Building2, Save, FileImage, ClipboardList, Info, HelpCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { CurrentUser } from '../App';
+import { Course, fetchMyRecord, saveMyRecord } from '@/lib/alumni';
+import { LoadingState } from './DataState';
 
 interface AlumniProfileProps {
   currentUser: CurrentUser | null;
-  onUpdateProfile: (updated: CurrentUser) => void;
+  onUpdateProfile: (updated: CurrentUser) => Promise<void> | void;
 }
+
+const COURSE_OPTIONS: { code: Course; label: string }[] = [
+  { code: 'BEED', label: 'Bachelor of Elementary Education (BEED)' },
+  { code: 'BSIT', label: 'Bachelor of Science in Information Technology (BSIT)' },
+  { code: 'BSBA-FM', label: 'Bachelor of Science in Business Administration (BSBA) Major in Financial Management' },
+  { code: 'BSBA-OM', label: 'Bachelor of Science in Business Administration (BSBA) Major in Operation Management' },
+  { code: 'BSOA', label: 'Bachelor of Science in Office Administration (BSOA)' },
+];
+const courseLabel = (code: string) => COURSE_OPTIONS.find((c) => c.code === code)?.label || COURSE_OPTIONS[1].label;
+const courseCode = (label: string): Course => COURSE_OPTIONS.find((c) => c.label === label)?.code || 'BSIT';
 
 export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfileProps) {
   const [success, setSuccess] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  
-  // Entire set of detailed fields requested by user
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [recordId, setRecordId] = useState<string | undefined>(undefined);
+  const [studentId, setStudentId] = useState('');
+
   const [formData, setFormData] = useState({
-    // Account details
-    email: currentUser?.email || 'juan.delacruz@omsc.edu.ph',
-    
+    email: currentUser?.email || '',
+
     // Personal Info
     avatarUrl: currentUser?.avatarUrl || '',
-    lastName: currentUser?.lastName || 'DELA CRUZ',
-    givenName: currentUser?.givenName || 'JUAN',
-    middleName: currentUser?.middleName || 'MENDOZA',
-    presentAddress: currentUser?.presentAddress || '123 Rizal St., Barangay San Roque, San Jose, Occidental Mindoro',
-    permanentAddress: currentUser?.permanentAddress || '123 Rizal St., Barangay San Roque, San Jose, Occidental Mindoro',
-    sex: currentUser?.sex || 'Male', // Female / Male
-    dateOfBirth: currentUser?.dateOfBirth || '1998-05-15',
-    civilStatus: currentUser?.civilStatus || 'Single', // Single, Married, Separated, Widowed
-    mobileNo: currentUser?.mobileNo || '09171234567',
-    facebookName: currentUser?.facebookName || 'Juan Dela Cruz Official',
+    lastName: currentUser?.lastName || '',
+    givenName: currentUser?.givenName || '',
+    middleName: currentUser?.middleName || '',
+    presentAddress: currentUser?.presentAddress || '',
+    permanentAddress: currentUser?.permanentAddress || '',
+    sex: currentUser?.sex || 'Male',
+    dateOfBirth: currentUser?.dateOfBirth || '',
+    civilStatus: currentUser?.civilStatus || 'Single',
+    mobileNo: currentUser?.mobileNo || '',
+    facebookName: currentUser?.facebookName || '',
 
     // Educational Background
-    course: 'Bachelor of Science in Information Technology (BSIT)',
-    academicYear: '2018-2019',
+    course: COURSE_OPTIONS[1].label,
+    academicYear: '2019-2020',
 
     // Employment History
-    status: 'Employed', // Employed, Self-Employed, Unemployed
-    employmentStatus: 'PERMANENT', // PERMANENT, CONTRACTUAL, DAILY WAGE
-    employerName: 'GlobalCorp Inc. Philippines',
-    companyType: 'Private', // Private, Semi-Private, Government, NGO/INGO
-    employerAddress: 'Fort Bonifacio, Taguig City, Metro Manila',
-    jobTitle: 'Senior Full Stack Software Engineer',
-    jobDescription: 'Maintains enterprise APIs, builds modern UI dashboards, and conducts code reviews.',
-    lengthOfService: '4 Years and 6 Months',
+    status: 'Employed',
+    employmentStatus: 'PERMANENT',
+    employerName: '',
+    companyType: 'Private',
+    employerAddress: '',
+    jobTitle: '',
+    jobDescription: '',
+    lengthOfService: '',
 
-    // Suggestions / Feedback
-    suggestions: 'Great system! Suggesting adding more networking mixers for technical alumni to meet and share job referrals.',
-    isPublic: true, // directory networking preference
+    suggestions: '',
+    isPublic: true,
   });
+
+  // Prefill from the alumnus's existing tracer record, if any
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    fetchMyRecord(currentUser.id)
+      .then((rec) => {
+        if (cancelled || !rec) return;
+        setRecordId(rec.id);
+        setStudentId(rec.studentId || '');
+        setFormData((f) => ({
+          ...f,
+          lastName: f.lastName || rec.lastName,
+          givenName: f.givenName || rec.givenName,
+          middleName: f.middleName || rec.middleName,
+          presentAddress: f.presentAddress || rec.presentAddress,
+          permanentAddress: f.permanentAddress || rec.permanentAddress,
+          sex: rec.sex || f.sex,
+          dateOfBirth: f.dateOfBirth || rec.dateOfBirth,
+          civilStatus: rec.civilStatus || f.civilStatus,
+          mobileNo: f.mobileNo || rec.mobileNo,
+          facebookName: f.facebookName || rec.facebookName,
+          course: courseLabel(rec.course),
+          academicYear: rec.batch || f.academicYear,
+          status: rec.status || f.status,
+          employmentStatus: rec.employmentStatus || f.employmentStatus,
+          employerName: rec.currentCompany || '',
+          companyType: rec.employerType || f.companyType,
+          employerAddress: rec.employerAddress || '',
+          jobTitle: rec.currentPosition || '',
+          jobDescription: rec.jobDescription || '',
+          lengthOfService: rec.lengthOfService || '',
+          suggestions: rec.suggestions || '',
+          isPublic: rec.isPublic ?? true,
+        }));
+      })
+      .catch((err) => toast.error(`Could not load your tracer record: ${err.message}`))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024 * 1024) { // 1GB check
-        alert('File size exceeds the 1 GB limit.');
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image must be 2 MB or smaller.');
         return;
       }
       const reader = new FileReader();
@@ -65,45 +120,81 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
+    setSaving(true);
 
-    // Sync back to global user state
-    if (currentUser) {
-      onUpdateProfile({
-        ...currentUser,
-        lastName: formData.lastName.trim().toUpperCase(),
-        givenName: formData.givenName.trim().toUpperCase(),
-        middleName: formData.middleName.trim().toUpperCase(),
-        email: formData.email.trim().toLowerCase(),
-        mobileNo: formData.mobileNo.trim(),
-        presentAddress: formData.presentAddress.trim(),
-        permanentAddress: formData.permanentAddress.trim(),
-        sex: formData.sex as 'Male' | 'Female',
-        civilStatus: formData.civilStatus as any,
-        dateOfBirth: formData.dateOfBirth,
-        facebookName: formData.facebookName.trim(),
-        avatarUrl: formData.avatarUrl,
+    const employed = formData.status !== 'Unemployed';
+    const avatarUrl = imagePreview || formData.avatarUrl;
+    const updatedUser: CurrentUser = {
+      ...currentUser,
+      lastName: formData.lastName.trim().toUpperCase(),
+      givenName: formData.givenName.trim().toUpperCase(),
+      middleName: formData.middleName.trim().toUpperCase(),
+      mobileNo: formData.mobileNo.trim(),
+      presentAddress: formData.presentAddress.trim(),
+      permanentAddress: formData.permanentAddress.trim(),
+      sex: formData.sex as 'Male' | 'Female',
+      civilStatus: formData.civilStatus as CurrentUser['civilStatus'],
+      dateOfBirth: formData.dateOfBirth,
+      facebookName: formData.facebookName.trim(),
+      avatarUrl,
+    };
+
+    try {
+      const newId = await saveMyRecord(currentUser.id, {
+        id: recordId,
+        studentId,
+        lastName: updatedUser.lastName,
+        givenName: updatedUser.givenName,
+        middleName: updatedUser.middleName,
+        email: currentUser.email,
+        batch: formData.academicYear,
+        yearGraduated: Number(formData.academicYear.split('-')[1]) || 0,
+        sex: updatedUser.sex,
+        dateOfBirth: updatedUser.dateOfBirth,
+        civilStatus: updatedUser.civilStatus,
+        mobileNo: updatedUser.mobileNo,
+        facebookName: updatedUser.facebookName,
+        presentAddress: updatedUser.presentAddress,
+        permanentAddress: updatedUser.permanentAddress,
+        course: courseCode(formData.course),
+        status: formData.status as 'Employed' | 'Self-Employed' | 'Unemployed',
+        employmentStatus: employed ? (formData.employmentStatus as 'PERMANENT' | 'CONTRACTUAL' | 'DAILY WAGE') : undefined,
+        currentPosition: employed ? formData.jobTitle.trim() : undefined,
+        currentCompany: employed ? formData.employerName.trim() : undefined,
+        employerType: employed ? (formData.companyType as 'Private' | 'Semi-Private' | 'Government' | 'NGO/INGO') : undefined,
+        employerAddress: employed ? formData.employerAddress.trim() : undefined,
+        jobDescription: employed ? formData.jobDescription.trim() : undefined,
+        lengthOfService: employed ? formData.lengthOfService.trim() : undefined,
+        lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+        suggestions: formData.suggestions.trim(),
+        isPublic: formData.isPublic,
       });
+      setRecordId(newId);
+      await onUpdateProfile(updatedUser);
+    } catch (err: any) {
+      toast.error(`Could not save: ${err.message}`);
+      setSaving(false);
+      return;
     }
 
+    setSaving(false);
     setSuccess(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    
-    // Sonner toast notifications
     toast.success('Profile and Employment Information updated successfully!');
-    
-    setTimeout(() => {
-      setSuccess(false);
-    }, 5000);
+    setTimeout(() => setSuccess(false), 5000);
   };
+
+  if (loading) return <LoadingState label="Loading your tracer record..." />;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight">My Alumni Profile</h2>
-          <p className="text-muted-foreground mt-1">Keep your demographic and employment details updated for OMSC accreditation</p>
+          <p className="text-muted-foreground mt-1">Keep your demographic and employment details updated for OMSU accreditation</p>
         </div>
       </div>
 
@@ -112,7 +203,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           <CheckCircle2 className="text-emerald-600 shrink-0" size={24} />
           <div>
             <p className="font-bold">Record Saved Successfully!</p>
-            <p className="text-xs text-emerald-700/90 mt-0.5">Your profile updates have been transmitted to the OMSC Department Administrator.</p>
+            <p className="text-xs text-emerald-700/90 mt-0.5">Your profile updates have been transmitted to the OMSU Department Administrator.</p>
           </div>
         </div>
       )}
@@ -153,7 +244,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                   >
                     Choose Image File
                   </label>
-                  <p className="text-[11px] text-muted-foreground mt-1">Supports PNG, JPG, or JPEG. Max size 1 GB.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Supports PNG, JPG, or JPEG. Max size 2 MB.</p>
                 </div>
               </div>
             </div>
@@ -200,10 +291,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email Address *</label>
                 <input
                   type="email"
-                  required
+                  readOnly
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  title="This is your sign-in email"
+                  className="w-full px-4 py-2 bg-muted border border-border rounded-lg focus:outline-none text-sm font-medium text-muted-foreground"
                 />
               </div>
 
@@ -325,17 +416,15 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Degree finished from OMSC - Courses *</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Degree finished from OMSU - Courses *</label>
               <select
                 value={formData.course}
                 onChange={(e) => setFormData({ ...formData, course: e.target.value })}
                 className="w-full px-4 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
               >
-                <option value="Bachelor of Elementary Education (BEED)">Bachelor of Elementary Education (BEED)</option>
-                <option value="Bachelor of Science in Information Technology (BSIT)">Bachelor of Science in Information Technology (BSIT)</option>
-                <option value="Bachelor of Science in Business Administration (BSBA) Major in Financial Management">Bachelor of Science in Business Administration (BSBA) Major in Financial Management</option>
-                <option value="Bachelor of Science in Business Administration (BSBA) Major in Operation Management">Bachelor of Science in Business Administration (BSBA) Major in Operation Management</option>
-                <option value="Bachelor of Science in Office Administration (BSOA)">Bachelor of Science in Office Administration (BSOA)</option>
+                {COURSE_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.label}>{c.label}</option>
+                ))}
               </select>
             </div>
 
@@ -357,6 +446,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <option value="2017-2018">2017-2018</option>
                 <option value="2018-2019">2018-2019</option>
                 <option value="2019-2020">2019-2020</option>
+                <option value="2020-2021">2020-2021</option>
+                <option value="2021-2022">2021-2022</option>
+                <option value="2022-2023">2022-2023</option>
+                <option value="2023-2024">2023-2024</option>
+                <option value="2024-2025">2024-2025</option>
+                <option value="2025-2026">2025-2026</option>
               </select>
             </div>
           </div>
@@ -500,9 +595,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
               className="mt-1 w-5 h-5 text-primary border-border focus:ring-primary rounded"
             />
             <label htmlFor="isPublic" className="text-sm cursor-pointer space-y-1">
-              <span className="font-bold text-foreground block">Opt-in to the public OMSC Alumni Directory</span>
+              <span className="font-bold text-foreground block">Opt-in to the public OMSU Alumni Directory</span>
               <span className="text-xs text-muted-foreground block leading-relaxed">
-                Checking this box allows other verified OMSC alumni to find your profile (Name, Course, Batch, Status, and Current Position) in the Networking Directory to support career mixers and peer referrals. Your personal physical addresses, date of birth, and civil status are **never** shown to other alumni.
+                Checking this box allows other verified OMSU alumni to find your profile (Name, Course, Batch, Status, and Current Position) in the Networking Directory to support career mixers and peer referrals. Your personal physical addresses, date of birth, and civil status are **never** shown to other alumni.
               </span>
             </label>
           </div>
@@ -517,14 +612,14 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <h3 className="text-lg font-bold">Suggestions & Feedback</h3>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Suggestions/Feedback for OMSC *</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Suggestions/Feedback for OMSU *</label>
             <textarea
               required
               rows={3}
               value={formData.suggestions}
               onChange={(e) => setFormData({ ...formData, suggestions: e.target.value })}
               className="w-full px-4 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm"
-              placeholder="How can OMSC improve this curriculum or tracing process?"
+              placeholder="How can OMSU improve this curriculum or tracing process?"
             />
           </div>
         </div>
@@ -533,10 +628,11 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         <div className="flex gap-4">
           <button
             type="submit"
-            className="flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/95 active:scale-[0.99] transition-all font-bold shadow-sm"
+            disabled={saving}
+            className="flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/95 active:scale-[0.99] transition-all font-bold shadow-sm disabled:opacity-60"
           >
             <Save size={20} />
-            Save Profile Records
+            {saving ? 'Saving...' : 'Save Profile Records'}
           </button>
         </div>
       </form>
@@ -547,7 +643,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         <div className="space-y-2 text-sm text-blue-900/90 dark:text-blue-200/80">
           <p className="font-bold">Important Accrediting Notice</p>
           <p className="text-xs leading-relaxed">
-            Data submitted through this tracer form is utilized in OMSC accreditation programs to measure teaching efficiency, student outcomes, and post-graduation success. Your detail privacy remains protected under standard OMSC Institutional Guidelines.
+            Data submitted through this tracer form is utilized in OMSU accreditation programs to measure teaching efficiency, student outcomes, and post-graduation success. Your detail privacy remains protected under standard OMSU Institutional Guidelines.
           </p>
         </div>
       </div>

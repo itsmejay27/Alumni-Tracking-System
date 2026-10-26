@@ -15,8 +15,8 @@ export function CollegeOfficialsDirectory() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-foreground">College Officials Directory</h2>
-        <p className="text-muted-foreground mt-1">Get in touch with the OMSC Department Program Chairs & Director</p>
+        <h2 className="text-3xl font-extrabold tracking-tight text-foreground">University Officials Directory</h2>
+        <p className="text-muted-foreground mt-1">Get in touch with the OMSU Department Program Chairs & Director</p>
       </div>
 
       {/* Directory Grid */}
@@ -92,8 +92,8 @@ const mockOfficials: OfficialProfile[] = [
     id: '1',
     name: 'Dr. Carlo Carlo',
     role: 'Director of Alumni Affairs',
-    department: 'OMSC Office of Alumni Relations (Super Account)',
-    email: 'director.alumni@omsc.edu.ph',
+    department: 'OMSU Office of Alumni Relations (Super Account)',
+    email: 'director.alumni@omsu.edu.ph',
     office: 'Alumni Affairs Center, Labangan Campus',
     isDirector: true,
   },
@@ -102,7 +102,7 @@ const mockOfficials: OfficialProfile[] = [
     name: 'Prof. Jane Doe',
     role: 'BSIT Program Chair',
     department: 'Information Technology Department',
-    email: 'admin.bsit@omsc.edu.ph',
+    email: 'admin.bsit@omsu.edu.ph',
     office: 'IT Faculty Office, Science & Tech Bldg',
   },
   {
@@ -110,7 +110,7 @@ const mockOfficials: OfficialProfile[] = [
     name: 'Dr. John Smith',
     role: 'BEED Program Chair',
     department: 'Elementary Education Department',
-    email: 'admin.beed@omsc.edu.ph',
+    email: 'admin.beed@omsu.edu.ph',
     office: 'Education Faculty Office, Acad Bldg A',
   },
   {
@@ -118,7 +118,7 @@ const mockOfficials: OfficialProfile[] = [
     name: 'Prof. Elena Cruz',
     role: 'BSOA Program Chair',
     department: 'Office Administration Department',
-    email: 'admin.bsoa@omsc.edu.ph',
+    email: 'admin.bsoa@omsu.edu.ph',
     office: 'BSOA Office, Business & Admin Bldg',
   },
   {
@@ -126,7 +126,7 @@ const mockOfficials: OfficialProfile[] = [
     name: 'Prof. Kervin Ramos',
     role: 'BSBA Financial Management Chair',
     department: 'Business Administration Department',
-    email: 'admin.bsba-fm@omsc.edu.ph',
+    email: 'admin.bsba-fm@omsu.edu.ph',
     office: 'BSBA Faculty Room, Business Bldg',
   },
   {
@@ -134,7 +134,7 @@ const mockOfficials: OfficialProfile[] = [
     name: 'Prof. Maria Santos',
     role: 'BSBA Operations Management Chair',
     department: 'Business Administration Department',
-    email: 'admin.bsba-om@omsc.edu.ph',
+    email: 'admin.bsba-om@omsu.edu.ph',
     office: 'BSBA Faculty Room, Business Bldg',
   },
 ];

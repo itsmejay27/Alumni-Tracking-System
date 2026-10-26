@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { LoginPage } from './components/LoginPage';
+import React, { useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { LoginPage, AuthMode } from './components/LoginPage';
+import { LandingPage } from './components/LandingPage';
+import { LoadingState } from './components/DataState';
+import { SetNewPassword } from './components/SetNewPassword';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
@@ -9,7 +13,8 @@ import { Announcements } from './components/Announcements';
 import { Home as HomeView } from './components/Home';
 import { Contact as ContactView } from './components/Contact';
 import { Settings as SettingsView } from './components/Settings';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 import { 
   Users, 
   Briefcase, 
@@ -28,9 +33,8 @@ import {
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
-type UserRole = string | null;
-
 export interface CurrentUser {
+  id: string;
   email: string;
   role: string;
   givenName: string;
@@ -47,116 +51,138 @@ export interface CurrentUser {
   title?: string;
 }
 
+function profileToUser(p: any): CurrentUser {
+  return {
+    id: p.id,
+    email: p.email,
+    role: p.role,
+    givenName: p.given_name,
+    lastName: p.last_name,
+    middleName: p.middle_name,
+    mobileNo: p.mobile_no,
+    presentAddress: p.present_address,
+    permanentAddress: p.permanent_address,
+    sex: p.sex,
+    dateOfBirth: p.date_of_birth,
+    civilStatus: p.civil_status,
+    facebookName: p.facebook_name,
+    avatarUrl: p.avatar_url,
+    title: p.title,
+  };
+}
+
 export default function App() {
-  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
+  const [authScreen, setAuthScreen] = useState<AuthMode | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
-  const handleLogin = (role: string, email: string) => {
-    setUserRole(role);
-    
-    // Initialize default profile details
-    const initialUser: CurrentUser = {
-      email,
-      role,
-      givenName: '',
-      lastName: '',
-      middleName: '',
-      mobileNo: '09171234567',
-      presentAddress: 'Barangay Fatima, Mamburao, Occidental Mindoro',
-      permanentAddress: 'Barangay Fatima, Mamburao, Occidental Mindoro',
-      sex: 'Male',
-      dateOfBirth: '1998-05-15',
-      civilStatus: 'Single',
-      facebookName: '',
-      avatarUrl: ''
+  // Track the Supabase auth session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
+      setSession(newSession);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Load the signed-in user's profile (role decides which screens they see)
+  const userId = session?.user.id;
+  useEffect(() => {
+    if (!userId) {
+      setCurrentUser(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          toast.error('Could not load your profile. Please sign in again.');
+          supabase.auth.signOut();
+          return;
+        }
+        const user = profileToUser(data);
+        setCurrentUser(user);
+        setAuthScreen(null);
+        setActiveTab(user.role.startsWith('admin') ? 'dashboard' : 'home');
+      });
+    return () => {
+      cancelled = true;
     };
+  }, [userId]);
 
-    if (role === 'admin') {
-      initialUser.givenName = 'JOSUE';
-      initialUser.lastName = 'DELFIN';
-      initialUser.middleName = 'C.';
-      initialUser.title = 'Campus Director';
-      initialUser.facebookName = 'Josue Delfin';
-    } else if (role === 'admin.bsit') {
-      initialUser.givenName = 'KARESA FAYE';
-      initialUser.lastName = 'ZABALA';
-      initialUser.middleName = 'D.';
-      initialUser.title = 'IT Program Chair';
-      initialUser.facebookName = 'Karesa Faye Zabala';
-    } else if (role === 'admin.beed') {
-      initialUser.givenName = 'DR. JOHN';
-      initialUser.lastName = 'SMITH';
-      initialUser.middleName = '';
-      initialUser.title = 'BEED Program Chair';
-    } else if (role === 'admin.bsba-fm') {
-      initialUser.givenName = 'PROF. KERVIN';
-      initialUser.lastName = 'RAMOS';
-      initialUser.middleName = '';
-      initialUser.title = 'BSBA-FM Program Chair';
-    } else if (role === 'admin.bsba-om') {
-      initialUser.givenName = 'PROF. MARIA';
-      initialUser.lastName = 'SANTOS';
-      initialUser.middleName = '';
-      initialUser.title = 'BSBA-OM Program Chair';
-    } else if (role === 'admin.bsoa') {
-      initialUser.givenName = 'PROF. ELENA';
-      initialUser.lastName = 'CRUZ';
-      initialUser.middleName = '';
-      initialUser.title = 'BSOA Program Chair';
-    } else {
-      // Alumni login
-      const prefix = email.split('@')[0];
-      if (prefix.includes('.')) {
-        const parts = prefix.split('.');
-        initialUser.givenName = parts[0].toUpperCase();
-        initialUser.lastName = parts[1].toUpperCase();
-      } else {
-        initialUser.givenName = prefix.toUpperCase();
-        initialUser.lastName = 'ALUMNI';
-      }
-      initialUser.middleName = 'MENDOZA';
-      initialUser.facebookName = `${initialUser.givenName.charAt(0) + initialUser.givenName.slice(1).toLowerCase()} ${initialUser.lastName.charAt(0) + initialUser.lastName.slice(1).toLowerCase()}`;
-    }
-
-    const saved = localStorage.getItem(`profile_${email}`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (!parsed.email) parsed.email = email;
-      setCurrentUser(parsed);
-    } else {
-      setCurrentUser(initialUser);
-      localStorage.setItem(`profile_${email}`, JSON.stringify(initialUser));
-    }
-
-    // Alumni defaults to home tab, admin defaults to analytics dashboard
-    setActiveTab(role.startsWith('admin') ? 'dashboard' : 'home');
+  const handleUpdateProfile = async (updated: CurrentUser) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        given_name: updated.givenName,
+        last_name: updated.lastName,
+        middle_name: updated.middleName,
+        mobile_no: updated.mobileNo,
+        present_address: updated.presentAddress,
+        permanent_address: updated.permanentAddress,
+        sex: updated.sex,
+        date_of_birth: updated.dateOfBirth,
+        civil_status: updated.civilStatus,
+        facebook_name: updated.facebookName,
+        avatar_url: updated.avatarUrl || '',
+      })
+      .eq('id', updated.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    setCurrentUser(profileToUser(data));
   };
 
-  const handleUpdateProfile = (updated: CurrentUser) => {
-    setCurrentUser(updated);
-    if (currentUser) {
-      localStorage.setItem(`profile_${currentUser.email}`, JSON.stringify(updated));
-    }
-  };
-
-  const handleLogout = () => {
-    setUserRole(null);
-    setCurrentUser(null);
+  const handleLogout = async () => {
     setMobileMenuOpen(false);
+    await supabase.auth.signOut();
   };
 
-  if (!userRole) {
+  if (!authReady || (session && !currentUser)) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
+        <LoadingState label="Loading..." />
+      </div>
+    );
+  }
+
+  if (recoveringPassword && session) {
     return (
       <>
-        <LoginPage onLogin={handleLogin} />
+        <SetNewPassword onDone={() => setRecoveringPassword(false)} />
         <Toaster position="top-right" closeButton richColors />
       </>
     );
   }
 
+  if (!session || !currentUser) {
+    return (
+      <>
+        {authScreen ? (
+          <LoginPage key={authScreen} initialMode={authScreen} onBack={() => setAuthScreen(null)} />
+        ) : (
+          <LandingPage onSignIn={() => setAuthScreen('signin')} onSignUp={() => setAuthScreen('signup')} />
+        )}
+        <Toaster position="top-right" closeButton richColors />
+      </>
+    );
+  }
+
+  const userRole = currentUser.role;
   const isAdmin = userRole.startsWith('admin');
 
   // Convert role to clean label
@@ -173,7 +199,7 @@ export default function App() {
   const getSubLabel = () => {
     if (userRole === 'admin') return 'Director';
     if (userRole.startsWith('admin.')) return 'Program Chair';
-    return 'OMSC Graduate';
+    return 'OMSU Graduate';
   };
 
   // Nav menu item details
@@ -188,7 +214,7 @@ export default function App() {
   const alumniMenuItems = [
     { id: 'home', label: 'Home', icon: <HomeIcon size={18} /> },
     { id: 'profile', label: 'Tracer Survey Form', icon: <UserCircle size={18} /> },
-    { id: 'officials', label: 'College Officials', icon: <Users size={18} /> },
+    { id: 'officials', label: 'University Officials', icon: <Users size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
     { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
     { id: 'contact', label: 'Contact Us', icon: <PhoneCall size={18} /> },
@@ -209,11 +235,11 @@ export default function App() {
         {/* Sidebar Header */}
         <div className={`p-5 flex items-center border-b border-sidebar-border ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-border shrink-0 shadow-inner overflow-hidden p-0.5">
-            <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+            <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm tracking-tight truncate">OMSC Tracer</h1>
+              <h1 className="font-extrabold text-sm tracking-tight truncate">OMSU Tracer</h1>
               <p className="text-[10px] text-white/65 font-bold tracking-widest uppercase">Tracer Platform</p>
             </div>
           )}
@@ -290,10 +316,10 @@ export default function App() {
         <header className="md:hidden flex items-center justify-between px-6 py-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="w-9 h-9 bg-white border border-border rounded-full flex items-center justify-center overflow-hidden p-0.5">
-              <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+              <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm leading-none">OMSC Alumni</h1>
+              <h1 className="font-extrabold text-sm leading-none">OMSU Alumni</h1>
               <p className="text-[9px] text-white/75 tracking-wider font-bold uppercase mt-0.5">Tracer Platform</p>
             </div>
           </div>
@@ -314,9 +340,9 @@ export default function App() {
                 <div className="flex items-center justify-between pb-4 border-b border-sidebar-border">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-white border rounded-full overflow-hidden p-0.5">
-                      <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+                      <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
                     </div>
-                    <span className="font-extrabold text-sm">OMSC Navigation</span>
+                    <span className="font-extrabold text-sm">OMSU Navigation</span>
                   </div>
                   <button 
                     onClick={() => setMobileMenuOpen(false)}
@@ -387,7 +413,7 @@ export default function App() {
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
           ) : (
@@ -396,7 +422,7 @@ export default function App() {
               {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'contact' && <ContactView />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>

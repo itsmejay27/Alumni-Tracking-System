@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { LoadingState, ErrorState } from './DataState';
 
 interface JobPosting {
   id: string;
@@ -13,19 +16,72 @@ interface JobPosting {
   postedBy: string;
   postedDate: string;
   contactEmail: string;
+  createdBy: string | null;
 }
 
 interface JobBoardProps {
-  userRole: 'admin' | 'alumni';
+  userRole: string;
+  userId: string;
+  posterName: string;
 }
 
-export function JobBoard({ userRole }: JobBoardProps) {
+export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'full-time' | 'part-time' | 'contract' | 'internship'>('all');
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const isAdmin = userRole.startsWith('admin');
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
+      setJobs(
+        data.map((j) => ({
+          id: j.id,
+          title: j.title,
+          company: j.company,
+          location: j.location,
+          type: j.type,
+          salary: j.salary || undefined,
+          description: j.description,
+          requirements: j.requirements || [],
+          postedBy: j.posted_by,
+          postedDate: new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          contactEmail: j.contact_email,
+          createdBy: j.created_by,
+        }))
+      );
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Remove this job posting?')) return;
+    const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
+    if (error || !data?.length) {
+      toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
+      return;
+    }
+    setJobs((list) => list.filter((j) => j.id !== id));
+  };
 
   const filteredJobs = filterType === 'all'
-    ? mockJobPostings
-    : mockJobPostings.filter(job => job.type === filterType);
+    ? jobs
+    : jobs.filter(job => job.type === filterType);
+
+  if (loading) return <LoadingState label="Loading job postings..." />;
+  if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
@@ -46,7 +102,13 @@ export function JobBoard({ userRole }: JobBoardProps) {
       </div>
 
       {/* Post Job Form */}
-      {showPostForm && <JobPostingForm onClose={() => setShowPostForm(false)} />}
+      {showPostForm && (
+        <JobPostingForm
+          posterName={posterName}
+          onClose={() => setShowPostForm(false)}
+          onPosted={() => { setShowPostForm(false); load(); }}
+        />
+      )}
 
       {/* Filter */}
       <div className="bg-card border border-border rounded-lg p-4">
@@ -107,14 +169,26 @@ export function JobBoard({ userRole }: JobBoardProps) {
       {/* Job Listings */}
       <div className="space-y-4">
         {filteredJobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+          <JobCard
+            key={job.id}
+            job={job}
+            canDelete={isAdmin || job.createdBy === userId}
+            onDelete={() => handleDelete(job.id)}
+          />
         ))}
+        {filteredJobs.length === 0 && (
+          <div className="bg-card border border-border rounded-lg p-12 text-center">
+            <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
+            <p className="font-medium">No job postings yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Be the first to share an opportunity with fellow alumni.</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function JobCard({ job }: { job: JobPosting }) {
+function JobCard({ job, canDelete, onDelete }: { job: JobPosting; canDelete: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -171,12 +245,23 @@ function JobCard({ job }: { job: JobPosting }) {
           <Clock size={14} />
           Posted {job.postedDate} by {job.postedBy}
         </div>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-sm text-primary hover:underline"
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
+        <div className="flex items-center gap-4">
+          {canDelete && (
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1 text-xs text-destructive hover:underline"
+            >
+              <Trash2 size={13} />
+              Remove
+            </button>
+          )}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-sm text-primary hover:underline"
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -204,7 +289,8 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
   );
 }
 
-function JobPostingForm({ onClose }: { onClose: () => void }) {
+function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string; onClose: () => void; onPosted: () => void }) {
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -216,10 +302,29 @@ function JobPostingForm({ onClose }: { onClose: () => void }) {
     contactEmail: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Job posting submitted! (In the real system, this will be saved to the database)');
-    onClose();
+    setSubmitting(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('jobs').insert({
+      title: formData.title.trim(),
+      company: formData.company.trim(),
+      location: formData.location.trim(),
+      type: formData.type,
+      salary: formData.salary.trim() || null,
+      description: formData.description.trim(),
+      requirements: formData.requirements.split('\n').map((r) => r.trim()).filter(Boolean),
+      contact_email: formData.contactEmail.trim(),
+      posted_by: posterName,
+      created_by: user?.id,
+    });
+    setSubmitting(false);
+    if (error) {
+      toast.error(`Could not post job: ${error.message}`);
+      return;
+    }
+    toast.success('Job posted!');
+    onPosted();
   };
 
   return (
@@ -330,9 +435,10 @@ function JobPostingForm({ onClose }: { onClose: () => void }) {
         <div className="flex gap-3 pt-2">
           <button
             type="submit"
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+            disabled={submitting}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
           >
-            Post Job
+            {submitting ? 'Posting...' : 'Post Job'}
           </button>
           <button
             type="button"
@@ -346,95 +452,3 @@ function JobPostingForm({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-
-const mockJobPostings: JobPosting[] = [
-  {
-    id: '1',
-    title: 'Junior Software Developer',
-    company: 'TechHub Philippines',
-    location: 'Makati, Metro Manila',
-    type: 'full-time',
-    salary: '₱30,000 - ₱45,000/month',
-    description: 'We are looking for a passionate Junior Software Developer to join our growing team. You will work on building web applications using modern technologies.',
-    requirements: [
-      'Bachelor\'s degree in Computer Science or related field',
-      'Knowledge of JavaScript, React, and Node.js',
-      'Strong problem-solving skills',
-      'Good communication skills',
-    ],
-    postedBy: 'Maria Santos',
-    postedDate: 'May 26, 2026',
-    contactEmail: 'careers@techhub.ph',
-  },
-  {
-    id: '2',
-    title: 'Registered Nurse',
-    company: 'Manila Medical Center',
-    location: 'Manila City',
-    type: 'full-time',
-    salary: '₱28,000 - ₱40,000/month',
-    description: 'Looking for dedicated Registered Nurses to provide quality patient care in our medical center.',
-    requirements: [
-      'Valid PRC License',
-      'BS Nursing degree',
-      'Fresh graduates are welcome',
-      'Compassionate and patient-oriented',
-    ],
-    postedBy: 'Carlos Mendoza',
-    postedDate: 'May 25, 2026',
-    contactEmail: 'hr@manilamedical.com',
-  },
-  {
-    id: '3',
-    title: 'Marketing Intern',
-    company: 'GlobalCorp Inc.',
-    location: 'Quezon City',
-    type: 'internship',
-    description: 'Great opportunity for students or fresh graduates to gain hands-on experience in marketing and brand management.',
-    requirements: [
-      'Currently pursuing or completed degree in Marketing, Business, or related field',
-      'Strong written and verbal communication skills',
-      'Familiarity with social media platforms',
-      'Creative and detail-oriented',
-    ],
-    postedBy: 'Juan dela Cruz',
-    postedDate: 'May 24, 2026',
-    contactEmail: 'internships@globalcorp.com',
-  },
-  {
-    id: '4',
-    title: 'Elementary Teacher',
-    company: 'DepEd Mindoro',
-    location: 'Calapan City, Oriental Mindoro',
-    type: 'full-time',
-    salary: '₱25,000 - ₱32,000/month',
-    description: 'Seeking passionate educators to teach elementary students. Position available for the upcoming school year.',
-    requirements: [
-      'Bachelor\'s degree in Elementary Education',
-      'Valid PRC License for Professional Teachers',
-      'Strong classroom management skills',
-      'Commitment to student development',
-    ],
-    postedBy: 'OMSC Alumni Relations',
-    postedDate: 'May 23, 2026',
-    contactEmail: 'recruitment@deped-mindoro.gov.ph',
-  },
-  {
-    id: '5',
-    title: 'Civil Engineer',
-    company: 'BuildRight Construction',
-    location: 'Calapan City, Oriental Mindoro',
-    type: 'full-time',
-    salary: '₱35,000 - ₱50,000/month',
-    description: 'Infrastructure projects require experienced Civil Engineers for planning and site supervision.',
-    requirements: [
-      'BS Civil Engineering degree',
-      'Valid PRC License',
-      'At least 1 year experience preferred',
-      'Knowledge of AutoCAD and engineering software',
-    ],
-    postedBy: 'Miguel Torres',
-    postedDate: 'May 22, 2026',
-    contactEmail: 'jobs@buildright.ph',
-  },
-];

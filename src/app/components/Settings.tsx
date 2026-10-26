@@ -2,10 +2,11 @@ import React, { useState, useRef } from 'react';
 import { ShieldAlert, Key, Eye, EyeOff, Save, User, Mail, Phone, MapPin, Calendar, HelpCircle, Check, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
+import { supabase } from '@/lib/supabase';
 
 interface SettingsProps {
   currentUser: CurrentUser | null;
-  onUpdateProfile: (updated: CurrentUser) => void;
+  onUpdateProfile: (updated: CurrentUser) => Promise<void> | void;
 }
 
 export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
@@ -24,7 +25,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
   const [givenName, setGivenName] = useState(currentUser?.givenName || '');
   const [lastName, setLastName] = useState(currentUser?.lastName || '');
   const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
-  const [email, setEmail] = useState(currentUser?.email || '');
+  const [email] = useState(currentUser?.email || '');
   const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
   const [presentAddress, setPresentAddress] = useState(currentUser?.presentAddress || '');
   const [permanentAddress, setPermanentAddress] = useState(currentUser?.permanentAddress || '');
@@ -37,11 +38,11 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters long.');
       return;
     }
 
@@ -50,10 +51,23 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
       return;
     }
 
-    // Success simulation
-    toast.success('Your security password has been changed successfully!');
-    
-    // Clear fields
+    // Confirm the current password before changing it
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: currentUser?.email || '',
+      password: currentPassword,
+    });
+    if (signInError) {
+      toast.error('Current password is incorrect.');
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast.error(`Could not change password: ${error.message}`);
+      return;
+    }
+
+    toast.success('Your password has been changed.');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -62,8 +76,8 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 25 * 1024 * 1024) { // 25MB check (Base64 size limits in localStorage)
-        toast.error('Image exceeds 25 MB limit.');
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image must be 2 MB or smaller.');
         return;
       }
       const reader = new FileReader();
@@ -76,7 +90,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
     }
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!givenName.trim() || !lastName.trim()) {
@@ -84,38 +98,35 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
       return;
     }
 
-    if (!email.trim() || !email.includes('@')) {
-      toast.error('Please enter a valid institutional email address.');
+    setIsSavingProfile(true);
+
+    if (!currentUser) {
+      toast.error('No active session found.');
+      setIsSavingProfile(false);
       return;
     }
 
-    setIsSavingProfile(true);
-
-    // Simulate saving delay for premium feedback
-    setTimeout(() => {
-      if (currentUser) {
-        const updated: CurrentUser = {
-          ...currentUser,
-          givenName: givenName.trim().toUpperCase(),
-          lastName: lastName.trim().toUpperCase(),
-          middleName: middleName.trim().toUpperCase(),
-          email: email.trim().toLowerCase(),
-          mobileNo: mobileNo.trim(),
-          presentAddress: presentAddress.trim(),
-          permanentAddress: permanentAddress.trim(),
-          sex,
-          civilStatus,
-          dateOfBirth,
-          facebookName: facebookName.trim(),
-          avatarUrl,
-        };
-        onUpdateProfile(updated);
-        toast.success('Your tracer profile details have been saved successfully!');
-      } else {
-        toast.error('No active session found.');
-      }
-      setIsSavingProfile(false);
-    }, 800);
+    const updated: CurrentUser = {
+      ...currentUser,
+      givenName: givenName.trim().toUpperCase(),
+      lastName: lastName.trim().toUpperCase(),
+      middleName: middleName.trim().toUpperCase(),
+      mobileNo: mobileNo.trim(),
+      presentAddress: presentAddress.trim(),
+      permanentAddress: permanentAddress.trim(),
+      sex,
+      civilStatus,
+      dateOfBirth,
+      facebookName: facebookName.trim(),
+      avatarUrl,
+    };
+    try {
+      await onUpdateProfile(updated);
+      toast.success('Your profile details have been saved.');
+    } catch (err: any) {
+      toast.error(`Could not save profile: ${err.message}`);
+    }
+    setIsSavingProfile(false);
   };
 
   const selectPredefinedAvatar = (avatarHex: string) => {
@@ -268,9 +279,9 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
-                    placeholder="name@omsc.edu.ph"
+                    readOnly
+                    title="This is your sign-in email"
+                    className="w-full pl-10 pr-4 py-2.5 bg-muted border border-border rounded-lg focus:outline-none text-sm font-medium text-muted-foreground"
                   />
                 </div>
               </div>
@@ -436,7 +447,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
-                  placeholder="Minimum 6 characters"
+                  placeholder="Minimum 8 characters"
                 />
                 <button
                   type="button"
@@ -489,7 +500,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
         <div className="space-y-1 text-xs text-amber-900/90 dark:text-amber-200/80 leading-relaxed">
           <p className="font-bold">Security Best Practices</p>
           <p>
-            Choose a strong, unique password that you do not use elsewhere. Do not share your OMSC tracer credentials with anyone. Authorized admins will never ask you for your account password. Keep your demographic fields accurate for official registrar reports.
+            Choose a strong, unique password that you do not use elsewhere. Do not share your OMSU tracer credentials with anyone. Authorized admins will never ask you for your account password. Keep your demographic fields accurate for official registrar reports.
           </p>
         </div>
       </div>

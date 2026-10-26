@@ -1,40 +1,7 @@
-import { mockRecords } from './csvRecords';
 import React, { useState } from 'react';
+import { LoadingState, ErrorState } from './DataState';
+import { useAlumniRecords, AlumniRecord } from '@/lib/alumni';
 import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X } from 'lucide-react';
-
-interface AlumniRecord {
-  id: string;
-  studentId: string;
-  lastName: string;
-  givenName: string;
-  middleName: string;
-  name: string; // compatibility
-  email: string;
-  batch: string;
-  yearGraduated: number;
-  sex: 'Female' | 'Male';
-  dateOfBirth: string;
-  civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
-  mobileNo: string;
-  facebookName: string;
-  presentAddress: string;
-  permanentAddress: string;
-  course: 'BSIT' | 'BEED' | 'BSBA-FM' | 'BSBA-OM' | 'BSOA';
-  
-  // Employment
-  status: 'Employed' | 'Self-Employed' | 'Unemployed';
-  employmentStatus?: 'PERMANENT' | 'CONTRACTUAL' | 'DAILY WAGE';
-  currentPosition?: string;
-  currentCompany?: string;
-  employerType?: 'Private' | 'Semi-Private' | 'Government' | 'NGO/INGO';
-  employerAddress?: string;
-  jobDescription?: string;
-  lengthOfService?: string;
-  employmentStartDate?: string;
-  
-  lastUpdated: string;
-  suggestions?: string;
-}
 
 interface AlumniRecordsProps {
   userRole: string;
@@ -47,6 +14,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedRecord, setSelectedRecord] = useState<AlumniRecord | null>(null);
   const [viewTab, setViewTab] = useState<'records' | 'suggestions'>('records');
+  const { records, loading, error } = useAlumniRecords();
 
   const isSuperAdmin = userRole === 'admin';
   
@@ -62,7 +30,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const courseScope = getCourseScope();
 
   // Filter records based on role and inputs
-  const filteredRecords = mockRecords.filter((record) => {
+  const filteredRecords = records.filter((record) => {
     // 1. Role Scope Filter
     if (courseScope && record.course !== courseScope) {
       return false;
@@ -87,7 +55,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
   });
 
-  const batches = Array.from(new Set(mockRecords.map(r => r.batch))).sort().reverse();
+  const batches = Array.from(new Set(records.map(r => r.batch))).sort().reverse();
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
 
   const handleDownload = () => {
@@ -97,7 +65,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `OMSC_Alumni_${scopeName}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `OMSU_Alumni_${scopeName}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -132,16 +100,19 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     return [headers, ...rows].map(row => row.join(',')).join('\n');
   };
 
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState message={error} />;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight">
-            {courseScope ? `${courseScope} Department Records` : 'College Alumni Registry'}
+            {courseScope ? `${courseScope} Department Records` : 'University Alumni Registry'}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {courseScope ? `Managing OMSC ${courseScope} Alumni submissions` : 'Central OMSC Alumni tracking system'}
+            {courseScope ? `Managing OMSU ${courseScope} Alumni submissions` : 'Central OMSU Alumni tracking system'}
           </p>
         </div>
         
@@ -606,7 +577,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           {record.suggestions && (
             <div className="space-y-4">
               <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-                <HelpCircle size={16} className="text-primary" /> Suggestions for OMSC
+                <HelpCircle size={16} className="text-primary" /> Suggestions for OMSU
               </h4>
               <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 text-sm">
                 <p className="italic text-foreground leading-relaxed">

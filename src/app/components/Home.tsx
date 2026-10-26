@@ -13,10 +13,10 @@ export function Home({ onStartSurvey }: HomeProps) {
       {/* Hero Welcome Card */}
       <div className="bg-card border border-border rounded-xl p-8 text-center space-y-6 shadow-sm">
         <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mx-auto border border-border p-1 shadow-sm overflow-hidden">
-          <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+          <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-foreground">Occidental Mindoro State College</h2>
+          <h2 className="text-2xl font-bold text-foreground">Occidental Mindoro State University</h2>
           <p className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">Alumni Graduate Tracer Study</p>
         </div>
       </div>
@@ -29,7 +29,7 @@ export function Home({ onStartSurvey }: HomeProps) {
         </div>
         
         <p className="text-base text-justify">
-          This institution is establishing a system of tracing its graduates and getting feedback regarding the type of work, further study, or other activity you are/were involved in since you completed your study at OMSC. The information provided will assist the institution in planning future educational needs and improving the course offerings.
+          This institution is establishing a system of tracing its graduates and getting feedback regarding the type of work, further study, or other activity you are/were involved in since you completed your study at OMSU. The information provided will assist the institution in planning future educational needs and improving the course offerings.
         </p>
         
         <p className="text-base text-justify">

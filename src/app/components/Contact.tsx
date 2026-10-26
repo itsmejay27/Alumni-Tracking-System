@@ -6,7 +6,7 @@ export function Contact() {
     <div className="max-w-3xl mx-auto py-4 space-y-6 animate-in fade-in duration-300">
       <div>
         <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Contact Us</h2>
-        <p className="text-muted-foreground mt-1">Get in touch with the OMSC Alumni Affairs Office</p>
+        <p className="text-muted-foreground mt-1">Get in touch with the OMSU Alumni Affairs Office</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -22,7 +22,7 @@ export function Contact() {
               </div>
               <div>
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email Address</h4>
-                <p className="text-sm font-semibold text-foreground mt-0.5">alumni.affairs@omsc.edu.ph</p>
+                <p className="text-sm font-semibold text-foreground mt-0.5">alumni.affairs@omsu.edu.ph</p>
                 <p className="text-xs text-muted-foreground">General inquiries & tracer updates</p>
               </div>
             </div>
@@ -45,12 +45,12 @@ export function Contact() {
               <div>
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Official Website</h4>
                 <a 
-                  href="https://www.omsc.edu.ph" 
+                  href="https://www.omsu.edu.ph" 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   className="text-sm font-semibold text-primary hover:underline mt-0.5 block"
                 >
-                  www.omsc.edu.ph
+                  www.omsu.edu.ph
                 </a>
               </div>
             </div>
@@ -69,7 +69,7 @@ export function Contact() {
               <div>
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Office Location</h4>
                 <p className="text-sm font-semibold text-foreground mt-0.5">
-                  OMSC Main Campus, Labangan, San Jose, Occidental Mindoro, Philippines, 5100
+                  OMSU Main Campus, Labangan, San Jose, Occidental Mindoro, Philippines, 5100
                 </p>
               </div>
             </div>
@@ -95,7 +95,7 @@ export function Contact() {
         <div className="space-y-1 text-sm text-foreground">
           <p className="font-bold">Need a Certificate or Transcript?</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            For Registrar services, transcript of records (TOR), and certificates of graduation, please contact the Registrar Office directly at <span className="font-semibold text-foreground">registrar@omsc.edu.ph</span> or visit the main administrative building at Labangan Campus.
+            For Registrar services, transcript of records (TOR), and certificates of graduation, please contact the Registrar Office directly at <span className="font-semibold text-foreground">registrar@omsu.edu.ph</span> or visit the main administrative building at Labangan Campus.
           </p>
         </div>
       </div>

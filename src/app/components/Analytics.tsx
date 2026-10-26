@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { LoadingState, ErrorState } from './DataState';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Users, Briefcase, AlertCircle, TrendingUp, ChevronRight, GraduationCap, Calendar } from 'lucide-react';
-import { mockRecords } from './csvRecords';
+import { useAlumniRecords } from '@/lib/alumni';
 
 interface AnalyticsProps {
   userRole: string;
@@ -20,10 +21,11 @@ export function Analytics({ userRole }: AnalyticsProps) {
   };
 
   const courseScope = getCourseScope();
+  const { records, loading, error } = useAlumniRecords();
   const [selectedCourse, setSelectedCourse] = useState<string>(courseScope || 'all');
 
   // Filter records by active course selection
-  const courseFiltered = mockRecords.filter(r => {
+  const courseFiltered = records.filter(r => {
     if (selectedCourse === 'all') return true;
     return r.course === selectedCourse;
   });
@@ -119,6 +121,9 @@ export function Analytics({ userRole }: AnalyticsProps) {
 
   const trendData = getTrendData();
 
+  if (loading) return <LoadingState label="Loading analytics..." />;
+  if (error) return <ErrorState message={error} />;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Header with Scope Switcher */}
@@ -126,7 +131,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight">Analytics Dashboard</h2>
           <p className="text-muted-foreground mt-1">
-            {courseScope ? `OMSC Departmental analysis for ${courseScope}` : 'Comprehensive College-wide analytics'}
+            {courseScope ? `OMSU Departmental analysis for ${courseScope}` : 'Comprehensive University-wide analytics'}
           </p>
         </div>
 
@@ -161,7 +166,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                 }}
                 className="px-4 py-2 bg-card border-2 border-border/80 rounded-xl focus:outline-none focus:border-primary text-xs font-bold shadow-sm cursor-pointer"
               >
-                <option value="all">All OMSC Departments</option>
+                <option value="all">All OMSU Departments</option>
                 <option value="BSIT">BSIT Department</option>
                 <option value="BEED">BEED Department</option>
                 <option value="BSBA-FM">BSBA Financial Management</option>

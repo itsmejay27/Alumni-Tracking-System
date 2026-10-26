@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { courseScopeForRole } from '@/lib/alumni';
+import { LoadingState, ErrorState } from './DataState';
 
 interface Announcement {
   id: string;
@@ -16,7 +20,9 @@ interface AnnouncementsProps {
 }
 
 export function Announcements({ userRole }: AnnouncementsProps) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(mockAnnouncements);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -24,58 +30,86 @@ export function Announcements({ userRole }: AnnouncementsProps) {
   const [targetCourse, setTargetCourse] = useState('all');
 
   const isAdmin = userRole.startsWith('admin');
+  const adminCourse = courseScopeForRole(userRole);
 
-  // Course Admin scope detection
-  const getCourseScope = () => {
-    if (userRole === 'admin') return 'Super Admin';
-    if (userRole === 'admin.beed') return 'BEED';
-    if (userRole === 'admin.bsit') return 'BSIT';
-    if (userRole === 'admin.bsba-fm') return 'BSBA-FM';
-    if (userRole === 'admin.bsba-om') return 'BSBA-OM';
-    if (userRole === 'admin.bsoa') return 'BSOA';
-    return '';
-  };
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('id, title, content, category, course, author, created_at')
+      .order('created_at', { ascending: false });
+    if (error) {
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
+      setAnnouncements(
+        data.map((a) => ({
+          id: a.id,
+          title: a.title,
+          content: a.content,
+          category: a.category,
+          course: a.course || undefined,
+          author: a.author,
+          date: new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        }))
+      );
+    }
+    setLoading(false);
+  }, []);
 
-  const handleAdd = (e: React.FormEvent) => {
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !content) return;
 
-    const newAnnouncement: Announcement = {
-      id: String(announcements.length + 1),
+    const course = userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : adminCourse;
+    const { error } = await supabase.from('announcements').insert({
       title,
       content,
       category,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      author: getCourseScope() + ' Admin',
-      course: targetCourse === 'all' ? undefined : targetCourse,
-    };
+      course,
+      author: userRole === 'admin' ? 'Super Admin' : `${adminCourse} Admin`,
+    });
+    if (error) {
+      toast.error(`Could not post announcement: ${error.message}`);
+      return;
+    }
 
-    setAnnouncements([newAnnouncement, ...announcements]);
+    toast.success('Announcement posted.');
     setTitle('');
     setContent('');
     setCategory('General');
     setShowAddForm(false);
+    load();
   };
 
-  const handleDelete = (id: string) => {
-    setAnnouncements(announcements.filter((a) => a.id !== id));
-  };
-
-  // Filtering: Alumni should only see general announcements or announcements matching their course
-  const filteredAnnouncements = announcements.filter((ann) => {
-    if (userRole.startsWith('admin.')) {
-      const course = userRole.split('.')[1].toUpperCase();
-      return !ann.course || ann.course === course;
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    const { data, error } = await supabase.from('announcements').delete().eq('id', id).select('id');
+    if (error || !data?.length) {
+      toast.error(error ? `Could not delete: ${error.message}` : 'You can only delete announcements you posted.');
+      return;
     }
-    return true; // Super Admin or Alumni sees all applicable
+    setAnnouncements((list) => list.filter((a) => a.id !== id));
+  };
+
+  // Course admins only see general announcements or ones for their course
+  const filteredAnnouncements = announcements.filter((ann) => {
+    if (adminCourse) return !ann.course || ann.course === adminCourse;
+    return true;
   });
+
+  if (loading) return <LoadingState label="Loading announcements..." />;
+  if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight">Announcements & Events</h2>
-          <p className="text-muted-foreground mt-1">Stay updated with official college circulars and events</p>
+          <p className="text-muted-foreground mt-1">Stay updated with official university circulars and events</p>
         </div>
         {isAdmin && (
           <button
@@ -256,32 +290,3 @@ export function Announcements({ userRole }: AnnouncementsProps) {
     </div>
   );
 }
-
-const mockAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    title: 'OMSC Annual Grand Alumni Homecoming 2026',
-    content: `We are delighted to invite all graduates of Occidental Mindoro State College to the 2026 Grand Alumni Homecoming!\n\nTheme: "OMSC Alumni: Bridging Milestones, Igniting Futures"\nDate: December 12, 2026\nVenue: OMSC Main Campus Gymnasium, San Jose, Occidental Mindoro\n\nActivities include networking dinners, academic panel updates, outstanding alumni awards, and a live band. Registration details and t-shirt orders will be available in early November. Save the date!`,
-    category: 'Homecoming',
-    date: 'Sep 12, 2026',
-    author: 'Super Admin',
-  },
-  {
-    id: '2',
-    title: 'Upcoming Tech Seminar: Industry Expectations for IT Graduates',
-    content: `The BSIT Department is hosting a virtual seminar focusing on modern software development standards. Guest speakers from GCash, Accenture, and Oracle will share critical industry trends.\n\nDate: October 15, 2026 (Thursday) at 1:30 PM via Zoom.\nThis event is open to all BSIT Alumni and senior students. Certificates of Attendance will be provided. Register via the Job Board link!`,
-    category: 'Job Seminar',
-    date: 'Sep 25, 2026',
-    author: 'BSIT Admin',
-    course: 'BSIT',
-  },
-  {
-    id: '3',
-    title: 'Curriculum Advisory Board Meeting: Call for Alumni Delegates',
-    content: `We are seeking 2 delegates from our BEED alumni to participate in our Curriculum Advisory Board. Your feedback on teaching practices and board exam outcomes will help us optimize future BEED instruction.\n\nInterested parties, please send an expression of interest to the Office of the Dean.`,
-    category: 'General',
-    date: 'Oct 02, 2026',
-    author: 'BEED Admin',
-    course: 'BEED',
-  },
-];
