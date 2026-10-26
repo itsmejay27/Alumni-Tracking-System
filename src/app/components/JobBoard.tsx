@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
+import { Pagination, usePaged } from './Pagination';
 import { supabase } from '@/lib/supabase';
 import { LoadingState, ErrorState } from './DataState';
 import { PROGRAMS } from '@/lib/programs';
@@ -83,7 +85,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   }, [load]);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Remove this job posting?')) return;
+    if (!(await confirmDialog({ title: 'Remove this job posting?', confirmLabel: 'Remove', danger: true }))) return;
     const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
     if (error || !data?.length) {
       toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
@@ -99,6 +101,8 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       ? matchScore(b) - matchScore(a) || b.createdAt.localeCompare(a.createdAt)
       : b.createdAt.localeCompare(a.createdAt)
   );
+
+  const paged = usePaged(filteredJobs, 8);
 
   if (loading) return <LoadingState label="Loading job postings..." />;
   if (loadError) return <ErrorState message={loadError} />;
@@ -197,7 +201,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
 
       {/* Job Listings */}
       <div className="space-y-4">
-        {filteredJobs.map((job) => (
+        {paged.pageItems.map((job) => (
           <JobCard
             key={job.id}
             job={job}
@@ -205,6 +209,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onDelete={() => handleDelete(job.id)}
           />
         ))}
+        <Pagination {...paged} label="jobs" />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />

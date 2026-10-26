@@ -232,7 +232,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
   if (loading) return <LoadingState label="Loading your profile..." />;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 pb-12 animate-in fade-in duration-300">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">My Alumni Profile</h2>
         <p className="text-muted-foreground text-sm mt-1">Keep your details and employment history up to date for the OMSU graduate tracer study.</p>

@@ -59,7 +59,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
     <div className="min-h-[100dvh] w-full bg-white text-slate-800 font-sans">
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <a href="#top" className="flex items-center gap-3 min-w-0">
             <img src={logo} alt="OMSU Logo" className="w-10 h-10 object-contain shrink-0" />
             <div className="min-w-0">
@@ -67,7 +67,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
               <p className="text-[11px] text-slate-500 truncate">Occidental Mindoro State University</p>
             </div>
           </a>
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
+          <nav className="hidden md:flex items-center gap-8 text-[15px] font-semibold text-slate-700">
             <a href="#features" className="hover:text-[#002060]">Features</a>
             <a href="#how" className="hover:text-[#002060]">How it works</a>
             <a href="#programs" className="hover:text-[#002060]">Programs</a>
@@ -93,7 +93,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           className="absolute inset-0 opacity-[0.07] pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
         />
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid md:grid-cols-[1.25fr_1fr] gap-12 items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid md:grid-cols-[1.25fr_1fr] gap-12 items-center">
           <div className="space-y-6">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
               <ShieldCheck size={14} /> Official Graduate Tracer Study
@@ -101,7 +101,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
             <h1 className="text-4xl sm:text-5xl font-black leading-[1.1] tracking-tight">
               Where has your OMSU degree taken you?
             </h1>
-            <p className="text-base sm:text-lg text-white/75 max-w-xl leading-relaxed">
+            <p className="text-lg sm:text-xl text-white/85 max-w-xl leading-relaxed">
               Share your career journey, find opportunities from fellow alumni, and help shape the programs that shaped you.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-1">
@@ -126,40 +126,40 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       </section>
 
       {/* Features */}
-      <section id="features" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 scroll-mt-16">
+      <section id="features" className="bg-[#eef2fa] scroll-mt-16"><div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="max-w-2xl mb-12">
-          <p className="text-sm font-semibold text-[#002060]/70 mb-2">What you can do</p>
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">One home for every OMSU graduate</h2>
-          <p className="text-slate-600 mt-3">
+          <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">What you can do</p>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">One home for every OMSU graduate</h2>
+          <p className="text-lg text-slate-700 mt-3">
             Individual answers stay confidential and are reported only in summary form for planning and accreditation.
           </p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {features.map((f) => (
-            <div key={f.title} className="rounded-2xl bg-slate-50 p-6">
-              <div className="w-10 h-10 rounded-xl bg-white text-[#002060] flex items-center justify-center mb-5 shadow-sm">
+            <div key={f.title} className="rounded-2xl bg-white p-7 shadow-sm ring-1 ring-[#002060]/10">
+              <div className="w-12 h-12 rounded-xl bg-[#002060] text-[#f5c400] flex items-center justify-center mb-5">
                 {f.icon}
               </div>
-              <h3 className="font-bold text-slate-900">{f.title}</h3>
-              <p className="text-sm text-slate-600 mt-2 leading-relaxed">{f.text}</p>
+              <h3 className="text-lg font-bold text-[#002060]">{f.title}</h3>
+              <p className="text-[15px] text-slate-700 mt-2 leading-relaxed">{f.text}</p>
             </div>
           ))}
         </div>
-      </section>
+      </div></section>
 
       {/* How it works */}
-      <section id="how" className="bg-slate-50 scroll-mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-12">How it works</h2>
+      <section id="how" className="bg-[#002060] text-white scroll-mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-12">How it works</h2>
           <ol className="grid md:grid-cols-3 gap-8">
             {steps.map((s, i) => (
               <li key={s.title} className="flex gap-4">
-                <div className="w-10 h-10 shrink-0 rounded-full bg-[#002060] text-white font-bold flex items-center justify-center">
+                <div className="w-12 h-12 shrink-0 rounded-full bg-[#f5c400] text-[#002060] text-lg font-black flex items-center justify-center">
                   {i + 1}
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900">{s.title}</h3>
-                  <p className="text-sm text-slate-600 mt-1">{s.text}</p>
+                  <h3 className="text-lg font-bold">{s.title}</h3>
+                  <p className="text-[15px] text-white/80 mt-1">{s.text}</p>
                 </div>
               </li>
             ))}
@@ -168,16 +168,18 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       </section>
 
       {/* Programs */}
-      <section id="programs" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 scroll-mt-16">
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Programs we trace</h2>
-        <p className="text-slate-600 mt-3 mb-10">Each program chair reviews the results for their own graduates.</p>
+      <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 scroll-mt-16">
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">Programs we trace</h2>
+        <p className="text-lg text-slate-700 mt-3 mb-10">Each program chair reviews the results for their own graduates.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {PROGRAMS.map((p) => (
-            <div key={p.code} className="flex items-center gap-4 rounded-2xl bg-slate-50 px-5 py-4">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
+            <div key={p.code} className="flex items-center gap-4 rounded-2xl bg-white px-5 py-5 ring-1 ring-slate-200 shadow-sm">
+              <span className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center text-white text-xs font-black" style={{ background: p.color }}>
+                {p.code.split('-')[0].slice(0, 4)}
+              </span>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-900">{p.code}</p>
-                <p className="text-sm text-slate-600 truncate">{p.name}</p>
+                <p className="font-bold text-[#002060]">{p.code}</p>
+                <p className="text-[15px] text-slate-700">{p.name}</p>
               </div>
             </div>
           ))}
@@ -185,7 +187,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       </section>
 
       {/* Call to action */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
         <div className="rounded-3xl bg-[#002060] text-white p-8 sm:p-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <h2 className="text-2xl sm:text-3xl font-extrabold">Ready to be counted?</h2>
@@ -201,19 +203,19 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       </section>
 
       {/* Contact / footer */}
-      <footer id="contact" className="bg-slate-50 scroll-mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr] text-sm text-slate-600">
+      <footer id="contact" className="bg-[#001a4d] text-white/85 scroll-mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr] text-[15px]">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <img src={logo} alt="" className="w-10 h-10 object-contain" />
               <div>
-                <p className="font-extrabold text-[#002060]">Alumni Affairs Office</p>
-                <p className="text-xs text-slate-500">Occidental Mindoro State University</p>
+                <p className="font-extrabold text-white text-base">Alumni Affairs Office</p>
+                <p className="text-sm text-white/70">Occidental Mindoro State University</p>
               </div>
             </div>
           </div>
           <div className="space-y-3">
-            <p className="font-semibold text-slate-900">Visit us</p>
+            <p className="font-bold text-[#f5c400]">Visit us</p>
             <p className="flex items-start gap-2"><MapPin size={16} className="shrink-0 mt-0.5" /> {contact.location}</p>
             <p className="flex items-start gap-2">
               <Clock size={16} className="shrink-0 mt-0.5" />
@@ -221,13 +223,13 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
             </p>
           </div>
           <div className="space-y-3">
-            <p className="font-semibold text-slate-900">Get in touch</p>
+            <p className="font-bold text-[#f5c400]">Get in touch</p>
             <p className="flex items-center gap-2 break-all"><Mail size={16} className="shrink-0" /> {contact.email}</p>
             <p className="flex items-center gap-2"><Phone size={16} className="shrink-0" /> {contact.phone}</p>
           </div>
         </div>
-        <div className="border-t border-slate-200/70">
-          <p className="max-w-6xl mx-auto px-4 sm:px-6 py-5 text-xs text-slate-400">
+        <div className="border-t border-white/10">
+          <p className="max-w-7xl mx-auto px-4 sm:px-6 py-5 text-sm text-white/60">
             © {new Date().getFullYear()} Occidental Mindoro State University · Alumni Graduate Tracer
           </p>
         </div>

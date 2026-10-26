@@ -64,6 +64,57 @@ OCCIDENTAL MINDORO STATE UNIVERSITY - Alumni Affairs Office`;
   return { html, text };
 }
 
+/** Sends the invitation: Resend if RESEND_API_KEY is set, otherwise SMTP (e.g. Gmail). */
+async function sendInvitation(o: { name: string; roleLabel: string; email: string; password: string; siteUrl: string }) {
+  let emailSent = false;
+  let emailError: string | null = null;
+  const message = invitationEmail(o);
+  const subject = 'Your OMSU Alumni Tracer account';
+  const resendKey = Deno.env.get('RESEND_API_KEY');
+  const smtpUser = Deno.env.get('SMTP_USER');
+  const smtpPass = Deno.env.get('SMTP_PASS');
+  try {
+    if (resendKey) {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>',
+          to: [o.email],
+          subject,
+          html: message.html,
+          text: message.text,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail?.message || `Resend returned ${res.status}`);
+      }
+      emailSent = true;
+    } else if (smtpUser && smtpPass) {
+      const transport = nodemailer.createTransport({
+        host: Deno.env.get('SMTP_HOST') || 'smtp.gmail.com',
+        port: Number(Deno.env.get('SMTP_PORT') || 465),
+        secure: true,
+        auth: { user: smtpUser, pass: smtpPass },
+      });
+      await transport.sendMail({
+        from: `"OMSU Alumni Tracer" <${Deno.env.get('SMTP_FROM') || smtpUser}>`,
+        to: o.email,
+        subject,
+        html: message.html,
+        text: message.text,
+      });
+      emailSent = true;
+    } else {
+      emailError = 'Email sending is not set up yet';
+    }
+  } catch (err) {
+    emailError = err instanceof Error ? err.message : String(err);
+  }
+  return { emailSent, emailError };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -95,6 +146,25 @@ Deno.serve(async (req) => {
     if (error) return json({ error: error.message }, 400);
     return json({ ok: true });
   }
+  // Resend a pending invitation with a fresh temporary password
+  if (body.action === 'resend') {
+    const userId = String(body.userId || '');
+    const { data: target } = await admin
+      .from('profiles')
+      .select('email, given_name, last_name, role, title, must_change_password')
+      .eq('id', userId)
+      .single();
+    if (!target) return json({ error: 'Account not found' }, 404);
+    if (!target.must_change_password) return json({ error: 'This person has already signed in and set their own password' }, 400);
+    const password = tempPassword();
+    const { error } = await admin.auth.admin.updateUserById(userId, { password });
+    if (error) return json({ error: error.message }, 400);
+    const siteUrl = String(Deno.env.get('SITE_URL') || body.siteUrl || '').trim();
+    const name = `${target.given_name} ${target.last_name}`.trim();
+    const result = await sendInvitation({ name, roleLabel: target.title || ROLES[target.role] || '', email: target.email, password, siteUrl });
+    return json({ ok: true, ...result, tempPassword: password });
+  }
+
   const email = String(body.email || '').trim().toLowerCase();
   const givenName = String(body.givenName || '').trim();
   const lastName = String(body.lastName || '').trim();
@@ -127,59 +197,7 @@ Deno.serve(async (req) => {
     return json({ error: `Could not set up profile: ${profileError.message}` }, 500);
   }
 
-  // Send the invitation email: Resend if RESEND_API_KEY is set, otherwise SMTP (e.g. Gmail)
-  let emailSent = false;
-  let emailError: string | null = null;
-  const message = invitationEmail({
-    name: `${givenName} ${lastName}`,
-    roleLabel: title,
-    email,
-    password,
-    siteUrl,
-  });
-  const subject = 'Your OMSU Alumni Tracer account';
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  const smtpUser = Deno.env.get('SMTP_USER');
-  const smtpPass = Deno.env.get('SMTP_PASS');
-  try {
-    if (resendKey) {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>',
-          to: [email],
-          subject,
-          html: message.html,
-          text: message.text,
-        }),
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        throw new Error(detail?.message || `Resend returned ${res.status}`);
-      }
-      emailSent = true;
-    } else if (smtpUser && smtpPass) {
-      const transport = nodemailer.createTransport({
-        host: Deno.env.get('SMTP_HOST') || 'smtp.gmail.com',
-        port: Number(Deno.env.get('SMTP_PORT') || 465),
-        secure: true,
-        auth: { user: smtpUser, pass: smtpPass },
-      });
-      await transport.sendMail({
-        from: `"OMSU Alumni Tracer" <${Deno.env.get('SMTP_FROM') || smtpUser}>`,
-        to: email,
-        subject,
-        html: message.html,
-        text: message.text,
-      });
-      emailSent = true;
-    } else {
-      emailError = 'Email sending is not set up yet';
-    }
-  } catch (err) {
-    emailError = err instanceof Error ? err.message : String(err);
-  }
+  const { emailSent, emailError } = await sendInvitation({ name: `${givenName} ${lastName}`, roleLabel: title, email, password, siteUrl });
 
   // The temporary password is returned once so the admin can share it if the email fails
   return json({ ok: true, userId: created.user.id, emailSent, emailError, tempPassword: password });

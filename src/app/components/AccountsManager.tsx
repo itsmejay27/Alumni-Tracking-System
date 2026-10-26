@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { UserPlus, Copy, Mail, ShieldCheck, X, Search, Trash2 } from 'lucide-react';
+import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { LoadingState, ErrorState } from './DataState';
+import { Pagination, usePaged } from './Pagination';
 
 const ROLE_OPTIONS = [
   { value: 'admin.bsit', label: 'BSIT Program Chair' },
@@ -97,8 +99,9 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       return;
     }
 
-    setResult({ email, tempPassword: data.tempPassword, emailSent: data.emailSent, emailError: data.emailError });
-    toast.success(data.emailSent ? `Invitation sent to ${email}` : `Account created for ${email}`);
+    if (data.emailSent) toast.success(`Invitation sent to ${email}`);
+    // Only when the email could not be sent do we show the password, so it can be shared another way
+    else setResult({ email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
     setGivenName('');
     setLastName('');
     setEmail('');
@@ -135,13 +138,39 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     return message as string;
   };
 
+  const [resending, setResending] = useState<string | null>(null);
+  const handleResend = async (acc: Account) => {
+    setResending(acc.id);
+    const { data, error } = await supabase.functions.invoke('invite-account', {
+      body: { action: 'resend', userId: acc.id, siteUrl: window.location.origin },
+    });
+    setResending(null);
+    if (error) {
+      toast.error(await invokeError(error));
+      return;
+    }
+    if (data.emailSent) toast.success(`New invitation sent to ${acc.email}`);
+    else setResult({ email: acc.email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
+  };
+
   const handleRemove = async (acc: Account) => {
     const pending = acc.must_change_password;
     const name = `${acc.given_name} ${acc.last_name}`.trim() || acc.email;
-    const ok = window.confirm(
+    const ok = await confirmDialog(
       pending
-        ? `Cancel the invitation for ${name}? Their account will be deleted and the temporary password will stop working.`
-        : `Remove the account of ${name}? They will no longer be able to sign in. Their tracer record (if any) is kept.`
+        ? {
+            title: `Cancel the invitation for ${name}?`,
+            message: 'Their account will be deleted and the temporary password will stop working.',
+            confirmLabel: 'Cancel invitation',
+            cancelLabel: 'Keep',
+            danger: true,
+          }
+        : {
+            title: `Remove ${name}'s account?`,
+            message: 'They will no longer be able to sign in. Their tracer record, if any, is kept.',
+            confirmLabel: 'Remove account',
+            danger: true,
+          }
     );
     if (!ok) return;
     const { error } = await supabase.functions.invoke('invite-account', { body: { action: 'delete', userId: acc.id } });
@@ -152,6 +181,15 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     toast.success(pending ? 'Invitation cancelled' : 'Account removed');
     setAccounts((list) => list.filter((a) => a.id !== acc.id));
   };
+
+  const paged = usePaged(
+    accounts.filter((a) => {
+      if (showStaffOnly && !a.role.startsWith('admin')) return false;
+      const q = search.toLowerCase();
+      return !q || a.email.includes(q) || `${a.given_name} ${a.last_name}`.toLowerCase().includes(q);
+    }),
+    10
+  );
 
   const visible = accounts.filter((a) => {
     if (showStaffOnly && !a.role.startsWith('admin')) return false;
@@ -179,39 +217,34 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {result && (
-        <div className="bg-emerald-50 rounded-2xl p-5 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setResult(null)} />
+          <div className="relative w-full max-w-md bg-card rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-bold text-emerald-800">Account created for {result.email}</p>
-                <p className="text-sm text-emerald-700 mt-1">
-                  {result.emailSent
-                    ? 'An invitation email with the temporary password has been sent.'
-                    : `The invitation email was not sent (${result.emailError}). Share the temporary password below with the person directly.`}
+                <h3 className="font-semibold">The invitation email could not be sent</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The account for {result.email} is ready. Share this temporary password with them directly. ({result.emailError})
                 </p>
               </div>
+              <button onClick={() => setResult(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+                <X size={18} />
+              </button>
             </div>
-            <button onClick={() => setResult(null)} className="text-emerald-700 hover:text-emerald-900">
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-3 rounded-xl bg-muted px-4 py-3">
+              <code className="font-mono text-base">{result.tempPassword}</code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(result.tempPassword);
+                  toast.success('Copied');
+                }}
+                className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-primary"
+              >
+                <Copy size={14} /> Copy
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">This is shown only once. They will choose their own password on first sign-in.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 bg-white border border-emerald-200 rounded-lg px-4 py-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Temporary password</span>
-            <code className="font-mono text-base text-slate-900">{result.tempPassword}</code>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(result.tempPassword);
-                toast.success('Copied');
-              }}
-              className="ml-auto flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-            >
-              <Copy size={14} /> Copy
-            </button>
-          </div>
-          <p className="text-xs text-emerald-700">
-            This password is shown only once. The person will be asked to choose a new password the first time they sign in.
-          </p>
         </div>
       )}
 
@@ -292,7 +325,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
         </div>
 
         <div className="divide-y divide-border">
-          {visible.map((a) => (
+          {paged.pageItems.map((a) => (
             <div key={a.id} className="p-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold truncate">
@@ -317,6 +350,17 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                   </option>
                 ))}
               </select>
+              {a.must_change_password && (
+                <button
+                  onClick={() => handleResend(a)}
+                  disabled={resending === a.id}
+                  title="Send a new invitation with a new temporary password"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 shrink-0 disabled:opacity-50"
+                >
+                  <RefreshCw size={15} className={resending === a.id ? 'animate-spin' : ''} />
+                  <span className="hidden sm:inline">{resending === a.id ? 'Sending...' : 'Resend'}</span>
+                </button>
+              )}
               {a.id !== currentUserId && (
                 <button
                   onClick={() => handleRemove(a)}
@@ -331,6 +375,9 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             </div>
           ))}
           {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No accounts found.</p>}
+        </div>
+        <div className="px-4 border-t border-border">
+          <Pagination {...paged} label="accounts" />
         </div>
       </div>
     </div>

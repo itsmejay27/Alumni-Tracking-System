@@ -42,7 +42,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
   const website = current.website.replace(/^https?:\/\//, '');
 
   return (
-    <div className="max-w-4xl mx-auto py-2 space-y-6 animate-in fade-in duration-300">
+    <div className="w-full py-2 space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-foreground">{editable ? 'Contact Info' : 'Contact Us'}</h2>

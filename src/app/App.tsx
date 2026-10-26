@@ -16,6 +16,7 @@ import { Contact as ContactView } from './components/Contact';
 import { Settings as SettingsView } from './components/Settings';
 import { toast } from 'sonner';
 import { AppToaster } from './components/AppToaster';
+import { ConfirmHost } from './components/ConfirmDialog';
 import { roleLabel } from '@/lib/programs';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -185,6 +186,7 @@ export default function App() {
           }
         />
         <AppToaster />
+        <ConfirmHost />
       </>
     );
   }
@@ -193,8 +195,9 @@ export default function App() {
     return (
       <>
         <LandingPage onSignIn={() => setAuthScreen('signin')} onSignUp={() => setAuthScreen('signup')} />
-        {authScreen && <LoginPage key={authScreen} initialMode={authScreen} onClose={() => setAuthScreen(null)} />}
+        {authScreen && <LoginPage key={authScreen} initialMode={authScreen} onClose={() => setAuthScreen(null)} onPasswordRecovery={setRecoveringPassword} />}
         <AppToaster />
+        <ConfirmHost />
       </>
     );
   }
@@ -440,6 +443,7 @@ export default function App() {
       </div>
 
       <AppToaster />
+        <ConfirmHost />
     </div>
   );
 }

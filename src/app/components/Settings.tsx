@@ -143,10 +143,10 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-2 space-y-6 animate-in fade-in duration-300">
+    <div className="w-full py-2 space-y-6 animate-in fade-in duration-300">
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground">Account Settings</h2>
-        <p className="text-muted-foreground mt-1">Manage your academic credentials, profile details, and account security</p>
+        <p className="text-muted-foreground mt-1">Your profile details and password</p>
       </div>
 
       {/* Tabs */}
@@ -185,7 +185,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
           <form onSubmit={handleProfileSubmit} className="space-y-6">
             {/* Avatar Section */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider">Profile Picture</label>
+              <label className="block text-sm font-medium text-foreground">Profile Picture</label>
               <div className="flex flex-col sm:flex-row items-center gap-6 p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="relative w-24 h-24 bg-card border-2 border-border rounded-xl flex items-center justify-center overflow-hidden shrink-0 shadow-sm group">
                   {avatarUrl ? (
@@ -230,7 +230,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                       </button>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Supported formats: JPG, PNG, or WEBP. Max size 25MB.</p>
+                  <p className="text-[11px] text-muted-foreground">JPG, PNG or WEBP, up to 2 MB.</p>
                 </div>
               </div>
             </div>
@@ -239,38 +239,38 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Given Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">First / Given Name *</label>
+                <label className="text-sm font-medium text-foreground block">First / Given Name *</label>
                 <input
                   type="text"
                   required
                   value={givenName}
                   onChange={(e) => setGivenName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium uppercase"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
                   placeholder="e.g. JUAN"
                 />
               </div>
 
               {/* Middle Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Middle Name</label>
+                <label className="text-sm font-medium text-foreground block">Middle Name</label>
                 <input
                   type="text"
                   value={middleName}
                   onChange={(e) => setMiddleName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium uppercase"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
                   placeholder="e.g. MENDOZA"
                 />
               </div>
 
               {/* Last Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Last Name *</label>
+                <label className="text-sm font-medium text-foreground block">Last Name *</label>
                 <input
                   type="text"
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium uppercase"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
                   placeholder="e.g. DELA CRUZ"
                 />
               </div>
@@ -279,7 +279,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Email */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Institutional Email *</label>
+                <label className="text-sm font-medium text-foreground block">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <input
@@ -295,7 +295,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
               {/* Mobile */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Mobile Number *</label>
+                <label className="text-sm font-medium text-foreground block">Mobile Number *</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <input
@@ -303,7 +303,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                     required
                     value={mobileNo}
                     onChange={(e) => setMobileNo(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                    className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                     placeholder="e.g. 09171234567"
                   />
                 </div>
@@ -311,13 +311,13 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
               {/* Facebook Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Facebook Username *</label>
+                <label className="text-sm font-medium text-foreground block">Facebook Username *</label>
                 <input
                   type="text"
                   required
                   value={facebookName}
                   onChange={(e) => setFacebookName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="e.g. Juan Dela Cruz"
                 />
               </div>
@@ -326,7 +326,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Sex */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Sex *</label>
+                <label className="text-sm font-medium text-foreground block">Sex *</label>
                 <select
                   value={sex}
                   onChange={(e) => setSex(e.target.value as 'Male' | 'Female')}
@@ -339,7 +339,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
               {/* Civil Status */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Civil Status *</label>
+                <label className="text-sm font-medium text-foreground block">Civil Status *</label>
                 <select
                   value={civilStatus}
                   onChange={(e) => setCivilStatus(e.target.value as any)}
@@ -354,7 +354,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
               {/* Date of Birth */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Date of Birth *</label>
+                <label className="text-sm font-medium text-foreground block">Date of Birth *</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <input
@@ -369,25 +369,25 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
             </div>
 
             {/* Addresses */}
-            <div className="space-y-4 pt-2 border-t border-border/40">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2">
               {/* Present Address */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block flex items-center gap-1">
-                  <MapPin size={14} className="text-primary" /> Present Residence Address *
+                <label className="text-sm font-medium text-foreground block flex items-center gap-1">
+                  <MapPin size={14} className="text-primary" /> Present Address *
                 </label>
                 <input
                   type="text"
                   required
                   value={presentAddress}
                   onChange={(e) => setPresentAddress(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="Complete current street, barangay, municipality, province"
                 />
               </div>
 
               {/* Permanent Address */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block flex items-center gap-1">
+                <label className="text-sm font-medium text-foreground block flex items-center gap-1">
                   <MapPin size={14} className="text-primary" /> Permanent Address *
                 </label>
                 <input
@@ -395,7 +395,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                   required
                   value={permanentAddress}
                   onChange={(e) => setPermanentAddress(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="Complete permanent address"
                 />
               </div>
@@ -421,17 +421,17 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
             <h3 className="font-bold text-lg text-foreground">Change Password</h3>
           </div>
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-xl">
             {/* Current Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Current Password *</label>
+              <label className="text-sm font-medium text-foreground block">Current Password *</label>
               <div className="relative">
                 <input
                   type={showCurrent ? 'text' : 'password'}
                   required
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="Enter current password"
                 />
                 <button
@@ -446,14 +446,14 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
             {/* New Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">New Password *</label>
+              <label className="text-sm font-medium text-foreground block">New Password *</label>
               <div className="relative">
                 <input
                   type={showNew ? 'text' : 'password'}
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="Minimum 8 characters"
                 />
                 <button
@@ -469,14 +469,14 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
             {/* Confirm Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Confirm New Password *</label>
+              <label className="text-sm font-medium text-foreground block">Confirm New Password *</label>
               <div className="relative">
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                   placeholder="Re-type new password"
                 />
                 <button

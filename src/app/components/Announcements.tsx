@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
+import { Pagination, usePaged } from './Pagination';
 import { supabase } from '@/lib/supabase';
 import { courseScopeForRole } from '@/lib/alumni';
 import { roleLabel } from '@/lib/programs';
@@ -88,7 +90,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this announcement?')) return;
+    if (!(await confirmDialog({ title: 'Delete this announcement?', message: 'Alumni will no longer see it.', confirmLabel: 'Delete', danger: true }))) return;
     const { data, error } = await supabase.from('announcements').delete().eq('id', id).select('id');
     if (error || !data?.length) {
       toast.error(error ? `Could not delete: ${error.message}` : 'You can only delete announcements you posted.');
@@ -102,6 +104,8 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     if (adminCourse) return !ann.course || ann.course === adminCourse;
     return true;
   });
+
+  const paged = usePaged(filteredAnnouncements, 8);
 
   if (loading) return <LoadingState label="Loading announcements..." />;
   if (loadError) return <ErrorState message={loadError} />;
@@ -209,7 +213,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
       {/* Announcements List */}
       <div className="space-y-4">
-        {filteredAnnouncements.map((ann) => (
+        {paged.pageItems.map((ann) => (
           <div
             key={ann.id}
             className="bg-card rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between"
@@ -278,6 +282,8 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             </div>
           </div>
         ))}
+
+        <Pagination {...paged} label="announcements" />
 
         {filteredAnnouncements.length === 0 && (
           <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">

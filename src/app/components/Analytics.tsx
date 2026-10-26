@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Send, Table2, LineChart as LineIcon, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, useAlumniRecords } from '@/lib/alumni';
 import { PROGRAMS, JOB_LEVELS } from '@/lib/programs';
@@ -538,7 +539,12 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
 
   const send = async () => {
     const target = minYears === '0' ? 'all alumni with an account' : `alumni who haven't updated in ${minYears}+ year(s)`;
-    if (!window.confirm(`Email an update reminder to ${course} ${target}?`)) return;
+    const ok = await confirmDialog({
+      title: 'Send update reminder?',
+      message: `An email will be sent to ${course} ${target}.`,
+      confirmLabel: 'Send reminder',
+    });
+    if (!ok) return;
     setSending(true);
     const { data, error } = await supabase.functions.invoke('send-reminders', {
       body: { course, minYears: Number(minYears), message },

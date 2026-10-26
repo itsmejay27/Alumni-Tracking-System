@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { useAlumniRecords, AlumniRecord, currentJob } from '@/lib/alumni';
 import { CsvImport } from './CsvImport';
+import { Pagination, usePaged } from './Pagination';
 import { Upload } from 'lucide-react';
 import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X } from 'lucide-react';
 
@@ -57,6 +58,9 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 
     return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
   });
+
+  const paged = usePaged(filteredRecords, 15);
+  const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
 
   const batches = Array.from(new Set(records.map(r => r.batch))).sort().reverse();
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
@@ -236,7 +240,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
           <div className="space-y-4">
             {/* Mobile Cards (visible on mobile only) */}
             <div className="block md:hidden space-y-4">
-              {filteredRecords.map((record) => (
+              {paged.pageItems.map((record) => (
                 <div key={record.id} className="bg-card rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex justify-between items-start gap-2">
                     <div>
@@ -302,7 +306,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {filteredRecords.map((record) => (
+                    {paged.pageItems.map((record) => (
                       <tr key={record.id} className="hover:bg-muted/20 transition-colors">
                         <td className="px-6 py-4 font-mono text-sm text-primary font-bold whitespace-nowrap">{record.studentId || '—'}</td>
                         <td className="px-6 py-4">
@@ -351,6 +355,8 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
               </div>
             </div>
 
+            <Pagination {...paged} label="records" />
+
             {filteredRecords.length === 0 && (
               <div className="bg-card rounded-2xl text-center py-16 shadow-sm">
                 <Filter className="mx-auto mb-3 text-muted-foreground/60" size={48} />
@@ -363,9 +369,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       ) : (
         /* Suggestions Tracker Board */
         <div className="grid grid-cols-1 gap-4">
-          {filteredRecords
-            .filter((r) => r.suggestions)
-            .map((r) => (
+          {feedback.pageItems.map((r) => (
               <div
                 key={r.id}
                 className="bg-card border border-border/80 rounded-2xl p-5 shadow-md flex flex-col justify-between hover:border-primary/50 transition-colors"
@@ -406,6 +410,8 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                 </div>
               </div>
             ))}
+
+          <Pagination {...feedback} label="responses" />
 
           {filteredRecords.filter((r) => r.suggestions).length === 0 && (
             <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">

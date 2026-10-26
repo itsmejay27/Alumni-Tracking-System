@@ -51,7 +51,21 @@ email address of your own Resend account, which is fine for testing only.
 
 If `RESEND_API_KEY` is set, Resend is used; otherwise Gmail.
 
-### The first super admin
+### Sign-up verification codes and forgot password (Supabase Auth email)
+
+Alumni confirm their email with a 6-digit code, and "Forgot password?" also uses a code.
+These emails are sent by Supabase Auth, so set it up once:
+
+1. **Use Resend to send Supabase's emails** (the built-in sender only delivers to your own team):
+   Supabase → Authentication → Emails → **SMTP Settings** → enable custom SMTP:
+   host `smtp.resend.com`, port `465`, username `resend`, password = your Resend API key,
+   sender email `noreply@omsualumnitrack.site`, sender name `OMSU Alumni Tracer`.
+2. **Templates:** Authentication → Emails → Templates. Paste
+   `supabase/email-templates/confirm-signup.html` into **Confirm signup** (subject: *Your OMSU Alumni Tracer verification code*)
+   and `supabase/email-templates/reset-password.html` into **Reset password** (subject: *Your OMSU password reset code*).
+3. **Code length:** Authentication → Sign In / Providers → Email → *Email OTP Length* = `6`, and keep *Confirm email* on.
+
+### The first Alumni Affairs account
 
 The very first super admin has to be set by hand. Sign up on the site, then run this in the
 Supabase SQL editor:
