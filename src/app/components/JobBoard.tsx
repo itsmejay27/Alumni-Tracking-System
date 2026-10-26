@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles } from 'lucide-react';
+import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -108,7 +108,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       : b.createdAt.localeCompare(a.createdAt)
   );
 
-  const paged = usePaged(filteredJobs, 8);
+  const paged = usePaged(filteredJobs, 5);
 
   if (loading) return <LoadingState label="Loading job postings..." />;
   if (loadError) return <ErrorState message={loadError} />;
@@ -238,7 +238,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
-        <Pagination {...paged} label="jobs" />
+        <Pagination {...paged} label="jobs" alwaysShowControls />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
@@ -268,74 +268,35 @@ const jobToText = (j: JobPosting) =>
   ].join('\n');
 
 function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; canDelete: boolean; onDelete: () => void; onExplain?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="bg-card rounded-2xl shadow-sm p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h3 className="font-semibold text-lg mb-1">{job.title}</h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Building2 size={16} />
-              {job.company}
-            </div>
-            {job.program && (
-              <>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-xs font-medium rounded-full bg-primary/10 text-primary px-2 py-0.5">{job.program}</span>
-              </>
-            )}
-            <span className="text-muted-foreground">•</span>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin size={16} />
-              {job.location}
-            </div>
-          </div>
-        </div>
+    <div className="bg-card rounded-2xl shadow-sm p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <button type="button" onClick={() => setOpen(true)} className="flex-1 min-w-0 text-left">
+          <h3 className="font-semibold text-lg mb-1 truncate hover:text-primary">{job.title}</h3>
+          <JobMeta job={job} />
+        </button>
         <JobTypeBadge type={job.type} />
       </div>
 
       {job.salary && (
-        <div className="flex items-center gap-1.5 text-sm text-foreground mb-3">
+        <div className="flex items-center gap-1.5 text-sm text-foreground mb-2">
           <DollarSign size={16} className="text-muted-foreground" />
           {job.salary}
         </div>
       )}
 
-      <p className="text-sm text-foreground mb-4 line-clamp-2">{job.description}</p>
+      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{job.description}</p>
 
-      {expanded && (
-        <div className="space-y-4 mb-4 pb-4 border-b border-border">
-          <div>
-            <h4 className="text-sm font-medium mb-2">Requirements:</h4>
-            <ul className="space-y-1">
-              {job.requirements.map((req, index) => (
-                <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
-                  {req}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium mb-1">Contact:</h4>
-            <p className="text-sm text-muted-foreground">{job.contactEmail}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock size={14} />
-          Posted {job.postedDate} by {job.postedBy}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+          <Clock size={14} className="shrink-0" />
+          <span className="truncate">Posted {job.postedDate} by {job.postedBy}</span>
         </div>
         <div className="flex items-center gap-4">
           {canDelete && (
-            <button
-              onClick={onDelete}
-              className="flex items-center gap-1 text-xs text-destructive hover:underline"
-            >
+            <button onClick={onDelete} className="flex items-center gap-1 text-xs text-destructive hover:underline">
               <Trash2 size={13} />
               Remove
             </button>
@@ -345,15 +306,123 @@ function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; can
               <Sparkles size={14} /> Explain with AI
             </button>
           )}
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-sm text-primary hover:underline"
-          >
-            {expanded ? 'Show less' : 'Show more'}
+          <button onClick={() => setOpen(true)} className="text-sm font-semibold text-primary hover:underline">
+            View details
           </button>
         </div>
       </div>
+
+      {open && <JobDetails job={job} onClose={() => setOpen(false)} onExplain={onExplain} />}
     </div>
+  );
+}
+
+function JobMeta({ job }: { job: JobPosting }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
+      <span className="flex items-center gap-1.5 min-w-0">
+        <Building2 size={16} className="shrink-0" />
+        {job.company}
+      </span>
+      {job.program && (
+        <>
+          <span>•</span>
+          <span className="text-xs font-medium rounded-full bg-primary/10 text-primary px-2 py-0.5">{job.program}</span>
+        </>
+      )}
+      <span>•</span>
+      <span className="flex items-center gap-1.5">
+        <MapPin size={16} className="shrink-0" />
+        {job.location}
+      </span>
+    </div>
+  );
+}
+
+/** Full job posting in a pop-up, so the list below never shifts. */
+function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () => void; onExplain?: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={job.title}>
+      <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-bold text-xl">{job.title}</h3>
+            <div className="mt-1.5">
+              <JobMeta job={job} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <JobTypeBadge type={job.type} />
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {job.salary && (
+          <div className="inline-flex items-center gap-1.5 rounded-xl bg-muted/60 px-3 py-2 text-sm font-medium">
+            <DollarSign size={16} className="text-muted-foreground" />
+            {job.salary}
+          </div>
+        )}
+
+        <div>
+          <h4 className="text-sm font-semibold mb-1.5">About the job</h4>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.description}</p>
+        </div>
+
+        {job.requirements.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold mb-1.5">Requirements</h4>
+            <ul className="space-y-1.5">
+              {job.requirements.map((req, index) => (
+                <li key={index} className="text-sm flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  {req}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="rounded-xl bg-muted/50 p-4 text-sm">
+          <p className="font-semibold mb-0.5">How to apply</p>
+          <a href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`} className="text-primary hover:underline break-all">
+            {job.contactEmail}
+          </a>
+          <p className="text-xs text-muted-foreground mt-2">Posted {job.postedDate} by {job.postedBy}. Never pay a fee to apply for a job.</p>
+        </div>
+
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+          {onExplain && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onExplain();
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f5c400] text-[#002060] text-sm font-semibold hover:brightness-95"
+            >
+              <Sparkles size={16} /> Explain with AI
+            </button>
+          )}
+          <a
+            href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+          >
+            <Mail size={16} /> Apply by email
+          </a>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -428,6 +497,7 @@ function JobPostingForm({
   onPosted: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [emailAlumni, setEmailAlumni] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -447,7 +517,7 @@ function JobPostingForm({
     e.preventDefault();
     setSubmitting(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('jobs').insert({
+    const { data: created, error } = await supabase.from('jobs').insert({
       title: formData.title.trim(),
       company: formData.company.trim(),
       location: formData.location.trim(),
@@ -459,13 +529,31 @@ function JobPostingForm({
       posted_by: posterName,
       program: formData.program || null,
       created_by: user?.id,
-    });
-    setSubmitting(false);
+    }).select('id').single();
     if (error) {
+      setSubmitting(false);
       toast.error(`Could not post job: ${error.message}`);
       return;
     }
-    toast.success('Job posted!');
+    if (emailAlumni && created) {
+      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-job', { body: { jobId: created.id } });
+      if (mailError) {
+        let message = 'Job posted, but the email could not be sent.';
+        try {
+          const body = await (mailError as any).context?.json();
+          if (body?.error) message = `Job posted. ${body.error}`;
+        } catch {
+          /* keep default */
+        }
+        toast.warning(message);
+      } else {
+        const who = formData.program ? `${formData.program} alumni` : 'alumni';
+        toast.success(mail?.sent ? `Job posted and emailed to ${mail.sent} ${who}.` : `Job posted. No ${who} with accounts to email yet.`);
+      }
+    } else {
+      toast.success('Job posted!');
+    }
+    setSubmitting(false);
     onPosted();
   };
 
@@ -607,6 +695,16 @@ function JobPostingForm({
           />
           <p className="text-xs text-muted-foreground mt-1">Enter each requirement on a new line</p>
         </div>
+
+        <label className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3.5 text-sm cursor-pointer">
+          <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
+          <span>
+            <span className="font-medium">Email this job to alumni</span>
+            <span className="block text-xs text-muted-foreground">
+              {formData.program ? `Sent to ${formData.program} alumni with an account` : 'Sent to all alumni with an account'}, except those who turned off job emails.
+            </span>
+          </span>
+        </label>
 
         <div className="flex flex-row-reverse gap-3 pt-2">
           <button

@@ -409,3 +409,8 @@ create table if not exists public.ai_usage (
 );
 create index if not exists ai_usage_user_time on public.ai_usage (user_id, created_at desc);
 alter table public.ai_usage enable row level security;
+
+-- Email preferences (Settings → Notifications) and one-time job alerts
+alter table public.profiles add column if not exists email_jobs boolean not null default true;
+alter table public.profiles add column if not exists email_announcements boolean not null default true;
+alter table public.jobs add column if not exists emailed_at timestamptz;

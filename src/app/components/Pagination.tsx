@@ -26,6 +26,7 @@ export function Pagination({
   to,
   total,
   label = 'items',
+  alwaysShowControls = false,
 }: {
   page: number;
   pages: number;
@@ -34,6 +35,8 @@ export function Pagination({
   to: number;
   total: number;
   label?: string;
+  /** Show the page buttons even when everything fits on one page */
+  alwaysShowControls?: boolean;
 }) {
   if (total === 0) return null;
   // Show up to 5 page numbers around the current page
@@ -44,7 +47,7 @@ export function Pagination({
       <p className="text-muted-foreground">
         Showing {from}–{to} of {total} {label}
       </p>
-      {pages > 1 && (
+      {(pages > 1 || alwaysShowControls) && (
         <div className="flex items-center gap-1">
           <button
             onClick={() => setPage(page - 1)}

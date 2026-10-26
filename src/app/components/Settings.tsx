@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { ShieldCheck, KeyRound, Save, User, Mail, Camera, Trash2, ArrowRight, Lock } from 'lucide-react';
+import { ShieldCheck, KeyRound, Save, User, Mail, Camera, Trash2, ArrowRight, Lock, Bell, Database, Download, LogOut, Clock, Megaphone, Briefcase, UserX } from 'lucide-react';
+import { useContactInfo } from '@/lib/settings';
+import { confirmDialog } from './ConfirmDialog';
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase, passwordUpdateError } from '@/lib/supabase';
@@ -15,7 +17,7 @@ interface SettingsProps {
   onOpenProfile?: () => void;
 }
 
-type Tab = 'account' | 'password';
+type Tab = 'account' | 'password' | 'notifications' | 'data';
 
 const input =
   'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm';
@@ -138,7 +140,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
     <div className="w-full space-y-6 animate-in fade-in duration-300">
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground">Settings</h2>
-        <p className="text-muted-foreground text-sm mt-1">{isAlumni ? 'Your sign-in password' : 'Manage your account and sign-in security'}</p>
+        <p className="text-muted-foreground text-sm mt-1">{isAlumni ? 'Sign-in, notifications and your data' : 'Your account, sign-in, notifications and data'}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
@@ -158,7 +160,9 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
           </div>
           <nav className="space-y-1.5">
             {!isAlumni && navItem('account', <User size={16} />, 'Account', 'Name, photo and mobile')}
-            {navItem('password', <KeyRound size={16} />, 'Password', 'Change your password')}
+            {navItem('password', <KeyRound size={16} />, 'Sign-in & security', 'Password and devices')}
+            {navItem('notifications', <Bell size={16} />, 'Notifications', 'Emails you receive')}
+            {navItem('data', <Database size={16} />, 'Privacy & data', 'Download or delete your data')}
           </nav>
           {isAlumni && onOpenProfile && (
             <button
@@ -250,7 +254,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
               </button>
             </div>
           </form>
-        ) : (
+        ) : tab === 'password' ? (
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_18rem] gap-6 items-start">
             <form onSubmit={savePassword} className="bg-card rounded-2xl shadow-sm divide-y divide-border/70">
               <div className="p-5 sm:p-6">
@@ -283,7 +287,12 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
                 <li>Alumni Affairs and program chairs will never ask for your password.</li>
               </ul>
             </div>
+            <SignInActivity />
           </div>
+        ) : tab === 'notifications' ? (
+          <NotificationsPanel userId={currentUser?.id} isAlumni={isAlumni} />
+        ) : (
+          <DataPanel currentUser={currentUser} isAlumni={isAlumni} />
         )}
       </div>
     </div>
@@ -329,5 +338,206 @@ function PasswordField({
         <RevealButton shown={shown} onToggle={onToggle} />
       </div>
     </div>
+  );
+}
+
+function Panel({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-card rounded-2xl shadow-sm divide-y divide-border/70">
+      <div className="p-5 sm:p-6">
+        <h3 className="font-semibold text-lg">{title}</h3>
+        {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Last sign-in and a way to sign out every other device. */
+function SignInActivity() {
+  const [info, setInfo] = useState<{ last?: string; created?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) =>
+      setInfo({ last: data.user?.last_sign_in_at || undefined, created: data.user?.created_at || undefined }),
+    );
+  }, []);
+  const fmt = (d?: string) => (d ? new Date(d).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+
+  const signOutOthers = async () => {
+    const ok = await confirmDialog({
+      title: 'Sign out other devices?',
+      message: 'You will stay signed in here. Phones and computers where you are signed in will need to log in again.',
+      confirmLabel: 'Sign out others',
+    });
+    if (!ok) return;
+    setBusy(true);
+    const { error } = await supabase.auth.signOut({ scope: 'others' });
+    setBusy(false);
+    if (error) toast.error(`Could not sign out other devices: ${error.message}`);
+    else toast.success('Other devices have been signed out');
+  };
+
+  return (
+    <div className="xl:col-start-1 bg-card rounded-2xl shadow-sm p-5 sm:p-6 space-y-4">
+      <h3 className="font-semibold flex items-center gap-2">
+        <Clock size={17} className="text-primary" /> Sign-in activity
+      </h3>
+      <dl className="grid sm:grid-cols-2 gap-3 text-sm">
+        <div className="rounded-xl bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">Last sign-in</dt>
+          <dd className="font-medium mt-0.5">{fmt(info?.last)}</dd>
+        </div>
+        <div className="rounded-xl bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">Account created</dt>
+          <dd className="font-medium mt-0.5">{fmt(info?.created)}</dd>
+        </div>
+      </dl>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <p className="text-sm text-muted-foreground">Lost a phone or used a shared computer? Sign out everywhere else.</p>
+        <button
+          type="button"
+          onClick={signOutOthers}
+          disabled={busy}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-muted text-sm font-semibold hover:bg-muted/70 disabled:opacity-60 shrink-0"
+        >
+          <LogOut size={16} /> {busy ? 'Signing out...' : 'Sign out other devices'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Email preferences, saved as soon as a switch is flipped. */
+function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: boolean }) {
+  const [prefs, setPrefs] = useState<{ email_jobs: boolean; email_announcements: boolean } | null>(null);
+  React.useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('profiles')
+      .select('email_jobs, email_announcements')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => setPrefs({ email_jobs: data?.email_jobs ?? true, email_announcements: data?.email_announcements ?? true }));
+  }, [userId]);
+
+  const toggle = async (key: 'email_jobs' | 'email_announcements') => {
+    if (!prefs || !userId) return;
+    const value = !prefs[key];
+    setPrefs({ ...prefs, [key]: value });
+    const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
+    if (error) {
+      setPrefs({ ...prefs });
+      toast.error(`Could not save: ${error.message}`);
+    } else toast.success(value ? 'Emails turned on' : 'Emails turned off');
+  };
+
+  const rows: { key: 'email_jobs' | 'email_announcements'; icon: React.ReactNode; title: string; text: string }[] = [
+    {
+      key: 'email_jobs',
+      icon: <Briefcase size={18} />,
+      title: 'New job openings',
+      text: isAlumni ? 'When a job for your program (or for all programs) is posted on the Job Board.' : 'Job posts emailed to alumni (staff only receive these if they also have an alumni record).',
+    },
+    {
+      key: 'email_announcements',
+      icon: <Megaphone size={18} />,
+      title: 'Announcements',
+      text: 'Homecomings, seminars and notices from Alumni Affairs and your program chair.',
+    },
+  ];
+
+  return (
+    <Panel title="Notifications" sub="Choose which emails the OMSU Alumni Tracer sends you.">
+      {!prefs ? (
+        <p className="p-6 text-sm text-muted-foreground">Loading...</p>
+      ) : (
+        rows.map((r) => (
+          <div key={r.key} className="p-5 sm:p-6 flex items-start gap-4">
+            <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">{r.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">{r.title}</p>
+              <p className="text-sm text-muted-foreground">{r.text}</p>
+            </div>
+            <Switch on={prefs[r.key]} onClick={() => toggle(r.key)} label={r.title} />
+          </div>
+        ))
+      )}
+      <p className="p-5 sm:p-6 text-xs text-muted-foreground">Account emails, like verification codes and password resets, are always sent.</p>
+    </Panel>
+  );
+}
+
+function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onClick}
+      className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${on ? 'bg-primary' : 'bg-slate-300'}`}
+    >
+      <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${on ? 'translate-x-5' : ''}`} />
+    </button>
+  );
+}
+
+/** Data Privacy Act rights: get a copy of your data, or ask Alumni Affairs to delete it. */
+function DataPanel({ currentUser, isAlumni }: { currentUser: CurrentUser | null; isAlumni: boolean }) {
+  const contact = useContactInfo();
+  const [busy, setBusy] = useState(false);
+
+  const download = async () => {
+    if (!currentUser) return;
+    setBusy(true);
+    const [{ data: profile }, { data: record }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
+      supabase.from('alumni_records').select('course, batch, email, data, updated_at').eq('user_id', currentUser.id).maybeSingle(),
+    ]);
+    setBusy(false);
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), account: profile, tracerRecord: record }, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omsu-alumni-data-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Your data was downloaded');
+  };
+
+  const deletionMail = `mailto:${contact.email}?subject=${encodeURIComponent('Request to delete my OMSU Alumni Tracer account')}&body=${encodeURIComponent(
+    `Hello Alumni Affairs,\n\nI would like my OMSU Alumni Tracer account and personal data deleted.\n\nName: ${`${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim()}\nAccount email: ${currentUser?.email || ''}\n\nThank you.`,
+  )}`;
+
+  return (
+    <Panel title="Privacy & data" sub="Your rights under the Data Privacy Act of 2012 (RA 10173).">
+      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+        <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Download size={18} />
+        </span>
+        <div className="flex-1">
+          <p className="font-medium">Download my data</p>
+          <p className="text-sm text-muted-foreground">A copy of your account{isAlumni ? ' and tracer record' : ''} as a file.</p>
+        </div>
+        <button type="button" onClick={download} disabled={busy} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+          <Download size={16} /> {busy ? 'Preparing...' : 'Download'}
+        </button>
+      </div>
+      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+        <span className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+          <UserX size={18} />
+        </span>
+        <div className="flex-1">
+          <p className="font-medium">Delete my account</p>
+          <p className="text-sm text-muted-foreground">Send a request to the Alumni Affairs Office. They will confirm before anything is removed.</p>
+        </div>
+        <a href={deletionMail} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100">
+          <Mail size={16} /> Request deletion
+        </a>
+      </div>
+    </Panel>
   );
 }

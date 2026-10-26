@@ -49,8 +49,9 @@ Deno.serve(async (req) => {
 
   const emails: string[] = [];
   for (let i = 0; i < ids.length; i += 500) {
-    const { data: ps } = await admin.from('profiles').select('email').in('id', ids.slice(i, i + 500));
-    emails.push(...(ps || []).map((p) => p.email).filter(Boolean));
+    const { data: ps } = await admin.from('profiles').select('email, email_announcements').in('id', ids.slice(i, i + 500));
+    // Skip people who turned off announcement emails in Settings
+    emails.push(...(ps || []).filter((p) => p.email_announcements !== false).map((p) => p.email).filter(Boolean));
   }
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
@@ -64,7 +65,7 @@ Deno.serve(async (req) => {
   <div style="white-space:pre-wrap">${escapeHtml(ann.content)}</div>
   <p style="margin-top:18px;color:#6b7280">Posted by ${escapeHtml(ann.author || 'OMSU Alumni Affairs')}</p>
   <p><a href="${escapeHtml(site)}" style="display:inline-block;padding:10px 18px;background:#002060;color:#fff;border-radius:6px;text-decoration:none">Open the OMSU Alumni Tracer</a></p>
-  <p style="font-size:12px;color:#9ca3af">You received this because you have an OMSU Alumni Tracer account.</p>
+  <p style="font-size:12px;color:#9ca3af">You received this because you have an OMSU Alumni Tracer account. To stop these emails, turn them off in Settings → Notifications.</p>
 </div>`;
 
   let sent = 0;
