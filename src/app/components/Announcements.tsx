@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/lib/preferences';
-import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
+import { Megaphone, Calendar, Tag, Plus, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
 import { supabase } from '@/lib/supabase';
 import { courseScopeForRole } from '@/lib/alumni';
@@ -140,25 +139,6 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     setCategory('General');
     setShowAddForm(false);
     load();
-  };
-
-  const handleDelete = async (ann: Announcement) => {
-    const mine = !!myId && ann.createdBy === myId;
-    const ok = await confirmDialog({
-      title: t('Delete this announcement for everyone?'),
-      message: mine
-        ? t('Announcements are shared, so deleting removes it for every account, not just you. To only remove it from your own list, use Hide instead.')
-        : t('This was posted by {author}. Deleting removes it for every account. To only remove it from your own list, use Hide instead.', { author: ann.author }),
-      confirmLabel: t('Delete for everyone'),
-      danger: true,
-    });
-    if (!ok) return;
-    const { data, error } = await supabase.from('announcements').delete().eq('id', ann.id).select('id');
-    if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : t('You can only delete announcements you posted.'));
-      return;
-    }
-    setAnnouncements((list) => list.filter((a) => a.id !== ann.id));
   };
 
   const toggleHidden = (id: string) => {
@@ -373,15 +353,6 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
                   {hidden.includes(ann.id) ? <Eye size={13} /> : <EyeOff size={13} />}
                   {hidden.includes(ann.id) ? t('Unhide') : t('Hide for me')}
                 </button>
-                {(userRole === 'admin' || (!!myId && ann.createdBy === myId)) && (
-                  <button
-                    onClick={() => handleDelete(ann)}
-                    className="flex items-center gap-1 text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
-                  >
-                    <Trash2 size={13} />
-                    {t('Delete for everyone')}
-                  </button>
-                )}
               </div>
             </div>
           </div>
