@@ -97,3 +97,19 @@ Import the GitHub repo in Vercel (framework: Vite) and add the two environment v
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. In Supabase → Authentication → URL
 Configuration, set the **Site URL** to your Vercel URL so confirmation and password-reset
 emails link back to the site.
+
+## AI Job Assistant (Google Gemini)
+
+Alumni can paste a job link, the job text, or a screenshot/PDF and get a plain-language
+explanation (English or Filipino), a pay breakdown, a skills check, a glossary, and help with a
+cover letter or interview practice. It runs in the `job-assistant` Supabase Edge Function.
+
+Secrets (Supabase Dashboard → Edge Functions → Secrets):
+
+| Name | Required | Notes |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | yes | From Google AI Studio (aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | no | Defaults to `gemini-flash-latest`, then `gemini-2.5-flash` |
+
+Each person can make 20 AI requests per 24 hours (`ai_usage` table). Links that point to
+private or internal addresses are refused.

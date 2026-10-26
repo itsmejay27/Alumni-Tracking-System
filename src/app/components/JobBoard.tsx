@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2 } from 'lucide-react';
+import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -30,9 +30,11 @@ interface JobBoardProps {
   userRole: string;
   userId: string;
   posterName: string;
+  /** Opens the AI Job Assistant with this job's text */
+  onExplain?: (jobText: string) => void;
 }
 
-export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
+export function JobBoard({ userRole, userId, posterName, onExplain }: JobBoardProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'full-time' | 'part-time' | 'contract' | 'internship'>('all');
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -208,6 +210,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             job={job}
             canDelete={isAdmin || job.createdBy === userId}
             onDelete={() => handleDelete(job.id)}
+            onExplain={onExplain ? () => onExplain(jobToText(job)) : undefined}
           />
         ))}
         <Pagination {...paged} label="jobs" />
@@ -223,7 +226,23 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   );
 }
 
-function JobCard({ job, canDelete, onDelete }: { job: JobPosting; canDelete: boolean; onDelete: () => void }) {
+const jobToText = (j: JobPosting) =>
+  [
+    `Job title: ${j.title}`,
+    `Company: ${j.company}`,
+    `Location: ${j.location}`,
+    `Type: ${j.type}`,
+    j.salary ? `Salary: ${j.salary}` : 'Salary: not stated',
+    '',
+    j.description,
+    '',
+    'Requirements:',
+    ...j.requirements.map((r) => `- ${r}`),
+    '',
+    `Contact: ${j.contactEmail}`,
+  ].join('\n');
+
+function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; canDelete: boolean; onDelete: () => void; onExplain?: () => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -294,6 +313,11 @@ function JobCard({ job, canDelete, onDelete }: { job: JobPosting; canDelete: boo
             >
               <Trash2 size={13} />
               Remove
+            </button>
+          )}
+          {onExplain && (
+            <button onClick={onExplain} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              <Sparkles size={14} /> Explain with AI
             </button>
           )}
           <button
