@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
+import { RevealButton } from './RevealButton';
 import { passwordStrength } from '@/lib/programs';
 import { LegalDoc, LegalModal } from './Legal';
 
@@ -44,6 +45,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [agreed, setAgreed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [legal, setLegal] = useState<LegalDoc | null>(null);
 
   useEffect(() => {
@@ -263,14 +266,15 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 <div className="relative">
                   <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete={step === 'signup' ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} pr-11`}
                     placeholder="••••••••"
                   />
+                  <RevealButton shown={showPassword} onToggle={() => setShowPassword((v) => !v)} />
                 </div>
                 {step === 'signup' && <PasswordStrength password={password} />}
               </div>
@@ -282,14 +286,15 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 <div className="relative">
                   <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type="password"
+                    type={showConfirm ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={inputClass}
+                    className={`${inputClass} pr-11`}
                     placeholder="••••••••"
                   />
+                  <RevealButton shown={showConfirm} onToggle={() => setShowConfirm((v) => !v)} />
                 </div>
               </div>
             )}

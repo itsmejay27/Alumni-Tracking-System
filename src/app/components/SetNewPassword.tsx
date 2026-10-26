@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
+import { RevealButton } from './RevealButton';
 import { passwordStrength } from '@/lib/programs';
 
 /** Shown after someone opens a password-reset link from their email. */
@@ -10,6 +11,7 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shown, setShown] = useState<Record<string, boolean>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,13 +49,14 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
             <div className="relative">
               <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                type="password"
+                type={shown[f.label] ? 'text' : 'password'}
                 required
                 autoComplete="new-password"
                 value={f.v}
                 onChange={(e) => f.set(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-[#002060] text-sm"
+                className="w-full pl-11 pr-11 py-3 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-[#002060] text-sm"
               />
+              <RevealButton shown={!!shown[f.label]} onToggle={() => setShown((s) => ({ ...s, [f.label]: !s[f.label] }))} />
             </div>
           </div>
         ))}
