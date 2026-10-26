@@ -513,3 +513,6 @@ drop policy if exists "jobs: owner or admin update" on public.jobs;
 create policy "jobs: owner or admin update" on public.jobs for update to authenticated
   using (created_by = (select auth.uid()) or (select public.app_role()) = 'admin')
   with check (created_by = (select auth.uid()) or (select public.app_role()) = 'admin');
+drop policy if exists "announcements: admins delete" on public.announcements;
+create policy "announcements: admins delete" on public.announcements for delete to authenticated
+  using ((select public.app_role()) = 'admin');

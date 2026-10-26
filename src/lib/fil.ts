@@ -406,4 +406,9 @@ export const FIL: Record<string, string> = {
   "No email requested.": "Walang hiniling na email.",
   "Sent to Alumni Affairs for approval. It will appear on the Job Board once approved.": "Ipinadala sa Alumni Affairs para ma-approve. Lalabas ito sa Job Board kapag na-approve na.",
   "Alumni Affairs reviews every job before it goes live. Any email is sent after approval.": "Sinusuri ng Alumni Affairs ang bawat trabaho bago ito lumabas. Ipapadala ang email pagkatapos ma-approve.",
+  "Delete this announcement?": "Burahin ang anunsyong ito?",
+  "It will be removed for every account.": "Aalisin ito sa lahat ng account.",
+  "Delete": "Burahin",
+  "Only Alumni Affairs can delete announcements.": "Ang Alumni Affairs lang ang maaaring magbura ng anunsyo.",
+  "Announcement deleted.": "Nabura ang anunsyo.",
 };
