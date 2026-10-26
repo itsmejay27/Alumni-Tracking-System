@@ -5,6 +5,7 @@ import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
 import { passwordStrength } from '@/lib/programs';
+import { LegalDoc, LegalModal } from './Legal';
 
 export type AuthMode = 'signin' | 'signup' | 'reset';
 type Step = AuthMode | 'verify' | 'resetCode';
@@ -42,6 +43,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [agreed, setAgreed] = useState(false);
+  const [legal, setLegal] = useState<LegalDoc | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -118,6 +121,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         setError('Please choose a stronger password (at least 8 characters).');
       } else if (password !== confirmPassword) {
         setError('Passwords do not match.');
+      } else if (!agreed) {
+        setError('Please agree to the Terms of Use and Privacy Policy.');
       } else if (!(await studentIdOk())) {
         // message already set
       } else {
@@ -289,6 +294,24 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
               </div>
             )}
 
+            {step === 'signup' && (
+              <label className="flex items-start gap-2.5 text-sm text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[#002060] shrink-0"
+                />
+                <span>
+                  I agree to the{' '}
+                  <button type="button" onClick={() => setLegal('terms')} className="font-semibold text-[#002060] hover:underline">Terms of Use</button>{' '}
+                  and{' '}
+                  <button type="button" onClick={() => setLegal('privacy')} className="font-semibold text-[#002060] hover:underline">Privacy Policy</button>, and I
+                  consent to OMSU processing my data for the Graduate Tracer Study.
+                </span>
+              </label>
+            )}
+
             {codeStep && (
               <div>
                 <label className={labelClass}>Verification code</label>
@@ -356,6 +379,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           </div>
         </div>
       </div>
+      {legal && <LegalModal doc={legal} onClose={() => setLegal(null)} />}
     </div>
   );
 }

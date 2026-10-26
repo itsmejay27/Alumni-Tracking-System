@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Mail, Phone, MapPin, Globe, Clock, Pencil, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { AboutEditor } from './AboutEditor';
 import { ContactInfo, saveContactInfo, useContactInfo } from '@/lib/settings';
 
 const FIELDS: { key: keyof ContactInfo; label: string; multiline?: boolean }[] = [
@@ -48,7 +49,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
           <h2 className="text-2xl font-bold tracking-tight text-foreground">{editable ? 'Contact Info' : 'Contact Us'}</h2>
           <p className="text-muted-foreground mt-1 text-sm">
             {editable
-              ? 'These details appear on the Contact Us page and the landing page.'
+              ? 'Contact details and the Vision, Mission and Core Values shown on the landing page.'
               : 'Get in touch with the OMSU Alumni Affairs Office'}
           </p>
         </div>
@@ -127,6 +128,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
           </div>
         </div>
       )}
+      {editable && <AboutEditor />}
     </div>
   );
 }
