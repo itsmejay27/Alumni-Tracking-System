@@ -5,6 +5,7 @@ import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
 import { AccountsManager } from './components/AccountsManager';
+import { LinkStudentId } from './components/LinkStudentId';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
@@ -82,6 +83,8 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
+  // Alumni accounts must be linked to a graduate record (Student ID) before using the system
+  const [needsLink, setNeedsLink] = useState<boolean | null>(null);
   const [authScreen, setAuthScreen] = useState<AuthMode | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -106,6 +109,7 @@ export default function App() {
   useEffect(() => {
     if (!userId) {
       setCurrentUser(null);
+      setNeedsLink(null);
       return;
     }
     let cancelled = false;
@@ -122,6 +126,14 @@ export default function App() {
           return;
         }
         const user = profileToUser(data);
+        if (user.role === 'alumni') {
+          supabase
+            .from('alumni_records')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+            .then(({ data: rec }) => !cancelled && setNeedsLink(!rec));
+        } else setNeedsLink(false);
         setCurrentUser(user);
         setAuthScreen(null);
         setActiveTab(user.role.startsWith('admin') ? 'dashboard' : 'home');
@@ -159,11 +171,20 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  if (!authReady || (session && !currentUser)) {
+  if (!authReady || (session && !currentUser) || (currentUser?.role === 'alumni' && needsLink === null)) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
         <LoadingState label="Loading..." />
       </div>
+    );
+  }
+
+  if (session && currentUser && needsLink && !recoveringPassword) {
+    return (
+      <>
+        <LinkStudentId defaultLastName={currentUser.lastName} onLinked={() => setNeedsLink(false)} />
+        <AppToaster />
+      </>
     );
   }
 
@@ -430,7 +451,7 @@ export default function App() {
             </>
           ) : (
             <>
-              {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} />}
+              {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} userId={currentUser.id} firstName={currentUser.givenName} />}
               {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}

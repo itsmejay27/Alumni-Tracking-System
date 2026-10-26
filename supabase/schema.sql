@@ -242,3 +242,79 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.staff_directory() from public, anon;
 grant execute on function public.staff_directory() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Student ID sign-up: alumni can only create an account for an existing record
+-- (Student ID + last name). Staff accounts are flagged by the invite function in
+-- app metadata ({"staff": true}), which users cannot set themselves.
+-- ---------------------------------------------------------------------------
+create index if not exists alumni_records_student_id_idx on public.alumni_records (upper(trim(data->>'studentId')));
+create unique index if not exists alumni_records_student_id_unique
+  on public.alumni_records (upper(trim(data->>'studentId')))
+  where coalesce(trim(data->>'studentId'), '') <> '';
+
+create or replace function public.check_student_id(p_student_id text, p_last_name text)
+returns text language plpgsql stable security definer set search_path = '' as $$
+declare r record;
+begin
+  select user_id into r from public.alumni_records
+   where upper(trim(data->>'studentId')) = upper(trim(p_student_id))
+     and upper(trim(data->>'lastName')) = upper(trim(p_last_name))
+   limit 1;
+  if not found then return 'not_found'; end if;
+  if r.user_id is not null then return 'taken'; end if;
+  return 'ok';
+end $$;
+revoke execute on function public.check_student_id(text, text) from public;
+grant execute on function public.check_student_id(text, text) to anon, authenticated;
+
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare rec_id text;
+begin
+  if coalesce(new.raw_app_meta_data->>'staff', '') <> 'true' then
+    select id into rec_id from public.alumni_records
+     where upper(trim(data->>'studentId')) = upper(trim(coalesce(new.raw_user_meta_data->>'student_id', '')))
+       and upper(trim(data->>'lastName')) = upper(trim(coalesce(new.raw_user_meta_data->>'last_name', '')))
+       and user_id is null
+     limit 1
+     for update;
+    if rec_id is null then
+      raise exception 'STUDENT_ID_NOT_FOUND';
+    end if;
+  end if;
+  insert into public.profiles (id, email, given_name, last_name)
+  values (new.id, lower(new.email),
+          upper(coalesce(new.raw_user_meta_data->>'given_name', '')),
+          upper(coalesce(new.raw_user_meta_data->>'last_name', '')));
+  if rec_id is not null then
+    update public.alumni_records
+       set user_id = new.id, email = lower(new.email),
+           data = data || jsonb_build_object('email', lower(new.email))
+     where id = rec_id;
+  end if;
+  return new;
+end $$;
+
+create or replace function public.link_student_id(p_student_id text, p_last_name text)
+returns text language plpgsql security definer set search_path = '' as $$
+declare rec_id text; uid uuid := auth.uid();
+begin
+  if uid is null then return 'not_signed_in'; end if;
+  if exists (select 1 from public.alumni_records where user_id = uid) then return 'already_linked'; end if;
+  select id into rec_id from public.alumni_records
+   where upper(trim(data->>'studentId')) = upper(trim(p_student_id))
+     and upper(trim(data->>'lastName')) = upper(trim(p_last_name))
+     and user_id is null
+   limit 1
+   for update;
+  if rec_id is null then return 'not_found'; end if;
+  update public.alumni_records
+     set user_id = uid,
+         email = (select email from public.profiles where id = uid),
+         data = data || jsonb_build_object('email', (select email from public.profiles where id = uid))
+   where id = rec_id;
+  return 'ok';
+end $$;
+revoke execute on function public.link_student_id(text, text) from public, anon;
+grant execute on function public.link_student_id(text, text) to authenticated;

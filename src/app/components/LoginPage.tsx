@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Lock, X, Mail, KeyRound, ArrowLeft } from 'lucide-react';
+import { User, Lock, X, Mail, KeyRound, ArrowLeft, IdCard } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -22,7 +22,7 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const COPY: Record<Step, { title: string; sub: string; button: string }> = {
   signin: { title: 'Welcome back', sub: 'Sign in to update your tracer record.', button: 'Sign In' },
-  signup: { title: 'Create your account', sub: 'For graduates of Occidental Mindoro State University.', button: 'Create Account' },
+  signup: { title: 'Create your account', sub: 'For OMSU graduates. You need your Student ID.', button: 'Create Account' },
   verify: { title: 'Verify your email', sub: '', button: 'Verify Email' },
   reset: { title: 'Forgot password', sub: "Enter your email and we'll send you a verification code.", button: 'Send Code' },
   resetCode: { title: 'Enter your code', sub: '', button: 'Continue' },
@@ -36,6 +36,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [givenName, setGivenName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -70,6 +71,26 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     }
   };
 
+  /** Sign-up is only for graduates already in the records: Student ID + last name must match. */
+  const studentIdOk = async () => {
+    const { data, error } = await supabase.rpc('check_student_id', { p_student_id: studentId.trim(), p_last_name: lastName.trim() });
+    if (error) {
+      setError(error.message);
+      return false;
+    }
+    if (data === 'not_found') {
+      setError(
+        "We couldn't find a graduate with this Student ID and last name. Check both (use the last name on your school records), or contact your program chair or the Alumni Affairs Office."
+      );
+      return false;
+    }
+    if (data === 'taken') {
+      setError('An account already exists for this Student ID. Sign in instead, or use "Forgot password?".');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -97,16 +118,18 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         setError('Please choose a stronger password (at least 8 characters).');
       } else if (password !== confirmPassword) {
         setError('Passwords do not match.');
+      } else if (!(await studentIdOk())) {
+        // message already set
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { given_name: givenName.trim(), last_name: lastName.trim() },
+            data: { given_name: givenName.trim(), last_name: lastName.trim(), student_id: studentId.trim() },
           },
         });
-        if (error) setError(error.message);
+        if (error) setError(/database error|student_id/i.test(error.message) ? 'Your Student ID and last name do not match our graduate records.' : error.message);
         else if (data.user && data.user.identities?.length === 0) setError('An account with this email already exists. Try signing in.');
         else if (!data.session) {
           go('verify');
@@ -174,6 +197,17 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {step === 'signup' && (
+              <div>
+                <label className={labelClass}>Student ID</label>
+                <div className="relative">
+                  <IdCard size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input required value={studentId} onChange={(e) => setStudentId(e.target.value)} className={inputClass} placeholder="e.g. IT-2018-0001" />
+                </div>
+                <p className="text-xs text-slate-500 mt-1.5">Must match your record at OMSU, together with your last name.</p>
+              </div>
+            )}
+
             {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

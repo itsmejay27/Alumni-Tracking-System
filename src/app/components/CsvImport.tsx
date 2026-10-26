@@ -102,13 +102,20 @@ export function CsvImport({
       return;
     }
 
-    // Program chairs can only import their own program's graduates
+    // Program chairs can only import their own program's graduates. The file must say which
+    // program it is for (a program column, or the program in the file name, e.g. BSIT_2025.xlsx).
     if (scope) {
       const others = result.programsFound.filter((p) => p !== scope);
       if (others.length) {
         const n = result.rows.filter((r) => r.course && r.course !== scope).length;
         setProblem(
           `This file contains ${n} graduate${n === 1 ? '' : 's'} from ${others.join(', ')}. You can only import ${scope} records. Upload a file that has ${scope} graduates only.`
+        );
+        return;
+      }
+      if (result.unknownProgram > 0) {
+        setProblem(
+          `This file doesn't say which program its graduates are from, so it can't be checked as ${scope}. Add a "Program" column, or put ${scope} in the file name (for example ${scope}_${THIS_YEAR}.xlsx), then upload it again.`
         );
         return;
       }
@@ -128,7 +135,11 @@ export function CsvImport({
   }));
   const existingKeys = new Set(existing.map((r) => key(r)));
   const existingEmails = new Set(existing.map((r) => (r.email || '').toLowerCase()).filter(Boolean));
-  const toImport = finalRows.filter((r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)));
+  const existingIds = new Set(existing.map((r) => (r.studentId || '').toUpperCase()).filter(Boolean));
+  const toImport = finalRows.filter(
+    (r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)) && !(r.studentId && existingIds.has(r.studentId))
+  );
+  const missingIds = toImport.filter((r) => !r.studentId).length;
   const duplicates = finalRows.length - toImport.length;
   const counts = {
     employed: toImport.filter((r) => r.status === 'Employed' || r.status === 'Self-Employed').length,
@@ -157,6 +168,7 @@ export function CsvImport({
         course: r.course,
         batch: `${r.yearGraduated - 1}-${r.yearGraduated}`,
         data: {
+          studentId: r.studentId,
           givenName: r.givenName,
           middleName: r.middleName,
           lastName: r.lastName,
@@ -275,6 +287,11 @@ export function CsvImport({
                 {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
               </p>
               {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system will be skipped.</p>}
+              {missingIds > 0 && (
+                <p className="text-amber-700">
+                  {missingIds} have no Student ID in the file. They can't sign up until a Student ID is added to their record (Alumni Records → Details).
+                </p>
+              )}
               {info?.format === 'tracer-sheet' && <p className="text-muted-foreground">Read as the official Graduate Tracer sheet.</p>}
             </div>
           </>

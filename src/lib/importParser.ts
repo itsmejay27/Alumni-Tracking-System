@@ -8,6 +8,7 @@ import type { Course } from './alumni';
 export type Cell = string | number | boolean | Date | null | undefined;
 
 export interface ParsedRow {
+  studentId: string;
   email: string | null;
   course: Course | null;
   givenName: string;
@@ -31,6 +32,8 @@ export interface ParsedRow {
 
 export interface ParseResult {
   rows: ParsedRow[];
+  /** Rows whose program could not be determined from the file or its name */
+  unknownProgram: number;
   programsFound: Course[];
   format: 'tracer-sheet' | 'table';
   skipped: number;
@@ -38,6 +41,7 @@ export interface ParseResult {
 
 // Header text (lower-cased, partial match) for each field. More specific keys come first.
 const COLUMNS: { key: string; match: string[] }[] = [
+  { key: 'studentId', match: ['student id', 'student no', 'student number', 'id number', 'id no'] },
   { key: 'fullName', match: ['name of graduate', 'full name', 'complete name', 'name of alumni'] },
   { key: 'lastName', match: ['last name', 'surname', 'family name'] },
   { key: 'givenName', match: ['first name', 'given name'] },
@@ -59,6 +63,8 @@ const COLUMNS: { key: string; match: string[] }[] = [
   { key: 'isIP', match: ['indigenous', 'ip member'] },
   { key: 'suggestions', match: ['suggestion', 'feedback', 'comment'] },
 ];
+
+const LOOKS_LIKE_PROGRAM = /bachelor|^bs\b|^bs[a-z]|^ab\b|education|science|technology|administration|arts|program|course/i;
 
 const FOOTER = /^(total|prepared by|noted by|approved by|certified|female|male\b|\d+\s*"?employed)/i;
 
@@ -144,6 +150,7 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
   const fileProgram = detectProgram(opts.fileName.replace(/[_.]/g, ' '));
   const programsFound = new Set<Course>();
   let currentProgram: Course | null = null;
+  let currentUnknown = false;
   // Official sheets group graduates under MALE / FEMALE section rows
   const isMarker = (r: Cell[], word: string) => r.slice(0, 2).some((c) => text(c).toUpperCase() === word);
   const hasFemaleMarker = table.slice(start).some((r) => isMarker(r, 'FEMALE'));
@@ -161,7 +168,14 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
     // Program names are often merged cells: carry the last one down
     const progCell = get(r, 'program');
     const rowProgram = progCell ? detectProgram(progCell) : null;
-    if (rowProgram) currentProgram = rowProgram;
+    if (rowProgram) {
+      currentProgram = rowProgram;
+      currentUnknown = false;
+    } else if (LOOKS_LIKE_PROGRAM.test(progCell)) {
+      // A program we don't trace (e.g. BSED): never fall back to the file name for these rows
+      currentProgram = null;
+      currentUnknown = true;
+    }
 
     let lastName = get(r, 'lastName');
     let givenName = get(r, 'givenName');
@@ -177,13 +191,14 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       continue;
     }
 
-    const course = currentProgram || fileProgram;
+    const course = currentUnknown ? null : currentProgram || fileProgram;
     if (course) programsFound.add(course);
     const sexText = get(r, 'sex');
     const ip = get(r, 'isIP').toLowerCase();
     const email = get(r, 'email').toLowerCase();
 
     rows.push({
+      studentId: get(r, 'studentId').toUpperCase(),
       email: /@/.test(email) ? email : null,
       course,
       givenName: givenName.toUpperCase(),
@@ -206,7 +221,7 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
     });
   }
 
-  return { rows, programsFound: [...programsFound], format, skipped };
+  return { rows, programsFound: [...programsFound], format, skipped, unknownProgram: rows.filter((r) => !r.course).length };
 }
 
 /** Guess the graduation year from a file name like "BSIT_2024-2025.xlsx" (-> 2025). */

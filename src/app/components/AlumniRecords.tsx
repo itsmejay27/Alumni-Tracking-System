@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { useAlumniRecords, AlumniRecord, currentJob, isEmployed } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
@@ -431,13 +433,20 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       {showImport && <CsvImport scope={courseScope as any} existing={records} onDone={reload} onClose={() => setShowImport(false)} />}
 
       {selectedRecord && (
-        <RecordDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
+        <RecordDetailModal
+          record={selectedRecord}
+          onClose={() => setSelectedRecord(null)}
+          onUpdated={(r) => {
+            setSelectedRecord(r);
+            reload();
+          }}
+        />
       )}
     </div>
   );
 }
 
-function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
+function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecord; onClose: () => void; onUpdated: (r: AlumniRecord) => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
@@ -459,7 +468,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
             </div>
             <div>
               <h3 className="text-xl sm:text-2xl font-black text-foreground leading-tight">{record.givenName} {record.lastName}</h3>
-              <p className="text-sm font-mono text-primary font-bold mt-0.5">Student ID: {record.studentId}</p>
+              <StudentIdEditor record={record} onUpdated={onUpdated} />
             </div>
           </div>
           <span
@@ -605,5 +614,68 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Lets Alumni Affairs / program chairs add or fix a graduate's Student ID (needed for sign-up). */
+function StudentIdEditor({ record, onUpdated }: { record: AlumniRecord; onUpdated: (r: AlumniRecord) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(record.studentId || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const id = value.trim().toUpperCase();
+    setSaving(true);
+    const { data: clash } = await supabase
+      .from('alumni_records')
+      .select('id')
+      .neq('id', record.id)
+      .filter('data->>studentId', 'eq', id)
+      .limit(1);
+    if (id && clash?.length) {
+      setSaving(false);
+      toast.error('Another graduate already has this Student ID');
+      return;
+    }
+    const { data: row, error } = await supabase.from('alumni_records').select('data').eq('id', record.id).single();
+    const { error: upErr } = error
+      ? { error }
+      : await supabase.from('alumni_records').update({ data: { ...(row!.data as object), studentId: id } }).eq('id', record.id);
+    setSaving(false);
+    if (upErr) {
+      toast.error(`Could not save: ${upErr.message}`);
+      return;
+    }
+    toast.success('Student ID saved');
+    setEditing(false);
+    onUpdated({ ...record, studentId: id });
+  };
+
+  if (!editing) {
+    return (
+      <p className="text-sm font-mono text-primary font-bold mt-0.5 flex items-center gap-2">
+        Student ID: {record.studentId || <span className="font-sans font-medium text-amber-700">none yet</span>}
+        <button onClick={() => setEditing(true)} className="font-sans text-xs font-semibold text-primary hover:underline">
+          {record.studentId ? 'Edit' : 'Add'}
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="e.g. IT-2025-0001"
+        className="h-8 w-44 px-2 rounded-lg border border-border bg-input-background text-sm font-mono"
+      />
+      <button onClick={save} disabled={saving} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-60">
+        {saving ? 'Saving' : 'Save'}
+      </button>
+      <button onClick={() => setEditing(false)} className="h-8 px-2 text-xs text-muted-foreground">
+        Cancel
+      </button>
+    </div>
   );
 }

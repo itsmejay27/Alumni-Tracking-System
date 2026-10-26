@@ -12,8 +12,12 @@ React + Vite frontend, Supabase for login and data, deployed on Vercel.
 
 ## Accounts and roles
 
-There are no built-in demo accounts. Everyone signs up with their own email from the
-landing page and starts as an **alumni** account.
+There are no built-in demo accounts.
+
+**Alumni** sign up from the landing page with their **Student ID + last name**, which must match
+a graduate record already in the system (seeded or imported by Alumni Affairs / program chairs).
+If no record matches, the account is not created. Program chairs can add or fix a Student ID
+from Alumni Records → Details. After signing in, alumni update their record in My Alumni Profile.
 
 ### Creating staff accounts (program chairs, directors)
 

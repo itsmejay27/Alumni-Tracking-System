@@ -182,6 +182,8 @@ Deno.serve(async (req) => {
     password,
     email_confirm: true,
     user_metadata: { given_name: givenName, last_name: lastName },
+    // Marks staff accounts so the sign-up Student ID check does not apply to them
+    app_metadata: { staff: true },
   });
   if (createError || !created.user) {
     const exists = /already/i.test(createError?.message || '');
