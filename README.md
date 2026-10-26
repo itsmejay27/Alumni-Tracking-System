@@ -35,7 +35,7 @@ Supabase → Edge Functions → Secrets. Use **either** Resend **or** Gmail.
 | Name | Value |
 | --- | --- |
 | `RESEND_API_KEY` | API key from resend.com → API Keys |
-| `RESEND_FROM` | sender, e.g. `OMSU Alumni Tracer <noreply@yourdomain.com>` (needs a domain verified in Resend) |
+| `RESEND_FROM` | sender, e.g. `OMSU Alumni Tracer <noreply@omsualumnitrack.site>` (needs a domain verified in Resend) |
 | `SITE_URL` | the live site address |
 
 Without a verified domain, Resend only lets you send from `onboarding@resend.dev` to the
