@@ -3,6 +3,7 @@ import { Mail, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { roleLabel } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
+import { Pagination, usePaged } from './Pagination';
 
 interface Staff {
   id: string;
@@ -31,6 +32,8 @@ export function CollegeOfficialsDirectory() {
     });
   }, []);
 
+  const paged = usePaged(staff, 9);
+
   if (loading) return <LoadingState label="Loading directory..." />;
   if (error) return <ErrorState message={error} />;
 
@@ -48,8 +51,9 @@ export function CollegeOfficialsDirectory() {
           <p className="text-sm text-muted-foreground mt-1">Program chairs will appear here once their accounts are set up.</p>
         </div>
       ) : (
+        <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {staff.map((s) => {
+          {paged.pageItems.map((s) => {
             const name = titleCase(`${s.given_name} ${s.middle_name ? s.middle_name[0] + '. ' : ''}${s.last_name}`.trim());
             const initials = `${s.given_name[0] || ''}${s.last_name[0] || ''}`.toUpperCase();
             return (
@@ -79,6 +83,10 @@ export function CollegeOfficialsDirectory() {
               </div>
             );
           })}
+        </div>
+        <div className="bg-card rounded-2xl shadow-sm">
+          <Pagination {...paged} label="people" />
+        </div>
         </div>
       )}
     </div>
