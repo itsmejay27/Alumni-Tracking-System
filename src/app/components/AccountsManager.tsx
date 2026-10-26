@@ -15,6 +15,8 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Alumni Affairs' },
   { value: 'alumni', label: 'Alumni Member' },
 ];
+// Alumni sign up themselves with their Student ID, so only staff roles can be created here
+const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni');
 const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
 
 interface Account {
@@ -292,12 +294,15 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Role / Department *</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
-                {ROLE_OPTIONS.map((o) => (
+                {STAFF_ROLE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                Staff accounts don't need a Student ID. Alumni create their own accounts with their Student ID.
+              </p>
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm font-semibold">Position Title (optional)</label>

@@ -114,6 +114,14 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
   const [legal, setLegal] = useState<LegalDoc | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
+  // Opened with a link like /#features: jump there, then drop the "#..." from the address bar
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (NAV.some((n) => n.id === id)) setTimeout(() => scrollToId(id), 50);
+  }, []);
+
   // Highlight the nav link of the section in view
   useEffect(() => {
     const sections = NAV.map((n) => document.getElementById(n.id)).filter(Boolean) as HTMLElement[];

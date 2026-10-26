@@ -193,6 +193,7 @@ Deno.serve(async (req) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Enter a valid email address' }, 400);
   if (!givenName || !lastName) return json({ error: 'First and last name are required' }, 400);
   if (!ROLES[role]) return json({ error: 'Unknown role' }, 400);
+  if (role === 'alumni') return json({ error: 'Alumni create their own accounts with their Student ID' }, 400);
 
   const password = tempPassword();
   // Supabase saves app_metadata only after the user row is inserted, so the sign-up trigger
