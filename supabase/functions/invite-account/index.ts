@@ -35,19 +35,37 @@ function tempPassword() {
 function invitationEmail(o: { name: string; roleLabel: string; email: string; password: string; siteUrl: string }) {
   const name = escapeHtml(o.name.toUpperCase());
   const site = escapeHtml(o.siteUrl);
+  const logo = escapeHtml(Deno.env.get('LOGO_URL') || 'https://omsualumnitrack.site/icon-192.png');
   const html = `
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:640px">
-  <p>Hello ${name},</p>
+<div style="background:#eef2fa;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border-collapse:separate">
+  <tr>
+    <td style="background:#002060;padding:20px 24px">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle;padding-right:14px"><img src="${logo}" width="56" height="56" alt="OMSU" style="display:block;border:0;width:56px;height:56px" /></td>
+        <td style="vertical-align:middle;color:#ffffff">
+          <div style="font-size:17px;font-weight:bold;line-height:1.3">OMSU Alumni Graduate Tracer</div>
+          <div style="font-size:12px;color:#f5c400;line-height:1.4">Occidental Mindoro State University</div>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:24px;font-size:14px;color:#222;line-height:1.6">
+  <p style="margin-top:0">Hello ${name},</p>
   <p>You have been given an account on the <b>OMSU Alumni Graduate Tracer</b> of Occidental Mindoro State University as <b>${escapeHtml(o.roleLabel)}</b>.</p>
   <p>You may now log in using the details below. For your security, you will be asked to change this temporary password the first time you sign in.</p>
-  <table style="border-collapse:collapse;margin:12px 0">
-    <tr><td style="padding:4px 12px 4px 0"><b>Login URL:</b></td><td><a href="${site}">${site}</a></td></tr>
-    <tr><td style="padding:4px 12px 4px 0"><b>Email:</b></td><td>${escapeHtml(o.email)}</td></tr>
-    <tr><td style="padding:4px 12px 4px 0"><b>Temporary Password:</b></td><td style="font-family:monospace;font-size:15px">${escapeHtml(o.password)}</td></tr>
+  <table style="border-collapse:collapse;margin:12px 0;background:#f6f8fc;border-radius:8px;font-size:14px;color:#222">
+    <tr><td style="padding:8px 12px"><b>Login URL:</b></td><td style="padding:8px 12px"><a href="${site}" style="color:#002060">${site}</a></td></tr>
+    <tr><td style="padding:8px 12px"><b>Email:</b></td><td style="padding:8px 12px">${escapeHtml(o.email)}</td></tr>
+    <tr><td style="padding:8px 12px"><b>Temporary Password:</b></td><td style="padding:8px 12px;font-family:monospace;font-size:15px">${escapeHtml(o.password)}</td></tr>
   </table>
-  <p>This is a system generated e-mail. Please do not reply. If you did not expect this invitation, please contact the OMSU Alumni Affairs Office.</p>
-  <p>Thank you,</p>
-  <p>OCCIDENTAL MINDORO STATE UNIVERSITY<br/>Alumni Affairs Office</p>
+  <p><a href="${site}" style="display:inline-block;background:#002060;color:#ffffff;text-decoration:none;font-weight:bold;padding:10px 22px;border-radius:999px">Log in now</a></p>
+  <p style="color:#666;font-size:12px">This is a system generated e-mail. Please do not reply. If you did not expect this invitation, please contact the OMSU Alumni Affairs Office.</p>
+  <p style="margin-bottom:0">Thank you,<br/><b>OCCIDENTAL MINDORO STATE UNIVERSITY</b><br/>Alumni Affairs Office</p>
+    </td>
+  </tr>
+</table>
 </div>`;
   const text = `Hello ${o.name.toUpperCase()},
 
