@@ -550,6 +550,14 @@ function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecor
             <EmploymentHistory record={record} />
           </div>
 
+          {/* PAST VERSIONS */}
+          <div className="space-y-4">
+            <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
+              <ClipboardList size={16} className="text-primary" /> Record history
+            </h4>
+            <RecordHistory recordId={record.id} />
+          </div>
+
           {/* SUGGESTIONS & FEEDBACK */}
           {record.suggestions && (
             <div className="space-y-4">
@@ -579,20 +587,94 @@ function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecor
 
 
 function EmploymentHistory({ record }: { record: AlumniRecord }) {
+  const [showPrevious, setShowPrevious] = useState(false);
   const history = record.employmentHistory?.length
     ? [...record.employmentHistory].reverse()
     : currentJob(record)
     ? [currentJob(record)!]
     : [];
-  if (!isEmployed(record) && history.every((h) => h.endDate)) {
-    return (
-      <div className="rounded-2xl bg-amber-50 p-5 text-sm text-amber-900">
-        {record.status === 'Not Tracked' ? 'This graduate has not answered the tracer yet.' : 'Currently not employed.'}
-        {history.length > 0 && <HistoryList items={history} />}
-      </div>
-    );
-  }
-  return history.length ? <HistoryList items={history} /> : <p className="text-sm text-muted-foreground">No employment details recorded.</p>;
+  const current = history.filter((h) => !h.endDate);
+  const previous = history.filter((h) => h.endDate);
+  return (
+    <div className="space-y-3">
+      {current.length ? (
+        <HistoryList items={current} />
+      ) : (
+        <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+          {record.status === 'Not Tracked' ? 'This graduate has not answered the tracer yet.' : 'Currently not employed.'}
+        </div>
+      )}
+      {previous.length > 0 && (
+        <div>
+          <button onClick={() => setShowPrevious((v) => !v)} className="text-sm font-medium text-primary hover:underline">
+            {showPrevious ? 'Hide' : 'Show'} previous jobs ({previous.length})
+          </button>
+          {showPrevious && <HistoryList items={previous} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Earlier versions of the record, saved automatically every time it changes. */
+function RecordHistory({ recordId }: { recordId: string }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<{ id: string; data: any; changed_at: string }[] | null>(null);
+
+  const toggle = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !items) {
+      const { data } = await supabase
+        .from('alumni_record_history')
+        .select('id, data, changed_at')
+        .eq('record_id', recordId)
+        .order('changed_at', { ascending: false });
+      setItems(data || []);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <button onClick={toggle} className="text-sm font-medium text-primary hover:underline">
+        {open ? 'Hide' : 'Show'} past versions of this record
+      </button>
+      {open && (
+        <div className="space-y-2">
+          {!items ? (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No earlier versions. This record has not been changed since it was added.</p>
+          ) : (
+            items.map((h) => {
+              const d = h.data || {};
+              const job = (d.employmentHistory || []).filter((j: any) => !j.endDate).pop();
+              return (
+                <div key={h.id} className="rounded-xl bg-muted/50 px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">{d.status || '—'}</span>
+                    <span className="text-xs text-muted-foreground">
+                      replaced on {new Date(h.changed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground mt-0.5">
+                    {job
+                      ? `${job.position || '—'} at ${job.company || '—'}`
+                      : d.currentPosition
+                      ? `${d.currentPosition} at ${d.currentCompany || '—'}`
+                      : 'No job listed'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {[d.civilStatus, d.mobileNo, d.presentAddress, d.lastUpdated && `last updated ${d.lastUpdated}`].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJob>>[] }) {

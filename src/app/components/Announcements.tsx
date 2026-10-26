@@ -32,6 +32,8 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
   const [content, setContent] = useState('');
   const [category, setCategory] = useState<'Event' | 'Job Seminar' | 'General' | 'Homecoming'>('General');
   const [targetCourse, setTargetCourse] = useState('all');
+  const [emailAlumni, setEmailAlumni] = useState(true);
+  const [posting, setPosting] = useState(false);
 
   const isAdmin = userRole.startsWith('admin');
   const adminCourse = courseScopeForRole(userRole);
@@ -69,19 +71,34 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     if (!title || !content) return;
 
     const course = userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : adminCourse;
-    const { error } = await supabase.from('announcements').insert({
-      title,
-      content,
-      category,
-      course,
-      author: `${authorName} · ${roleLabel(userRole)}`,
-    });
+    setPosting(true);
+    const { data: created, error } = await supabase
+      .from('announcements')
+      .insert({
+        title,
+        content,
+        category,
+        course,
+        author: `${authorName} · ${roleLabel(userRole)}`,
+      })
+      .select('id')
+      .single();
     if (error) {
+      setPosting(false);
       toast.error(`Could not post announcement: ${error.message}`);
       return;
     }
 
-    toast.success('Announcement posted.');
+    if (emailAlumni) {
+      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-announcement', {
+        body: { announcementId: created.id },
+      });
+      if (mailError) toast.warning('Announcement posted, but the email could not be sent.');
+      else toast.success(mail.sent ? `Announcement posted and emailed to ${mail.sent} alumni.` : 'Announcement posted. No alumni accounts to email yet.');
+    } else {
+      toast.success('Announcement posted.');
+    }
+    setPosting(false);
     setTitle('');
     setContent('');
     setCategory('General');
@@ -202,11 +219,19 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             />
           </div>
 
+          <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+            <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="w-4 h-4" />
+            <span>
+              Also email this to {userRole === 'admin' ? (targetCourse === 'all' ? 'all alumni' : `${targetCourse} alumni`) : `${adminCourse} alumni`} with an account
+            </span>
+          </label>
+
           <button
             type="submit"
-            className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-sm shadow-md"
+            disabled={posting}
+            className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-sm disabled:opacity-60"
           >
-            Post Notice
+            {posting ? 'Posting...' : 'Post Notice'}
           </button>
         </form>
       )}

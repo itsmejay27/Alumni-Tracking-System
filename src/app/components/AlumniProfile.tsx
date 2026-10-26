@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,7 +29,7 @@ interface AlumniProfileProps {
 
 const THIS_YEAR = new Date().getFullYear();
 const GRAD_YEARS = Array.from({ length: THIS_YEAR - 1999 }, (_, i) => THIS_YEAR - i);
-const PAGE_SIZE = 3;
+const PAGE_SIZE = 5;
 
 const input =
   'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm disabled:opacity-70 disabled:cursor-not-allowed';
@@ -137,18 +138,28 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
   // Newest first for display
   const ordered = [...history].reverse();
-  const pages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
-  const shown = ordered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const currentJobs = ordered.filter((e) => !e.endDate);
+  const previousJobs = ordered.filter((e) => e.endDate);
+  const pages = Math.max(1, Math.ceil(previousJobs.length / PAGE_SIZE));
+  const shownPrevious = previousJobs.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-  const updateEntry = (id: string, patch: Partial<EmploymentEntry>) =>
-    setHistory((h) => h.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const [employmentOpen, setEmploymentOpen] = useState(false);
+  const [showPrevious, setShowPrevious] = useState(false);
+  const [jobModal, setJobModal] = useState<{ entry: EmploymentEntry; isNew: boolean } | null>(null);
 
-  const addEntry = () => {
-    // Adding a new job closes the previous current job, so history is kept instead of replaced
-    const month = new Date().toISOString().slice(0, 7);
-    setHistory((h) => [...h.map((e) => (!e.endDate && savedIds.has(e.id) ? { ...e, endDate: month } : e)), newEntry()]);
-    setPage(0);
-    if (status === 'Unemployed') setStatus('Employed');
+  const openNewJob = () => setJobModal({ entry: newEntry(), isNew: true });
+
+  const saveJob = (entry: EmploymentEntry, isNew: boolean) => {
+    if (isNew) {
+      // A new job closes the previous current job, so history is kept instead of replaced
+      const month = new Date().toISOString().slice(0, 7);
+      setHistory((h) => [...h.map((e) => (!e.endDate && !entry.endDate ? { ...e, endDate: e.endDate || month } : e)), entry]);
+      if (status === 'Unemployed' && !entry.endDate) setStatus('Employed');
+    } else {
+      setHistory((h) => h.map((e) => (e.id === entry.id ? entry : e)));
+    }
+    setJobModal(null);
+    setEmploymentOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -339,127 +350,120 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           </div>
         </Section>
 
-        {/* EMPLOYMENT */}
-        <Section
-          icon={<Briefcase size={18} />}
-          title="Employment"
-          action={
-            <button type="button" onClick={addEntry} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-              <Plus size={16} /> Add job
-            </button>
-          }
-        >
-          <Field label="Current status *">
-            <div className="flex flex-wrap gap-2">
-              {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((s) => (
-                <button
-                  type="button"
-                  key={s}
-                  onClick={() => setStatus(s)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                    status === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'
-                  }`}
-                >
-                  {s}
+        {/* EMPLOYMENT (collapsed to a one-line summary until opened) */}
+        <section className="bg-card rounded-2xl shadow-sm">
+          <button
+            type="button"
+            onClick={() => setEmploymentOpen((v) => !v)}
+            aria-expanded={employmentOpen}
+            className="w-full flex items-center justify-between gap-3 p-5 sm:p-6 text-left"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Briefcase size={18} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-semibold text-base">Employment</h3>
+                <p className="text-sm text-muted-foreground truncate">
+                  {status}
+                  {currentJobs[0] && ` · ${currentJobs[0].position || 'Position'} at ${currentJobs[0].company || 'Company'}`}
+                  {previousJobs.length > 0 && ` · ${previousJobs.length} previous job${previousJobs.length === 1 ? '' : 's'}`}
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-sm font-medium text-primary shrink-0">
+              {employmentOpen ? 'Hide' : 'Show'}
+              <ChevronDown size={16} className={`transition-transform ${employmentOpen ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+
+          {employmentOpen && (
+            <div className="px-5 sm:px-6 pb-6 space-y-5 border-t border-border/60 pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium mr-1">Current status:</span>
+                  {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
+                    <button
+                      type="button"
+                      key={st}
+                      onClick={() => setStatus(st)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        status === st ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+                  <Plus size={16} /> Add job
                 </button>
-              ))}
-            </div>
-          </Field>
+              </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Employment history</p>
-            <p className="text-xs text-muted-foreground">
-              Click "Add job" whenever your job changes. Earlier jobs are kept for the tracer history instead of being replaced.
-            </p>
-          </div>
-
-          {history.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              No jobs recorded yet. {status !== 'Unemployed' && 'Click "Add job" to add your current job.'}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {shown.map((entry) => {
-                const locked = savedIds.has(entry.id);
-                return (
-                  <div key={entry.id} className="rounded-xl bg-muted/40 p-4 space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${entry.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {entry.endDate ? 'Previous job' : 'Current job'}
-                        </span>
-                        {entry.recordedAt && (
-                          <span className="text-[11px] text-muted-foreground truncate">
-                            recorded {new Date(entry.recordedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                      {!locked && (
-                        <button type="button" onClick={() => setHistory((h) => h.filter((x) => x.id !== entry.id))} className="p-1.5 rounded-lg text-muted-foreground hover:bg-card" aria-label="Remove this job">
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
-                    {locked && (
-                      <p className="text-xs text-muted-foreground -mt-2">Saved jobs are kept as history. You can only set when it ended.</p>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Field label="Position / job title *"><input value={entry.position} onChange={(e) => updateEntry(entry.id, { position: e.target.value })} disabled={locked} className={input} /></Field>
-                      <Field label="Company / agency *"><input value={entry.company} onChange={(e) => updateEntry(entry.id, { company: e.target.value })} disabled={locked} className={input} /></Field>
-                      <Field label="Employment status *">
-                        <select value={entry.employmentStatus} onChange={(e) => updateEntry(entry.id, { employmentStatus: e.target.value })} disabled={locked} className={input}>
-                          {EMPLOYMENT_STATUSES.map((s) => <option key={s}>{s}</option>)}
-                        </select>
-                      </Field>
-                      <Field label="Job level *">
-                        <select value={entry.jobLevel} onChange={(e) => updateEntry(entry.id, { jobLevel: e.target.value })} disabled={locked} className={input}>
-                          {JOB_LEVELS.map((s) => <option key={s}>{s}</option>)}
-                        </select>
-                      </Field>
-                      <Field label="Employer type *">
-                        <select value={entry.employerType} onChange={(e) => updateEntry(entry.id, { employerType: e.target.value })} disabled={locked} className={input}>
-                          {EMPLOYER_TYPES.map((s) => <option key={s}>{s}</option>)}
-                        </select>
-                      </Field>
-                      <Field label="Employer address"><input value={entry.employerAddress || ''} onChange={(e) => updateEntry(entry.id, { employerAddress: e.target.value })} disabled={locked} className={input} /></Field>
-                      <Field label="Start (month)"><input type="month" value={entry.startDate || ''} onChange={(e) => updateEntry(entry.id, { startDate: e.target.value })} disabled={locked} className={input} /></Field>
-                      <Field label="End (month)">
-                        <div className="flex gap-2 items-center">
-                          <input type="month" value={entry.endDate || ''} onChange={(e) => updateEntry(entry.id, { endDate: e.target.value })} className={input} />
-                          {entry.endDate && (
-                            <button type="button" onClick={() => updateEntry(entry.id, { endDate: '' })} className="text-xs text-primary whitespace-nowrap hover:underline">
-                              Still here
-                            </button>
-                          )}
-                        </div>
-                      </Field>
-                      <div className="md:col-span-2">
-                        <Field label="Job description">
-                          <textarea rows={2} value={entry.jobDescription || ''} onChange={(e) => updateEntry(entry.id, { jobDescription: e.target.value })} disabled={locked} className={`${input} resize-none`} />
-                        </Field>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {pages > 1 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Page {page + 1} of {pages} · {history.length} jobs
-                  </span>
-                  <div className="flex gap-2">
-                    <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
-                      <ChevronLeft size={15} /> Newer
-                    </button>
-                    <button type="button" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
-                      Older <ChevronRight size={15} />
-                    </button>
-                  </div>
+              {/* Current job(s) */}
+              {currentJobs.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No current job recorded. {status !== 'Unemployed' && 'Click "Add job" to add it.'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {currentJobs.map((j) => (
+                    <JobRow key={j.id} job={j} onOpen={() => setJobModal({ entry: j, isNew: false })} />
+                  ))}
                 </div>
               )}
+
+              {/* Previous jobs, hidden until asked for */}
+              {previousJobs.length > 0 && (
+                <div>
+                  <button type="button" onClick={() => setShowPrevious((v) => !v)} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
+                    <ChevronDown size={16} className={`transition-transform ${showPrevious ? 'rotate-180' : ''}`} />
+                    {showPrevious ? 'Hide' : 'Show'} previous jobs ({previousJobs.length})
+                  </button>
+                  {showPrevious && (
+                    <div className="mt-3 space-y-2">
+                      {shownPrevious.map((j) => (
+                        <JobRow key={j.id} job={j} onOpen={() => setJobModal({ entry: j, isNew: false })} />
+                      ))}
+                      {pages > 1 && (
+                        <div className="flex items-center justify-between text-sm pt-1">
+                          <span className="text-muted-foreground">Page {page + 1} of {pages}</span>
+                          <div className="flex gap-2">
+                            <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
+                              <ChevronLeft size={15} /> Newer
+                            </button>
+                            <button type="button" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
+                              Older <ChevronRight size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">Saved jobs are kept as your employment history. Remember to click "Save profile" below.</p>
             </div>
           )}
-        </Section>
+        </section>
+
+        {jobModal && (
+          <JobModal
+            entry={jobModal.entry}
+            isNew={jobModal.isNew}
+            locked={savedIds.has(jobModal.entry.id)}
+            onClose={() => setJobModal(null)}
+            onSave={(e) => saveJob(e, jobModal.isNew)}
+            onRemove={
+              !jobModal.isNew && !savedIds.has(jobModal.entry.id)
+                ? () => {
+                    setHistory((h) => h.filter((x) => x.id !== jobModal.entry.id));
+                    setJobModal(null);
+                  }
+                : undefined
+            }
+          />
+        )}
 
         {/* PRIVACY + FEEDBACK */}
         <Section icon={<ShieldCheck size={18} />} title="Privacy">
@@ -512,6 +516,113 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <span className={labelCls}>{label}</span>
       {children}
+    </div>
+  );
+}
+
+function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="w-full flex items-center justify-between gap-3 rounded-xl bg-muted/50 hover:bg-muted px-4 py-3 text-left">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold truncate">
+          {job.position || 'Position not set'} <span className="font-normal text-muted-foreground">at {job.company || '—'}</span>
+        </p>
+        <p className="text-xs text-muted-foreground truncate">
+          {[job.employmentStatus, job.employerType, job.jobLevel].filter(Boolean).join(' · ')}
+          {(job.startDate || job.endDate) && ` · ${job.startDate || '?'} – ${job.endDate || 'present'}`}
+        </p>
+      </div>
+      <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${job.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
+        {job.endDate ? 'Previous' : 'Current'}
+      </span>
+    </button>
+  );
+}
+
+/** Add or view one job. Saved jobs are history: only their end month can change. */
+function JobModal({
+  entry,
+  isNew,
+  locked,
+  onClose,
+  onSave,
+  onRemove,
+}: {
+  entry: EmploymentEntry;
+  isNew: boolean;
+  locked: boolean;
+  onClose: () => void;
+  onSave: (e: EmploymentEntry) => void;
+  onRemove?: () => void;
+}) {
+  const [draft, setDraft] = useState<EmploymentEntry>(entry);
+  const set = (patch: Partial<EmploymentEntry>) => setDraft((d) => ({ ...d, ...patch }));
+  const submit = () => {
+    if (!draft.position.trim() || !draft.company.trim()) {
+      toast.error('Enter the position and the company');
+      return;
+    }
+    onSave({ ...draft, position: draft.position.trim(), company: draft.company.trim() });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Job details">
+      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-lg">{isNew ? 'Add job' : locked ? 'Job details' : 'Edit job'}</h3>
+            {locked && <p className="text-xs text-muted-foreground mt-0.5">Saved jobs are kept as history. You can only set when it ended.</p>}
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Position / job title *"><input autoFocus={!locked} disabled={locked} value={draft.position} onChange={(e) => set({ position: e.target.value })} className={input} /></Field>
+          <Field label="Company / agency *"><input disabled={locked} value={draft.company} onChange={(e) => set({ company: e.target.value })} className={input} /></Field>
+          <Field label="Employment status *">
+            <select disabled={locked} value={draft.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })} className={input}>
+              {EMPLOYMENT_STATUSES.map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label="Job level *">
+            <select disabled={locked} value={draft.jobLevel} onChange={(e) => set({ jobLevel: e.target.value })} className={input}>
+              {JOB_LEVELS.map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label="Employer type *">
+            <select disabled={locked} value={draft.employerType} onChange={(e) => set({ employerType: e.target.value })} className={input}>
+              {EMPLOYER_TYPES.map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label="Employer address"><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
+          <Field label="Start (month)"><input type="month" disabled={locked} value={draft.startDate || ''} onChange={(e) => set({ startDate: e.target.value })} className={input} /></Field>
+          <Field label="End (month) — leave empty if current">
+            <input type="month" value={draft.endDate || ''} onChange={(e) => set({ endDate: e.target.value })} className={input} />
+          </Field>
+          <div className="md:col-span-2">
+            <Field label="Job description">
+              <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
+            </Field>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div>
+            {onRemove && (
+              <button type="button" onClick={onRemove} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50">
+                <Trash2 size={15} /> Remove
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">Cancel</button>
+            <button type="button" onClick={submit} className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground">
+              {isNew ? 'Add job' : 'Done'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

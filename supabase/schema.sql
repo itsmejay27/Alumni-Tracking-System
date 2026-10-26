@@ -318,3 +318,39 @@ begin
 end $$;
 revoke execute on function public.link_student_id(text, text) from public, anon;
 grant execute on function public.link_student_id(text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Record history: every change to a tracer record keeps the previous version
+-- ---------------------------------------------------------------------------
+create table if not exists public.alumni_record_history (
+  id uuid primary key default gen_random_uuid(),
+  record_id text not null references public.alumni_records(id) on delete cascade,
+  course text not null,
+  data jsonb not null,
+  changed_by uuid references auth.users(id) on delete set null default auth.uid(),
+  changed_at timestamptz not null default now()
+);
+create index if not exists alumni_record_history_record_idx on public.alumni_record_history(record_id, changed_at desc);
+create index if not exists alumni_record_history_changed_by_idx on public.alumni_record_history(changed_by);
+alter table public.alumni_record_history enable row level security;
+create policy "history: alumni affairs, program chair, or owner reads" on public.alumni_record_history
+  for select to authenticated
+  using (
+    (select public.app_role()) = 'admin'
+    or course = (select public.admin_course())
+    or exists (select 1 from public.alumni_records r where r.id = record_id and r.user_id = (select auth.uid()))
+  );
+
+create or replace function public.keep_record_history() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.data is distinct from old.data then
+    insert into public.alumni_record_history (record_id, course, data, changed_by)
+    values (old.id, old.course, old.data || jsonb_build_object('batch', old.batch), auth.uid());
+  end if;
+  return new;
+end $$;
+revoke execute on function public.keep_record_history() from public, anon, authenticated;
+create trigger alumni_records_keep_history
+  before update on public.alumni_records
+  for each row execute function public.keep_record_history();
