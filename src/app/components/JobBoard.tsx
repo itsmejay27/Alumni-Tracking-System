@@ -504,6 +504,8 @@ function JobPostingForm({
   const t = useT();
   const [submitting, setSubmitting] = useState(false);
   const [emailAlumni, setEmailAlumni] = useState(true);
+  // Who gets the email: everyone, or only the job's program (its alumni and chair)
+  const [audience, setAudience] = useState<'everyone' | 'department'>(initial?.program || defaultProgram ? 'department' : 'everyone');
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -542,7 +544,9 @@ function JobPostingForm({
       return;
     }
     if (emailAlumni && created) {
-      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-job', { body: { jobId: created.id } });
+      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-job', {
+        body: { jobId: created.id, audience: formData.program ? audience : 'everyone' },
+      });
       if (mailError) {
         let message = 'Job posted, but the email could not be sent.';
         try {
@@ -553,8 +557,7 @@ function JobPostingForm({
         }
         toast.warning(message);
       } else {
-        const who = formData.program ? `${formData.program} alumni` : 'alumni';
-        toast.success(mail?.sent ? `Job posted and emailed to ${mail.sent} ${who}.` : `Job posted. No ${who} with accounts to email yet.`);
+        toast.success(t('Job posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
       }
     } else {
       toast.success(t('Job posted!'));
@@ -702,15 +705,42 @@ function JobPostingForm({
           <p className="text-xs text-muted-foreground mt-1">{t('Enter each requirement on a new line')}</p>
         </div>
 
-        <label className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3.5 text-sm cursor-pointer">
-          <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
-          <span>
-            <span className="font-medium">{t('Email this job to alumni')}</span>
-            <span className="block text-xs text-muted-foreground">
-              {formData.program ? t('Sent to {program} alumni with an account', { program: formData.program }) : t('Sent to all alumni with an account')}, {t('except those who turned off job emails.')}
+        <div className="rounded-xl bg-muted/50 p-3.5 text-sm space-y-3">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
+            <span>
+              <span className="font-medium">{t('Email this job')}</span>
+              <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off job emails are skipped.')}</span>
             </span>
-          </span>
-        </label>
+          </label>
+          {emailAlumni && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
+              {(
+                [
+                  ['everyone', t('Everyone'), t('All alumni, program chairs and Alumni Affairs')],
+                  ['department', formData.program ? t('{program} department only', { program: formData.program }) : t('My department only'), formData.program ? t('{program} alumni and the {program} chair', { program: formData.program }) : t('Choose a Related Program above first')],
+                ] as const
+              ).map(([value, title, sub]) => {
+                const disabled = value === 'department' && !formData.program;
+                const selected = (formData.program ? audience : 'everyone') === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setAudience(value)}
+                    className={`rounded-xl p-3 text-left ring-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                      selected ? 'ring-primary bg-card' : 'ring-transparent bg-card/60 hover:ring-border'
+                    }`}
+                  >
+                    <span className="block font-semibold text-sm">{title}</span>
+                    <span className="block text-xs text-muted-foreground">{sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-row-reverse gap-3 pt-2">
           <button

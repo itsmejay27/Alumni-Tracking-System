@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/lib/preferences';
-import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
+import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -17,6 +17,7 @@ interface Announcement {
   date: string;
   author: string;
   course?: string;
+  createdBy?: string;
 }
 
 interface AnnouncementsProps {
@@ -39,11 +40,38 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
   const isAdmin = userRole.startsWith('admin');
   const adminCourse = courseScopeForRole(userRole);
+  // Program chairs choose: everyone, or their own department only
+  const [chairAudience, setChairAudience] = useState<'department' | 'everyone'>('department');
+  const [myId, setMyId] = useState<string | null>(null);
+  // Announcements this person hid for themselves (others still see them)
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
+  const hiddenKey = myId ? `omsu-hidden-announcements:${myId}` : null;
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMyId(data.user?.id ?? null));
+  }, []);
+  useEffect(() => {
+    if (!hiddenKey) return;
+    try {
+      setHidden(JSON.parse(localStorage.getItem(hiddenKey) || '[]'));
+    } catch {
+      setHidden([]);
+    }
+  }, [hiddenKey]);
+  const setHiddenList = (next: string[]) => {
+    setHidden(next);
+    try {
+      if (hiddenKey) localStorage.setItem(hiddenKey, JSON.stringify(next));
+    } catch {
+      /* private mode: hiding just lasts until reload */
+    }
+  };
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('announcements')
-      .select('id, title, content, category, course, author, created_at')
+      .select('id, title, content, category, course, author, created_at, created_by')
       .order('created_at', { ascending: false });
     if (error) {
       setLoadError(error.message);
@@ -57,6 +85,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           category: a.category,
           course: a.course || undefined,
           author: a.author,
+          createdBy: a.created_by || undefined,
           date: new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         }))
       );
@@ -72,7 +101,8 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     e.preventDefault();
     if (!title || !content) return;
 
-    const course = userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : adminCourse;
+    const course =
+      userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : chairAudience === 'everyone' ? null : adminCourse;
     setPosting(true);
     const { data: created, error } = await supabase
       .from('announcements')
@@ -87,7 +117,11 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       .single();
     if (error) {
       setPosting(false);
-      toast.error(`Could not post announcement: ${error.message}`);
+      toast.error(
+        /row-level security/i.test(error.message) && !course
+          ? t('Posting to everyone is not enabled yet. Ask the admin to run the latest database update, or choose your department only.')
+          : `Could not post announcement: ${error.message}`
+      );
       return;
     }
 
@@ -96,7 +130,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
         body: { announcementId: created.id },
       });
       if (mailError) toast.warning('Announcement posted, but the email could not be sent.');
-      else toast.success(mail.sent ? `Announcement posted and emailed to ${mail.sent} alumni.` : 'Announcement posted. No alumni accounts to email yet.');
+      else toast.success(t('Announcement posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
     } else {
       toast.success('Announcement posted.');
     }
@@ -108,20 +142,37 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     load();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!(await confirmDialog({ title: 'Delete this announcement?', message: 'Alumni will no longer see it.', confirmLabel: 'Delete', danger: true }))) return;
-    const { data, error } = await supabase.from('announcements').delete().eq('id', id).select('id');
+  const handleDelete = async (ann: Announcement) => {
+    const mine = !!myId && ann.createdBy === myId;
+    const ok = await confirmDialog({
+      title: t('Delete this announcement for everyone?'),
+      message: mine
+        ? t('Announcements are shared, so deleting removes it for every account, not just you. To only remove it from your own list, use Hide instead.')
+        : t('This was posted by {author}. Deleting removes it for every account. To only remove it from your own list, use Hide instead.', { author: ann.author }),
+      confirmLabel: t('Delete for everyone'),
+      danger: true,
+    });
+    if (!ok) return;
+    const { data, error } = await supabase.from('announcements').delete().eq('id', ann.id).select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : 'You can only delete announcements you posted.');
+      toast.error(error ? `Could not delete: ${error.message}` : t('You can only delete announcements you posted.'));
       return;
     }
-    setAnnouncements((list) => list.filter((a) => a.id !== id));
+    setAnnouncements((list) => list.filter((a) => a.id !== ann.id));
+  };
+
+  const toggleHidden = (id: string) => {
+    if (hidden.includes(id)) setHiddenList(hidden.filter((h) => h !== id));
+    else {
+      setHiddenList([...hidden, id]);
+      toast.success(t('Hidden from your list only. Others still see it.'));
+    }
   };
 
   // Course admins only see general announcements or ones for their course
   const filteredAnnouncements = announcements.filter((ann) => {
-    if (adminCourse) return !ann.course || ann.course === adminCourse;
-    return true;
+    if (adminCourse && ann.course && ann.course !== adminCourse) return false;
+    return showHidden ? hidden.includes(ann.id) : !hidden.includes(ann.id);
   });
 
   const paged = usePaged(filteredAnnouncements, 8);
@@ -190,6 +241,19 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
               </select>
             </div>
 
+            {userRole !== 'admin' && adminCourse && (
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-sm font-semibold">{t('Who is this for?')}</label>
+                <select
+                  value={chairAudience}
+                  onChange={(e) => setChairAudience(e.target.value as 'department' | 'everyone')}
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
+                >
+                  <option value="department">{t('{program} department only', { program: adminCourse })}</option>
+                  <option value="everyone">{t('Everyone')}</option>
+                </select>
+              </div>
+            )}
             {userRole === 'admin' && (
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-sm font-semibold">Target Audience (Course Scope)</label>
@@ -198,7 +262,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
                   onChange={(e) => setTargetCourse(e.target.value)}
                   className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
                 >
-                  <option value="all">All Alumni (Global)</option>
+                  <option value="all">Everyone (all alumni, chairs and Alumni Affairs)</option>
                   <option value="BSIT">BSIT Only</option>
                   <option value="BEED">BEED Only</option>
                   <option value="BSBA-FM">BSBA Major in Financial Management Only</option>
@@ -224,7 +288,10 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           <label className="flex items-center gap-2.5 text-sm cursor-pointer">
             <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="w-4 h-4" />
             <span>
-              Also email this to {userRole === 'admin' ? (targetCourse === 'all' ? 'all alumni' : `${targetCourse} alumni`) : `${adminCourse} alumni`} with an account
+              {(userRole === 'admin' ? targetCourse === 'all' : chairAudience === 'everyone')
+                ? t('Also email this to everyone (alumni, program chairs and Alumni Affairs)')
+                : t('Also email this to {program} alumni and the {program} chair', { program: userRole === 'admin' ? targetCourse : adminCourse || '' })}
+              <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off announcement emails are skipped.')}</span>
             </span>
           </label>
 
@@ -297,20 +364,38 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
               <p className="text-xs text-muted-foreground">
                 {t('Posted by')}: <span className="font-semibold text-foreground">{ann.author}</span>
               </p>
-              {isAdmin && (
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => handleDelete(ann.id)}
-                  className="flex items-center gap-1 text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  onClick={() => toggleHidden(ann.id)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:bg-muted px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  title={t('Only hides it for you')}
                 >
-                  <Trash2 size={13} />
-                  Delete Notice
+                  {hidden.includes(ann.id) ? <Eye size={13} /> : <EyeOff size={13} />}
+                  {hidden.includes(ann.id) ? t('Unhide') : t('Hide for me')}
                 </button>
-              )}
+                {(userRole === 'admin' || (!!myId && ann.createdBy === myId)) && (
+                  <button
+                    onClick={() => handleDelete(ann)}
+                    className="flex items-center gap-1 text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  >
+                    <Trash2 size={13} />
+                    {t('Delete for everyone')}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
 
         <Pagination {...paged} label={t('announcements')} />
+
+        {(hidden.length > 0 || showHidden) && (
+          <div className="text-center">
+            <button onClick={() => setShowHidden(!showHidden)} className="text-xs font-semibold text-primary hover:underline">
+              {showHidden ? t('Back to announcements') : t('Show hidden announcements ({n})', { n: hidden.length })}
+            </button>
+          </div>
+        )}
 
         {filteredAnnouncements.length === 0 && (
           <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">

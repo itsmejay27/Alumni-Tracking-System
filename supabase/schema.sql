@@ -460,3 +460,8 @@ create policy "two-step: records" on public.alumni_records as restrictive for al
 drop policy if exists "two-step: record history" on public.alumni_record_history;
 create policy "two-step: record history" on public.alumni_record_history as restrictive for all to authenticated
   using ((select public.two_step_ok())) with check ((select public.two_step_ok()));
+drop policy if exists "announcements: admins post" on public.announcements;
+create policy "announcements: admins post" on public.announcements for insert to authenticated
+  with check ((select public.app_role()) = 'admin'
+              or ((select public.admin_course()) is not null
+                  and (course is null or course = (select public.admin_course()))));

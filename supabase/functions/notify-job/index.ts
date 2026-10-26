@@ -1,6 +1,6 @@
-// Emails a new Job Board posting to alumni: those in the job's program, or everyone when the job
-// has no program. Only the person who posted the job can trigger it, each job is emailed once,
-// and people who turned off job emails in Settings are skipped.
+// Emails a new Job Board posting to everyone, or only the job's program (its alumni and chair),
+// as the poster chose. Only the person who posted the job can trigger it, each job is emailed
+// once, and people who turned off job emails in Settings are skipped.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 const cors = {
@@ -35,6 +35,29 @@ export function monthlyPhp(salary: string | null | undefined): number | null {
 
 const isRemote = (location: string) => /remote|work from home|wfh|home[- ]based|online|anywhere/i.test(location || '');
 
+/**
+ * Accounts to email. With a program: that program's alumni plus its program chair.
+ * Without one: every account (all alumni, program chairs and Alumni Affairs).
+ */
+async function recipientIds(admin: any, program: string | null): Promise<string[]> {
+  const ids = new Set<string>();
+  if (!program) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin.from('profiles').select('id').range(from, from + 999);
+      if (error) throw error;
+      (data || []).forEach((p: { id: string }) => ids.add(p.id));
+      if (!data || data.length < 1000) break;
+    }
+    return [...ids];
+  }
+  const { data: recs, error } = await admin.from('alumni_records').select('user_id').not('user_id', 'is', null).eq('course', program);
+  if (error) throw error;
+  (recs || []).forEach((r: { user_id: string }) => ids.add(r.user_id));
+  const { data: chairs } = await admin.from('profiles').select('id').eq('role', `admin.${program.toLowerCase()}`);
+  (chairs || []).forEach((p: { id: string }) => ids.add(p.id));
+  return [...ids];
+}
+
 // Alumni (not staff) may email at most this many job posts per day
 const ALUMNI_DAILY_LIMIT = 3;
 
@@ -51,7 +74,7 @@ Deno.serve(async (req) => {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
   const isStaff = (profile?.role || '').startsWith('admin');
 
-  const { jobId } = await req.json().catch(() => ({}));
+  const { jobId, audience } = await req.json().catch(() => ({}));
   const { data: job } = await admin.from('jobs').select('*').eq('id', jobId).single();
   if (!job) return json({ error: 'Job not found' }, 404);
   if (job.created_by !== caller.user.id) return json({ error: 'Only the person who posted this job can email it' }, 403);
@@ -70,12 +93,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Recipients: alumni accounts in the job's program (or all), minus the poster and anyone opted out
-  let q = admin.from('alumni_records').select('user_id').not('user_id', 'is', null);
-  if (job.program) q = q.eq('course', job.program);
-  const { data: recs, error } = await q;
-  if (error) return json({ error: error.message }, 500);
-  const ids = [...new Set((recs || []).map((r) => r.user_id as string))].filter((id) => id !== caller.user.id);
+  // Recipients: everyone, or only the job's program (its alumni and chair), as the poster chose
+  const department = audience === 'department' && job.program ? job.program : null;
+  let ids: string[];
+  try {
+    ids = (await recipientIds(admin, department)).filter((id) => id !== caller.user.id);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 
   // Each person's job alert filters from Settings
   const pay = monthlyPhp(job.salary);
@@ -96,12 +121,12 @@ Deno.serve(async (req) => {
       .in('id', ids.slice(i, i + 500));
     emails.push(...(ps || []).filter((p) => p.email && wantsJob(p)).map((p) => p.email as string));
   }
+  // The poster always gets a copy as confirmation
+  if (caller.user.email && !emails.includes(caller.user.email.toLowerCase())) emails.push(caller.user.email.toLowerCase());
 
   // Mark first so a retry can never send twice
   await admin.from('jobs').update({ emailed_at: new Date().toISOString() }).eq('id', job.id);
   if (!isStaff) await admin.from('ai_usage').insert({ user_id: caller.user.id, action: 'job-email' });
-  if (!emails.length) return json({ ok: true, sent: 0 });
-
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
   const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>';
@@ -116,7 +141,7 @@ Deno.serve(async (req) => {
     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
       <td style="padding-right:12px"><img src="${escapeHtml(logo)}" width="44" height="44" alt="OMSU" style="display:block;border:0" /></td>
       <td style="color:#fff"><div style="font-size:16px;font-weight:bold">New job on the OMSU Job Board</div>
-      <div style="font-size:12px;color:#f5c400">${job.program ? `For ${escapeHtml(job.program)} graduates` : 'For all OMSU graduates'}</div></td>
+      <div style="font-size:12px;color:#f5c400">${department ? `For the ${escapeHtml(department)} department` : 'For everyone at OMSU Alumni Tracer'}</div></td>
     </tr></table>
   </td></tr>
   <tr><td style="padding:24px;font-size:14px;color:#222;line-height:1.6">
@@ -144,5 +169,5 @@ Deno.serve(async (req) => {
     }
     sent += batch.length;
   }
-  return json({ ok: true, sent });
+  return json({ ok: true, sent, audience: department ? 'department' : 'everyone' });
 });

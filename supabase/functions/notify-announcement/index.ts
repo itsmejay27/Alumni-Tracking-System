@@ -20,6 +20,29 @@ const COURSE_BY_ROLE: Record<string, string> = {
   'admin.bsoa': 'BSOA',
 };
 
+/**
+ * Accounts to email. With a program: that program's alumni plus its program chair.
+ * Without one: every account (all alumni, program chairs and Alumni Affairs).
+ */
+async function recipientIds(admin: any, program: string | null): Promise<string[]> {
+  const ids = new Set<string>();
+  if (!program) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin.from('profiles').select('id').range(from, from + 999);
+      if (error) throw error;
+      (data || []).forEach((p: { id: string }) => ids.add(p.id));
+      if (!data || data.length < 1000) break;
+    }
+    return [...ids];
+  }
+  const { data: recs, error } = await admin.from('alumni_records').select('user_id').not('user_id', 'is', null).eq('course', program);
+  if (error) throw error;
+  (recs || []).forEach((r: { user_id: string }) => ids.add(r.user_id));
+  const { data: chairs } = await admin.from('profiles').select('id').eq('role', `admin.${program.toLowerCase()}`);
+  (chairs || []).forEach((p: { id: string }) => ids.add(p.id));
+  return [...ids];
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -37,15 +60,17 @@ Deno.serve(async (req) => {
   const { announcementId } = await req.json().catch(() => ({}));
   const { data: ann } = await admin.from('announcements').select('*').eq('id', announcementId).single();
   if (!ann) return json({ error: 'Announcement not found' }, 404);
-  // Program chairs may only email announcements for their own program
-  if (role !== 'admin' && ann.course !== COURSE_BY_ROLE[role]) return json({ error: 'Not allowed' }, 403);
+  // Program chairs may email everyone or their own program, but only for announcements they posted
+  if (role !== 'admin' && (ann.created_by !== caller.user.id || (ann.course && ann.course !== COURSE_BY_ROLE[role])))
+    return json({ error: 'Not allowed' }, 403);
 
-  let q = admin.from('alumni_records').select('user_id').not('user_id', 'is', null);
-  if (ann.course) q = q.eq('course', ann.course);
-  const { data: recs, error } = await q;
-  if (error) return json({ error: error.message }, 500);
-  const ids = [...new Set((recs || []).map((r) => r.user_id))];
-  if (!ids.length) return json({ ok: true, sent: 0 });
+  // Recipients follow the announcement's audience: everyone, or one program (its alumni and chair)
+  let ids: string[];
+  try {
+    ids = (await recipientIds(admin, ann.course || null)).filter((id) => id !== caller.user.id);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 
   const emails: string[] = [];
   for (let i = 0; i < ids.length; i += 500) {
@@ -53,6 +78,8 @@ Deno.serve(async (req) => {
     // Skip people who turned off announcement emails in Settings
     emails.push(...(ps || []).filter((p) => p.email_announcements !== false).map((p) => p.email).filter(Boolean));
   }
+  // The poster always gets a copy as confirmation
+  if (caller.user.email && !emails.includes(caller.user.email.toLowerCase())) emails.push(caller.user.email.toLowerCase());
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
