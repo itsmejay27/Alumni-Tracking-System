@@ -21,7 +21,8 @@ const input =
   'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm';
 
 export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: SettingsProps) {
-  const [tab, setTab] = useState<Tab>('account');
+  // Alumni manage their name, photo and details in My Alumni Profile, so Settings is just the password
+  const [tab, setTab] = useState<Tab>(currentUser?.role === 'alumni' ? 'password' : 'account');
 
   // Account
   const [givenName, setGivenName] = useState(currentUser?.givenName || '');
@@ -137,7 +138,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
     <div className="w-full space-y-6 animate-in fade-in duration-300">
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-foreground">Settings</h2>
-        <p className="text-muted-foreground text-sm mt-1">Manage your account and sign-in security</p>
+        <p className="text-muted-foreground text-sm mt-1">{isAlumni ? 'Your sign-in password' : 'Manage your account and sign-in security'}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
@@ -156,13 +157,26 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
             </div>
           </div>
           <nav className="space-y-1.5">
-            {navItem('account', <User size={16} />, 'Account', 'Name, photo and mobile')}
+            {!isAlumni && navItem('account', <User size={16} />, 'Account', 'Name, photo and mobile')}
             {navItem('password', <KeyRound size={16} />, 'Password', 'Change your password')}
           </nav>
+          {isAlumni && onOpenProfile && (
+            <button
+              type="button"
+              onClick={onOpenProfile}
+              className="w-full flex items-center justify-between gap-3 rounded-xl bg-muted/60 hover:bg-muted px-3 py-2.5 text-left"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">My Alumni Profile</span>
+                <span className="block text-xs text-muted-foreground">Name, photo, contact and employment</span>
+              </span>
+              <ArrowRight size={16} className="text-primary shrink-0" />
+            </button>
+          )}
         </aside>
 
         {/* Right: the selected section */}
-        {tab === 'account' ? (
+        {tab === 'account' && !isAlumni ? (
           <form onSubmit={saveProfile} className="bg-card rounded-2xl shadow-sm divide-y divide-border/70">
             <div className="p-5 sm:p-6">
               <h3 className="font-semibold text-lg">Account</h3>

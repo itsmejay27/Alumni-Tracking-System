@@ -181,8 +181,25 @@ const ANALYSIS_SCHEMA = {
       required: ['verdict', 'matchedSkills', 'missingSkills', 'advice'],
     },
     warnings: ARR(S('Possible scam sign or concern'), 'Red flags, e.g. asks for payment, vague employer'),
+    posting: {
+      type: 'OBJECT',
+      description: 'The job in the format of the OMSU Job Board form, in the original language of the posting',
+      properties: {
+        jobType: { type: 'STRING', enum: ['full-time', 'part-time', 'contract', 'internship'] },
+        salaryRange: S('Salary as a short range, e.g. "₱25,000 - ₱35,000/month" or "$5/hour"; empty if not stated'),
+        contactEmail: S('Application email address exactly as written; empty if none'),
+        relatedProgram: {
+          type: 'STRING',
+          enum: ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA', 'None'],
+          description: 'Closest OMSU program: BSIT (IT), BEED (elementary education), BSBA-FM (financial management), BSBA-OM (operations management), BSOA (office administration); None if none fits',
+        },
+        description: S('Clean 2-5 sentence description of the role and responsibilities, faithful to the posting'),
+        requirements: ARR(S('One requirement'), 'Requirements and qualifications, one per item'),
+      },
+      required: ['jobType', 'salaryRange', 'contactEmail', 'relatedProgram', 'description', 'requirements'],
+    },
   },
-  required: ['isJobPosting', 'title', 'company', 'location', 'workSetup', 'summary', 'dailyTasks', 'requiredSkills', 'qualifications', 'salary', 'glossary', 'fit', 'warnings'],
+  required: ['isJobPosting', 'title', 'company', 'location', 'workSetup', 'summary', 'dailyTasks', 'requiredSkills', 'qualifications', 'salary', 'glossary', 'fit', 'warnings', 'posting'],
 };
 
 type Part = { text: string } | { inline_data: { mime_type: string; data: string } };

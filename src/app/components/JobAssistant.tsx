@@ -21,6 +21,7 @@ import {
   Briefcase,
   RotateCcw,
   X,
+  Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -41,6 +42,44 @@ interface Analysis {
   glossary: { term: string; meaning: string; example: string }[];
   fit: { verdict: string; matchedSkills: string[]; missingSkills: string[]; advice: string[] };
   warnings: string[];
+  posting?: {
+    jobType: string;
+    salaryRange: string;
+    contactEmail: string;
+    relatedProgram: string;
+    description: string;
+    requirements: string[];
+  };
+}
+
+/** Values for the Job Board's Post a Job form */
+export interface JobPrefill {
+  title: string;
+  company: string;
+  location: string;
+  type: string;
+  salary: string;
+  description: string;
+  requirements: string;
+  contactEmail: string;
+  program: string;
+}
+
+const notStated = (v?: string) => (!v || /^not stated$/i.test(v.trim()) ? '' : v.trim());
+
+function toPrefill(a: Analysis): JobPrefill {
+  const p = a.posting;
+  return {
+    title: notStated(a.title),
+    company: notStated(a.company),
+    location: notStated(a.location),
+    type: ['full-time', 'part-time', 'contract', 'internship'].includes(p?.jobType || '') ? p!.jobType : 'full-time',
+    salary: notStated(p?.salaryRange || (a.salary.stated !== 'Not stated' ? a.salary.stated : '')),
+    description: p?.description || a.summary,
+    requirements: (p?.requirements?.length ? p.requirements : a.qualifications).join('\n'),
+    contactEmail: /@/.test(p?.contactEmail || '') ? p!.contactEmail.trim() : '',
+    program: p?.relatedProgram && p.relatedProgram !== 'None' ? p.relatedProgram : '',
+  };
 }
 
 type Mode = 'url' | 'text' | 'file';
@@ -80,7 +119,20 @@ const fileToBase64 = (file: File) =>
   });
 
 /** AI helper that explains a job posting, its pay and requirements, and helps the user apply. */
-export function JobAssistant({ userId, initialText, onSeedUsed, onClose }: { userId?: string; initialText?: string; onSeedUsed?: () => void; onClose?: () => void }) {
+export function JobAssistant({
+  userId,
+  initialText,
+  onSeedUsed,
+  onClose,
+  onPost,
+}: {
+  userId?: string;
+  initialText?: string;
+  onSeedUsed?: () => void;
+  onClose?: () => void;
+  /** Opens the Post a Job form filled with this job's details */
+  onPost?: (prefill: JobPrefill) => void;
+}) {
   const [mode, setMode] = useState<Mode>(initialText ? 'text' : 'url');
   const [lang, setLang] = useState<Lang>('en');
   const [url, setUrl] = useState('');
@@ -361,6 +413,18 @@ export function JobAssistant({ userId, initialText, onSeedUsed, onClose }: { use
                   </span>
                 </div>
                 <p className="mt-4 text-[15px] leading-relaxed">{analysis.summary}</p>
+                {onPost && (
+                  <div className="mt-5 pt-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">Want fellow alumni to see this opening? Share it on the Job Board.</p>
+                    <button
+                      type="button"
+                      onClick={() => onPost(toPrefill(analysis))}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shrink-0"
+                    >
+                      <Send size={16} /> Post to Job Board
+                    </button>
+                  </div>
+                )}
               </section>
 
               {analysis.warnings.length > 0 && (

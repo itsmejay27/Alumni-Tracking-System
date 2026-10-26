@@ -55,8 +55,6 @@ const newEntry = (): EmploymentEntry => ({
 
 export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfileProps) {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [record, setRecord] = useState<AlumniRecord | null>(null);
 
   // Personal
@@ -144,7 +142,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       return;
     }
     const reader = new FileReader();
-    reader.onloadend = () => setAvatarUrl(reader.result as string);
+    reader.onloadend = () => savePhoto(reader.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -174,107 +172,158 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     setEmploymentOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
+  // ---- Saving, one section at a time ----
+  type SectionId = 'personal' | 'education' | 'employment' | 'feedback';
+  const [savingSection, setSavingSection] = useState<SectionId | null>(null);
 
-    if (!isValidMobile(mobileNo)) {
-      toast.error('Enter an 11-digit mobile number starting with 09');
-      return;
+  const personalSlice = () => ({
+    givenName: givenName.trim().toUpperCase(),
+    middleName: middleName.trim().toUpperCase(),
+    lastName: lastName.trim().toUpperCase(),
+    sex,
+    dateOfBirth,
+    civilStatus,
+    mobileNo: mobileNo.trim(),
+    facebookName: facebookName.trim(),
+    presentAddress: presentAddress.trim(),
+    permanentAddress: permanentAddress.trim(),
+    fatherName: fatherName.trim().toUpperCase(),
+    fatherContact: fatherContact.trim(),
+    motherName: motherName.trim().toUpperCase(),
+    motherContact: motherContact.trim(),
+  });
+  const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}` });
+  const employmentSlice = () => {
+    // Marking yourself unemployed ends your current job(s); they stay in your history
+    const month = new Date().toISOString().slice(0, 7);
+    const finalHistory = (status === 'Unemployed' ? history.map((h) => (h.endDate ? h : { ...h, endDate: month })) : history).map((h) => ({
+      ...h,
+      position: h.position.trim(),
+      company: h.company.trim(),
+    }));
+    const latest = [...finalHistory].reverse().find((h) => !h.endDate);
+    const employed = status !== 'Unemployed' && latest;
+    return {
+      status,
+      employmentHistory: finalHistory,
+      // Current-job summary fields kept for reports and older screens
+      currentPosition: employed ? latest!.position : undefined,
+      currentCompany: employed ? latest!.company : undefined,
+      employerType: employed ? (latest!.employerType as any) : undefined,
+      employerAddress: employed ? latest!.employerAddress : undefined,
+      jobDescription: employed ? latest!.jobDescription : undefined,
+      jobLevel: employed ? latest!.jobLevel : undefined,
+    };
+  };
+  const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic });
+
+  // Which sections have changes that are not saved yet (compared with what was loaded or last saved)
+  const snapshot = (section: SectionId) =>
+    JSON.stringify(
+      section === 'personal'
+        ? personalSlice()
+        : section === 'education'
+          ? educationSlice()
+          : section === 'employment'
+            ? [status, history]
+            : feedbackSlice(),
+    );
+  const [baseline, setBaseline] = useState<Record<SectionId, string> | null>(null);
+  useEffect(() => {
+    if (!loading && !baseline) {
+      setBaseline({ personal: snapshot('personal'), education: snapshot('education'), employment: snapshot('employment'), feedback: snapshot('feedback') });
     }
-    for (const [label, v] of [["Father's", fatherContact], ["Mother's", motherContact]] as const) {
-      if (v && !isValidMobile(v)) {
-        toast.error(`${label} contact number must be 11 digits starting with 09`);
+  });
+  const dirty = Object.fromEntries(
+    (['personal', 'education', 'employment', 'feedback'] as SectionId[]).map((sct) => [sct, !!baseline && snapshot(sct) !== baseline[sct]]),
+  ) as Record<SectionId, boolean>;
+
+  const validate = (section: SectionId): string | null => {
+    if (section === 'personal') {
+      if (!givenName.trim() || !lastName.trim()) return 'First and last name are required';
+      if (!isValidMobile(mobileNo)) return 'Enter an 11-digit mobile number starting with 09';
+      for (const [label, v] of [["Father's", fatherContact], ["Mother's", motherContact]] as const) {
+        if (v && !isValidMobile(v)) return `${label} contact number must be 11 digits starting with 09`;
+      }
+      const age = ageFrom(dateOfBirth);
+      if (age == null || age < 15) return 'Please enter your correct date of birth';
+      if (!presentAddress.trim() || !permanentAddress.trim()) return 'Enter your present and permanent address';
+    }
+    if (section === 'employment') {
+      if (status !== 'Unemployed' && !history.some((h) => !h.endDate)) return 'Add your current job, or choose Unemployed';
+      if (history.some((h) => !h.position.trim() || !h.company.trim())) return 'Each job needs a position and a company';
+    }
+    return null;
+  };
+
+  const saveSection = async (section: SectionId) => {
+    if (!currentUser) return;
+    // A brand-new record must be complete before its first save
+    const sections: SectionId[] = record?.id ? [section] : ['personal', 'education', 'employment', 'feedback'];
+    for (const sct of sections) {
+      const problem = validate(sct);
+      if (problem) {
+        toast.error(problem);
         return;
       }
     }
-    const age = ageFrom(dateOfBirth);
-    if (age == null || age < 15) {
-      toast.error('Please enter your correct date of birth');
-      return;
-    }
+    const patch = Object.assign(
+      {},
+      ...sections.map((sct) =>
+        sct === 'personal' ? personalSlice() : sct === 'education' ? educationSlice() : sct === 'employment' ? employmentSlice() : feedbackSlice(),
+      ),
+    );
+    const { id: _id, name: _name, ...base } = (record || {}) as AlumniRecord;
+    const next = {
+      ...base,
+      ...patch,
+      id: record?.id,
+      studentId: record?.studentId || '',
+      email: currentUser.email,
+      lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+    } as Parameters<typeof saveMyRecord>[1];
 
-    const hasCurrentJob = history.some((h) => !h.endDate);
-    if (status !== 'Unemployed' && !hasCurrentJob) {
-      toast.error('Add your current job under Employment History, or set your status to Unemployed');
-      return;
-    }
-    if (history.some((h) => !h.position.trim() || !h.company.trim())) {
-      toast.error('Each job needs a position and a company');
-      return;
-    }
-
-    setSaving(true);
-    // Marking yourself unemployed ends your current job(s); they stay in your history
-    const month = new Date().toISOString().slice(0, 7);
-    const finalHistory = status === 'Unemployed' ? history.map((h) => (h.endDate ? h : { ...h, endDate: month })) : history;
-    const latest = [...finalHistory].reverse().find((h) => !h.endDate);
-    const updatedUser: CurrentUser = {
-      ...currentUser,
-      givenName: givenName.trim().toUpperCase(),
-      middleName: middleName.trim().toUpperCase(),
-      lastName: lastName.trim().toUpperCase(),
-      mobileNo: mobileNo.trim(),
-      presentAddress: presentAddress.trim(),
-      permanentAddress: permanentAddress.trim(),
-      sex,
-      civilStatus,
-      dateOfBirth,
-      facebookName: facebookName.trim(),
-      avatarUrl,
-    };
-    const employed = status !== 'Unemployed' && latest;
-
+    setSavingSection(section);
     try {
-      const id = await saveMyRecord(currentUser.id, {
-        id: record?.id,
-        studentId: record?.studentId || '',
-        givenName: updatedUser.givenName,
-        middleName: updatedUser.middleName,
-        lastName: updatedUser.lastName,
-        email: currentUser.email,
-        course,
-        yearGraduated,
-        batch: `${yearGraduated - 1}-${yearGraduated}`,
-        sex,
-        dateOfBirth,
-        civilStatus,
-        mobileNo: updatedUser.mobileNo,
-        facebookName: updatedUser.facebookName,
-        presentAddress: updatedUser.presentAddress,
-        permanentAddress: updatedUser.permanentAddress,
-        isIP,
-        ipGroup: isIP ? ipGroup.trim() : '',
-        fatherName: fatherName.trim().toUpperCase(),
-        fatherContact: fatherContact.trim(),
-        motherName: motherName.trim().toUpperCase(),
-        motherContact: motherContact.trim(),
-        status,
-        employmentHistory: finalHistory.map((h) => ({ ...h, position: h.position.trim(), company: h.company.trim() })),
-        // Current-job summary fields kept for reports and older screens
-        currentPosition: employed ? latest!.position : undefined,
-        currentCompany: employed ? latest!.company : undefined,
-        employerType: employed ? (latest!.employerType as any) : undefined,
-        employerAddress: employed ? latest!.employerAddress : undefined,
-        jobDescription: employed ? latest!.jobDescription : undefined,
-        jobLevel: employed ? latest!.jobLevel : undefined,
-        lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        suggestions: suggestions.trim(),
-        isPublic,
+      const id = await saveMyRecord(currentUser.id, next);
+      if (sections.includes('personal')) {
+        const p = personalSlice();
+        await onUpdateProfile({ ...currentUser, ...p, avatarUrl });
+      }
+      setRecord({ ...(next as AlumniRecord), id });
+      if (sections.includes('employment')) {
+        setHistory(next.employmentHistory || []);
+        setSavedIds(new Set((next.employmentHistory || []).map((h) => h.id)));
+      }
+      // Employment history may have changed (unemployed closes current jobs), so snapshot what was saved
+      setBaseline((bl) => {
+        const nextBl = { ...(bl as Record<SectionId, string>) };
+        for (const sct of sections) nextBl[sct] = sct === 'employment' ? JSON.stringify([status, next.employmentHistory || []]) : snapshot(sct);
+        return nextBl;
       });
-      await onUpdateProfile(updatedUser);
-      setRecord((r) => ({ ...(r as AlumniRecord), id }));
-      setHistory(finalHistory);
-      setSavedIds(new Set(finalHistory.map((h) => h.id)));
-      setSaved(true);
-      toast.success('Your alumni profile has been saved');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => setSaved(false), 5000);
+      const label = { personal: 'Personal information', education: 'Education', employment: 'Employment', feedback: 'Privacy and feedback' }[section];
+      toast.success(record?.id ? `${label} saved` : 'Your alumni profile has been saved');
     } catch (err: any) {
       toast.error(`Could not save: ${err.message}`);
     }
-    setSaving(false);
+    setSavingSection(null);
   };
+
+  // The photo is saved as soon as it is chosen or removed
+  const savePhoto = async (url: string) => {
+    if (!currentUser) return;
+    setAvatarUrl(url);
+    try {
+      await onUpdateProfile({ ...currentUser, avatarUrl: url });
+      toast.success(url ? 'Photo updated' : 'Photo removed');
+    } catch (err: any) {
+      toast.error(`Could not save photo: ${err.message}`);
+    }
+  };
+
+  const saveBar = (section: SectionId, label: string) => (
+    <SaveRow dirty={dirty[section]} busy={savingSection === section} onSave={() => saveSection(section)} label={label} />
+  );
 
   if (loading) return <LoadingState label="Loading your profile..." />;
 
@@ -323,7 +372,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
               <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{status}</span>
               {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">Updated {record.lastUpdated}</span>}
               {avatarUrl && (
-                <button type="button" onClick={() => setAvatarUrl('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">
+                <button type="button" onClick={() => savePhoto('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">
                   <Trash2 size={12} /> Remove photo
                 </button>
               )}
@@ -342,14 +391,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         </div>
       </section>
 
-      {saved && (
-        <div className="bg-emerald-50 rounded-2xl px-5 py-4 flex items-center gap-3">
-          <CheckCircle2 className="text-emerald-600 shrink-0" size={22} />
-          <p className="text-sm text-emerald-800">Saved. Your program chair can now see your updated record.</p>
-        </div>
-      )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-6">
         {/* PERSONAL */}
         <Section icon={<User size={18} />} title="Personal information">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -399,6 +442,28 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
           </div>
 
+          {saveBar('personal', 'Save personal information')}
+        </Section>
+
+        {/* EDUCATION */}
+        <Section icon={<GraduationCap size={18} />} title="Education">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4">
+            <Field label="Program *">
+              <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
+                {PROGRAMS.map((p) => (
+                  <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Year graduated *">
+              <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
+                {GRAD_YEARS.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          {saveBar('education', 'Save education')}
         </Section>
 
         {/* EMPLOYMENT (collapsed to a one-line summary until opened) */}
@@ -423,6 +488,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
               </div>
             </div>
             <span className="inline-flex items-center gap-1 text-sm font-medium text-primary shrink-0">
+              {!employmentOpen && dirty.employment && <span className="text-xs text-amber-600 font-medium mr-1">Not saved</span>}
               {employmentOpen ? 'Hide' : 'Show'}
               <ChevronDown size={16} className={`transition-transform ${employmentOpen ? 'rotate-180' : ''}`} />
             </span>
@@ -501,7 +567,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                   )}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Saved jobs are kept as your employment history. Remember to click "Save profile" below.</p>
+              <p className="text-xs text-muted-foreground">Saved jobs are kept as your employment history.</p>
+              {saveBar('employment', 'Save employment')}
             </div>
           )}
         </section>
@@ -525,35 +592,50 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         )}
 
         {/* PRIVACY + FEEDBACK */}
-        <Section icon={<ShieldCheck size={18} />} title="Privacy">
-          <label className="flex items-start gap-3 cursor-pointer">
+        <Section icon={<HelpCircle size={18} />} title="Suggestions & privacy">
+          <Field label="Suggestions & feedback">
+            <textarea
+              rows={3}
+              value={suggestions}
+              onChange={(e) => setSuggestions(e.target.value)}
+              className={`${input} resize-none`}
+              placeholder="How can OMSU improve its programs or this tracer study?"
+            />
+          </Field>
+          <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-muted/50 p-4">
             <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
             <span className="text-sm">
-              <span className="font-medium block">Let other OMSU alumni find me</span>
+              <span className="font-medium block flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> Let other OMSU alumni find me</span>
               <span className="text-muted-foreground text-xs">Only your name, program, batch and current position are shown. Addresses, birth date and civil status are never shown.</span>
             </span>
           </label>
+          {saveBar('feedback', 'Save')}
         </Section>
 
-        <Section icon={<HelpCircle size={18} />} title="Suggestions & feedback">
-          <textarea
-            rows={3}
-            value={suggestions}
-            onChange={(e) => setSuggestions(e.target.value)}
-            className={`${input} resize-none`}
-            placeholder="How can OMSU improve its programs or this tracer study?"
-          />
-        </Section>
+      </div>
+    </div>
+  );
+}
 
-        <div className="sticky bottom-3 z-20">
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-card/95 backdrop-blur shadow-lg ring-1 ring-border px-4 sm:px-5 py-3">
-            <p className="text-xs sm:text-sm text-muted-foreground">Changes are saved to your tracer record when you click Save.</p>
-            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60 shrink-0">
-              <Save size={16} /> {saving ? 'Saving...' : 'Save profile'}
-            </button>
-          </div>
-        </div>
-      </form>
+/** Save button at the bottom of a section; shows whether that section has unsaved changes. */
+function SaveRow({ dirty, busy, onSave, label }: { dirty: boolean; busy: boolean; onSave: () => void; label: string }) {
+  return (
+    <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-4 border-t border-border/60">
+      {dirty ? (
+        <span className="text-xs font-medium text-amber-600 sm:mr-auto">You have unsaved changes</span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 sm:mr-auto">
+          <CheckCircle2 size={14} /> Saved
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={busy || !dirty}
+        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Save size={16} /> {busy ? 'Saving...' : label}
+      </button>
     </div>
   );
 }

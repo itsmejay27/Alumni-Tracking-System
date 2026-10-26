@@ -36,6 +36,8 @@ interface JobBoardProps {
 export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   // AI assistant pop-up: null = closed, '' = empty, otherwise a job's text to explain
   const [assistant, setAssistant] = useState<string | null>(null);
+  // Job details filled in by the AI, shown in the Post a Job form for review
+  const [postPrefill, setPostPrefill] = useState<Partial<JobFormData> | undefined>();
   const [showPostForm, setShowPostForm] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'full-time' | 'part-time' | 'contract' | 'internship'>('all');
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -135,7 +137,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           AI Assistant
         </button>
         <button
-          onClick={() => setShowPostForm(true)}
+          onClick={() => { setPostPrefill(undefined); setShowPostForm(true); }}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
         >
           <Plus size={18} />
@@ -145,15 +147,27 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       </div>
 
       {/* AI Job Assistant pop-up */}
-      {assistant !== null && <AssistantModal userId={userId} seed={assistant} onClose={() => setAssistant(null)} />}
+      {assistant !== null && (
+        <AssistantModal
+          userId={userId}
+          seed={assistant}
+          onClose={() => setAssistant(null)}
+          onPost={(prefill) => {
+            setAssistant(null);
+            setPostPrefill(prefill);
+            setShowPostForm(true);
+          }}
+        />
+      )}
 
       {/* Post Job Form */}
       {showPostForm && (
         <JobPostingForm
           posterName={posterName}
           defaultProgram={courseScopeForRole(userRole) || myProgram || ''}
-          onClose={() => setShowPostForm(false)}
-          onPosted={() => { setShowPostForm(false); load(); }}
+          initial={postPrefill}
+          onClose={() => { setShowPostForm(false); setPostPrefill(undefined); }}
+          onPosted={() => { setShowPostForm(false); setPostPrefill(undefined); load(); }}
         />
       )}
 
@@ -343,7 +357,7 @@ function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; can
   );
 }
 
-function AssistantModal({ userId, seed, onClose }: { userId: string; seed: string; onClose: () => void }) {
+function AssistantModal({ userId, seed, onClose, onPost }: { userId: string; seed: string; onClose: () => void; onPost: (prefill: Partial<JobFormData>) => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -359,7 +373,7 @@ function AssistantModal({ userId, seed, onClose }: { userId: string; seed: strin
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="AI Job Assistant">
       <div className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-200" onClick={onClose} />
       <div className="relative w-full max-w-6xl max-h-[96vh] overflow-y-auto rounded-2xl bg-background shadow-2xl p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-200">
-        <JobAssistant userId={userId} initialText={seed || undefined} onClose={onClose} />
+        <JobAssistant userId={userId} initialText={seed || undefined} onClose={onClose} onPost={onPost} />
       </div>
     </div>,
     document.body
@@ -388,7 +402,31 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
   );
 }
 
-function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { posterName: string; defaultProgram: string; onClose: () => void; onPosted: () => void }) {
+export interface JobFormData {
+  title: string;
+  company: string;
+  location: string;
+  type: string;
+  salary: string;
+  description: string;
+  requirements: string;
+  contactEmail: string;
+  program: string;
+}
+
+function JobPostingForm({
+  posterName,
+  defaultProgram,
+  initial,
+  onClose,
+  onPosted,
+}: {
+  posterName: string;
+  defaultProgram: string;
+  initial?: Partial<JobFormData>;
+  onClose: () => void;
+  onPosted: () => void;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -400,6 +438,9 @@ function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { pos
     requirements: '',
     contactEmail: '',
     program: defaultProgram,
+    ...initial,
+    // Keep the usual program (e.g. a chair's own) when the AI didn't pick one
+    ...(initial && !initial.program ? { program: defaultProgram } : {}),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -443,7 +484,9 @@ function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { pos
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
           <h3 className="font-semibold text-lg">Post a Job Opportunity</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Fields marked * are required.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {initial ? 'Filled in by the AI Assistant. Check every field before posting.' : 'Fields marked * are required.'}
+          </p>
         </div>
         <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
           <X size={18} />
