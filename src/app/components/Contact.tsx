@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { Mail, Phone, MapPin, Globe, Clock, Pencil, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AboutEditor } from './AboutEditor';
@@ -16,6 +17,7 @@ const FIELDS: { key: keyof ContactInfo; label: string; multiline?: boolean }[] =
 
 /** Alumni Affairs contact details. Alumni see it read-only; Alumni Affairs can edit it live. */
 export function Contact({ editable = false }: { editable?: boolean }) {
+  const t = useT();
   const info = useContactInfo();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ContactInfo>(info);
@@ -46,11 +48,11 @@ export function Contact({ editable = false }: { editable?: boolean }) {
     <div className="w-full py-2 space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">{editable ? 'Contact Info' : 'Contact Us'}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">{editable ? t('Contact Info') : t('Contact Us')}</h2>
           <p className="text-muted-foreground mt-1 text-sm">
             {editable
               ? 'Contact details and the Vision, Mission and Core Values shown on the landing page.'
-              : 'Get in touch with the OMSU Alumni Affairs Office'}
+              : t('Get in touch with the OMSU Alumni Affairs Office')}
           </p>
         </div>
         {editable && !editing && (
@@ -108,7 +110,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-card rounded-2xl p-6 space-y-5 shadow-sm">
-            <h3 className="font-semibold text-foreground">Office channels</h3>
+            <h3 className="font-semibold text-foreground">{t('Office channels')}</h3>
             <InfoRow icon={<Mail size={18} />} label="Email" value={current.email} note={current.emailNote} />
             <InfoRow icon={<Phone size={18} />} label="Phone" value={current.phone} />
             <InfoRow
@@ -122,7 +124,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
             />
           </div>
           <div className="bg-card rounded-2xl p-6 space-y-5 shadow-sm">
-            <h3 className="font-semibold text-foreground">Visit us</h3>
+            <h3 className="font-semibold text-foreground">{t('Visit us')}</h3>
             <InfoRow icon={<MapPin size={18} />} label="Office location" value={current.location} />
             <InfoRow icon={<Clock size={18} />} label="Office hours" value={current.officeDays} note={current.officeHours} />
           </div>
@@ -134,11 +136,12 @@ export function Contact({ editable = false }: { editable?: boolean }) {
 }
 
 function InfoRow({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: React.ReactNode; note?: string }) {
+  const t = useT();
   return (
     <div className="flex gap-4">
       <div className="w-10 h-10 bg-primary/8 text-primary rounded-xl shrink-0 flex items-center justify-center">{icon}</div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{t(label)}</p>
         <p className="text-sm font-semibold text-foreground mt-0.5 break-words">{value}</p>
         {note && <p className="text-xs text-muted-foreground mt-0.5">{note}</p>}
       </div>

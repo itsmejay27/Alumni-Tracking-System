@@ -13,6 +13,28 @@ const json = (body: unknown, status = 200) =>
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+const USD_TO_PHP = 58;
+
+/**
+ * Rough monthly pay in pesos from free text like "$8 to $9 an hour", "₱25,000 - ₱35,000/month"
+ * or "PHP 800 per day". Uses the highest number in a range. Returns null when no pay is stated.
+ */
+export function monthlyPhp(salary: string | null | undefined): number | null {
+  if (!salary) return null;
+  const s = salary.toLowerCase().replace(/,/g, '');
+  const nums = [...s.matchAll(/(\d+(?:\.\d+)?)\s*(k)?/g)].map((m) => Number(m[1]) * (m[2] ? 1000 : 1)).filter((n) => n > 0);
+  if (!nums.length) return null;
+  let amount = Math.max(...nums);
+  if (/\$|usd|dollar/.test(s)) amount *= USD_TO_PHP;
+  if (/hour|hr\b|\/h\b|per h/.test(s)) amount *= 40 * 4.33;
+  else if (/day|daily/.test(s)) amount *= 22;
+  else if (/week/.test(s)) amount *= 4.33;
+  else if (/year|annual|annum/.test(s)) amount /= 12;
+  return Math.round(amount);
+}
+
+const isRemote = (location: string) => /remote|work from home|wfh|home[- ]based|online|anywhere/i.test(location || '');
+
 // Alumni (not staff) may email at most this many job posts per day
 const ALUMNI_DAILY_LIMIT = 3;
 
@@ -55,10 +77,24 @@ Deno.serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
   const ids = [...new Set((recs || []).map((r) => r.user_id as string))].filter((id) => id !== caller.user.id);
 
+  // Each person's job alert filters from Settings
+  const pay = monthlyPhp(job.salary);
+  const remote = isRemote(job.location);
+  const wantsJob = (p: { email_jobs?: boolean; job_alert_types?: string[]; job_alert_remote_only?: boolean; job_alert_min_salary?: number }) => {
+    if (p.email_jobs === false) return false;
+    if (p.job_alert_types?.length && !p.job_alert_types.includes(job.type)) return false;
+    if (p.job_alert_remote_only && !remote) return false;
+    if ((p.job_alert_min_salary || 0) > 0 && (pay == null || pay < (p.job_alert_min_salary || 0))) return false;
+    return true;
+  };
+
   const emails: string[] = [];
   for (let i = 0; i < ids.length; i += 500) {
-    const { data: ps } = await admin.from('profiles').select('email, email_jobs').in('id', ids.slice(i, i + 500));
-    emails.push(...(ps || []).filter((p) => p.email && p.email_jobs !== false).map((p) => p.email as string));
+    const { data: ps } = await admin
+      .from('profiles')
+      .select('email, email_jobs, job_alert_types, job_alert_remote_only, job_alert_min_salary')
+      .in('id', ids.slice(i, i + 500));
+    emails.push(...(ps || []).filter((p) => p.email && wantsJob(p)).map((p) => p.email as string));
   }
 
   // Mark first so a retry can never send twice

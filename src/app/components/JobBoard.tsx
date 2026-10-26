@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
 import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail } from 'lucide-react';
@@ -34,6 +35,7 @@ interface JobBoardProps {
 }
 
 export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
+  const t = useT();
   // AI assistant pop-up: null = closed, '' = empty, otherwise a job's text to explain
   const [assistant, setAssistant] = useState<string | null>(null);
   // Job details filled in by the AI, shown in the Post a Job form for review
@@ -91,7 +93,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   }, [load]);
 
   const handleDelete = async (id: string) => {
-    if (!(await confirmDialog({ title: 'Remove this job posting?', confirmLabel: 'Remove', danger: true }))) return;
+    if (!(await confirmDialog({ title: t('Remove this job posting?'), confirmLabel: t('Remove'), danger: true }))) return;
     const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
     if (error || !data?.length) {
       toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
@@ -110,38 +112,38 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
 
   const paged = usePaged(filteredJobs, 5);
 
-  if (loading) return <LoadingState label="Loading job postings..." />;
+  if (loading) return <LoadingState label={t('Loading job postings...')} />;
   if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Job Board</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{t('Job Board')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredJobs.length} job opportunities{myProgram ? ` · ${myProgram} jobs shown first` : ''}
+            {t('{n} job opportunities', { n: filteredJobs.length })}{myProgram ? ` · ${t('{program} jobs shown first', { program: myProgram })}` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         {myProgram && (
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="filter-select">
-            <option value="match">Best match</option>
-            <option value="newest">Newest</option>
+            <option value="match">{t('Best match')}</option>
+            <option value="newest">{t('Newest')}</option>
           </select>
         )}
         <button
           onClick={() => setAssistant('')}
-          className="flex items-center gap-2 px-4 py-2 bg-[#f5c400] text-[#002060] font-semibold rounded-lg hover:brightness-95 transition"
+          className="flex items-center gap-2 px-4 py-2 bg-[#f5c400] text-[#002060] font-semibold rounded-lg hover:brightness-95 transition whitespace-nowrap"
         >
           <Sparkles size={18} />
-          AI Assistant
+          {t('AI Assistant')}
         </button>
         <button
           onClick={() => { setPostPrefill(undefined); setShowPostForm(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
         >
           <Plus size={18} />
-          Post a Job
+          {t('Post a Job')}
         </button>
         </div>
       </div>
@@ -182,7 +184,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            All Jobs
+            {t('All Jobs')}
           </button>
           <button
             onClick={() => setFilterType('full-time')}
@@ -192,7 +194,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            Full-time
+            {t('Full-time')}
           </button>
           <button
             onClick={() => setFilterType('part-time')}
@@ -202,7 +204,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            Part-time
+            {t('Part-time')}
           </button>
           <button
             onClick={() => setFilterType('contract')}
@@ -212,7 +214,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            Contract
+            {t('Contract')}
           </button>
           <button
             onClick={() => setFilterType('internship')}
@@ -222,7 +224,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            Internship
+            {t('Internship')}
           </button>
         </div>
       </div>
@@ -238,12 +240,12 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
-        <Pagination {...paged} label="jobs" alwaysShowControls />
+        <Pagination {...paged} label={t('jobs')} alwaysShowControls />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
-            <p className="font-medium">No job postings yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Be the first to share an opportunity with fellow alumni.</p>
+            <p className="font-medium">{t('No job postings yet')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('Be the first to share an opportunity with fellow alumni.')}</p>
           </div>
         )}
       </div>
@@ -268,6 +270,7 @@ const jobToText = (j: JobPosting) =>
   ].join('\n');
 
 function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; canDelete: boolean; onDelete: () => void; onExplain?: () => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
@@ -292,22 +295,22 @@ function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; can
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
           <Clock size={14} className="shrink-0" />
-          <span className="truncate">Posted {job.postedDate} by {job.postedBy}</span>
+          <span className="truncate">{t('Posted {date} by {name}', { date: job.postedDate, name: job.postedBy })}</span>
         </div>
         <div className="flex items-center gap-4">
           {canDelete && (
             <button onClick={onDelete} className="flex items-center gap-1 text-xs text-destructive hover:underline">
               <Trash2 size={13} />
-              Remove
+              {t('Remove')}
             </button>
           )}
           {onExplain && (
             <button onClick={onExplain} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-              <Sparkles size={14} /> Explain with AI
+              <Sparkles size={14} /> {t('Explain with AI')}
             </button>
           )}
           <button onClick={() => setOpen(true)} className="text-sm font-semibold text-primary hover:underline">
-            View details
+            {t('View details')}
           </button>
         </div>
       </div>
@@ -341,6 +344,7 @@ function JobMeta({ job }: { job: JobPosting }) {
 
 /** Full job posting in a pop-up, so the list below never shifts. */
 function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () => void; onExplain?: () => void }) {
+  const t = useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -374,13 +378,13 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
         )}
 
         <div>
-          <h4 className="text-sm font-semibold mb-1.5">About the job</h4>
+          <h4 className="text-sm font-semibold mb-1.5">{t('About the job')}</h4>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.description}</p>
         </div>
 
         {job.requirements.length > 0 && (
           <div>
-            <h4 className="text-sm font-semibold mb-1.5">Requirements</h4>
+            <h4 className="text-sm font-semibold mb-1.5">{t('Requirements')}</h4>
             <ul className="space-y-1.5">
               {job.requirements.map((req, index) => (
                 <li key={index} className="text-sm flex items-start gap-2">
@@ -393,11 +397,11 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
         )}
 
         <div className="rounded-xl bg-muted/50 p-4 text-sm">
-          <p className="font-semibold mb-0.5">How to apply</p>
+          <p className="font-semibold mb-0.5">{t('How to apply')}</p>
           <a href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`} className="text-primary hover:underline break-all">
             {job.contactEmail}
           </a>
-          <p className="text-xs text-muted-foreground mt-2">Posted {job.postedDate} by {job.postedBy}. Never pay a fee to apply for a job.</p>
+          <p className="text-xs text-muted-foreground mt-2">{t('Posted {date} by {name}', { date: job.postedDate, name: job.postedBy })}. {t('Never pay a fee to apply for a job.')}</p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
@@ -410,14 +414,14 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
               }}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#f5c400] text-[#002060] text-sm font-semibold hover:brightness-95"
             >
-              <Sparkles size={16} /> Explain with AI
+              <Sparkles size={16} /> {t('Explain with AI')}
             </button>
           )}
           <a
             href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
           >
-            <Mail size={16} /> Apply by email
+            <Mail size={16} /> {t('Apply by email')}
           </a>
         </div>
       </div>
@@ -450,6 +454,7 @@ function AssistantModal({ userId, seed, onClose, onPost }: { userId: string; see
 }
 
 function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
+  const t = useT();
   const styles = {
     'full-time': 'bg-blue-500/10 text-blue-700 border-blue-200',
     'part-time': 'bg-purple-500/10 text-purple-700 border-purple-200',
@@ -466,7 +471,7 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
 
   return (
     <span className={`px-2 py-1 rounded text-xs border ${styles[type]}`}>
-      {labels[type]}
+      {t(labels[type])}
     </span>
   );
 }
@@ -496,6 +501,7 @@ function JobPostingForm({
   onClose: () => void;
   onPosted: () => void;
 }) {
+  const t = useT();
   const [submitting, setSubmitting] = useState(false);
   const [emailAlumni, setEmailAlumni] = useState(true);
   const [formData, setFormData] = useState({
@@ -551,7 +557,7 @@ function JobPostingForm({
         toast.success(mail?.sent ? `Job posted and emailed to ${mail.sent} ${who}.` : `Job posted. No ${who} with accounts to email yet.`);
       }
     } else {
-      toast.success('Job posted!');
+      toast.success(t('Job posted!'));
     }
     setSubmitting(false);
     onPosted();
@@ -571,9 +577,9 @@ function JobPostingForm({
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <h3 className="font-semibold text-lg">Post a Job Opportunity</h3>
+          <h3 className="font-semibold text-lg">{t('Post a Job Opportunity')}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {initial ? 'Filled in by the AI Assistant. Check every field before posting.' : 'Fields marked * are required.'}
+            {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : t('Fields marked * are required.')}
           </p>
         </div>
         <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
@@ -583,7 +589,7 @@ function JobPostingForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm mb-1.5">Job Title *</label>
+            <label className="block text-sm mb-1.5">{t('Job Title')} *</label>
             <input
               type="text"
               required
@@ -595,7 +601,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Company *</label>
+            <label className="block text-sm mb-1.5">{t('Company')} *</label>
             <input
               type="text"
               required
@@ -607,7 +613,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Location *</label>
+            <label className="block text-sm mb-1.5">{t('Location')} *</label>
             <input
               type="text"
               required
@@ -619,22 +625,22 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Job Type *</label>
+            <label className="block text-sm mb-1.5">{t('Job Type')} *</label>
             <select
               required
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="full-time">Full-time</option>
-              <option value="part-time">Part-time</option>
-              <option value="contract">Contract</option>
-              <option value="internship">Internship</option>
+              <option value="full-time">{t('Full-time')}</option>
+              <option value="part-time">{t('Part-time')}</option>
+              <option value="contract">{t('Contract')}</option>
+              <option value="internship">{t('Internship')}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Salary Range (Optional)</label>
+            <label className="block text-sm mb-1.5">{t('Salary Range (Optional)')}</label>
             <input
               type="text"
               value={formData.salary}
@@ -645,13 +651,13 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Related Program</label>
+            <label className="block text-sm mb-1.5">{t('Related Program')}</label>
             <select
               value={formData.program}
               onChange={(e) => setFormData({ ...formData, program: e.target.value })}
               className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">Any program</option>
+              <option value="">{t('Any program')}</option>
               {PROGRAMS.map((p) => (
                 <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
               ))}
@@ -659,7 +665,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">Contact Email *</label>
+            <label className="block text-sm mb-1.5">{t('Contact Email')} *</label>
             <input
               type="email"
               required
@@ -672,36 +678,36 @@ function JobPostingForm({
         </div>
 
         <div>
-          <label className="block text-sm mb-1.5">Job Description *</label>
+          <label className="block text-sm mb-1.5">{t('Job Description')} *</label>
           <textarea
             required
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={4}
             className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            placeholder="Describe the job role and responsibilities..."
+            placeholder={t('Describe the job role and responsibilities...')}
           />
         </div>
 
         <div>
-          <label className="block text-sm mb-1.5">Requirements *</label>
+          <label className="block text-sm mb-1.5">{t('Requirements')} *</label>
           <textarea
             required
             value={formData.requirements}
             onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
             rows={4}
             className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            placeholder="List requirements (one per line)"
+            placeholder={t('List requirements (one per line)')}
           />
-          <p className="text-xs text-muted-foreground mt-1">Enter each requirement on a new line</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('Enter each requirement on a new line')}</p>
         </div>
 
         <label className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3.5 text-sm cursor-pointer">
           <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
           <span>
-            <span className="font-medium">Email this job to alumni</span>
+            <span className="font-medium">{t('Email this job to alumni')}</span>
             <span className="block text-xs text-muted-foreground">
-              {formData.program ? `Sent to ${formData.program} alumni with an account` : 'Sent to all alumni with an account'}, except those who turned off job emails.
+              {formData.program ? t('Sent to {program} alumni with an account', { program: formData.program }) : t('Sent to all alumni with an account')}, {t('except those who turned off job emails.')}
             </span>
           </span>
         </label>
@@ -712,14 +718,14 @@ function JobPostingForm({
             disabled={submitting}
             className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
           >
-            {submitting ? 'Posting...' : 'Post Job'}
+            {submitting ? t('Posting...') : t('Post Job')}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
           >
-            Cancel
+            {t('Cancel')}
           </button>
         </div>
       </form>

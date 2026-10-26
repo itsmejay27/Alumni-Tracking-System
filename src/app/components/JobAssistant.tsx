@@ -1,3 +1,4 @@
+import { usePrefs } from '@/lib/preferences';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
@@ -134,7 +135,8 @@ export function JobAssistant({
   onPost?: (prefill: JobPrefill) => void;
 }) {
   const [mode, setMode] = useState<Mode>(initialText ? 'text' : 'url');
-  const [lang, setLang] = useState<Lang>('en');
+  // Starts in the language chosen in Settings; can be switched just for the AI's answer
+  const [lang, setLang] = useState<Lang>(usePrefs().lang);
   const [url, setUrl] = useState('');
   const [text, setText] = useState(initialText || '');
   const [file, setFile] = useState<File | null>(null);

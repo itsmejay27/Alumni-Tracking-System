@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /** Splits a list into pages. Jumps back to page 1 when the list's length changes (e.g. a filter). */
@@ -38,6 +39,7 @@ export function Pagination({
   /** Show the page buttons even when everything fits on one page */
   alwaysShowControls?: boolean;
 }) {
+  const t = useT();
   if (total === 0) return null;
   // Show up to 5 page numbers around the current page
   const start = Math.max(1, Math.min(page - 2, pages - 4));
@@ -45,7 +47,7 @@ export function Pagination({
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-3 text-sm">
       <p className="text-muted-foreground">
-        Showing {from}–{to} of {total} {label}
+        {t('Showing {from}–{to} of {total}', { from, to, total })} {label}
       </p>
       {(pages > 1 || alwaysShowControls) && (
         <div className="flex items-center gap-1">

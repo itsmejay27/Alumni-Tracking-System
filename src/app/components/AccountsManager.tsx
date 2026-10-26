@@ -145,6 +145,23 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
   };
 
   const [resending, setResending] = useState<string | null>(null);
+  // For someone who lost the phone with their authenticator app
+  const handleResetTwoStep = async (acc: Account) => {
+    const name = `${acc.given_name} ${acc.last_name}`.trim() || acc.email;
+    const ok = await confirmDialog({
+      title: `Reset two-step verification for ${name}?`,
+      message: 'They will sign in with just their password and can set up two-step verification again in Settings.',
+      confirmLabel: 'Reset',
+    });
+    if (!ok) return;
+    const { data, error } = await supabase.functions.invoke('invite-account', { body: { action: 'reset-mfa', userId: acc.id } });
+    if (error) {
+      toast.error(await invokeError(error));
+      return;
+    }
+    toast.success(data?.removed ? `Two-step verification reset for ${name}` : `${name} did not have two-step verification on`);
+  };
+
   const handleResend = async (acc: Account) => {
     setResending(acc.id);
     const { data, error } = await supabase.functions.invoke('invite-account', {
@@ -379,6 +396,11 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                   {a.id === currentUserId && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}
                 </p>
                 <p className="text-sm text-muted-foreground truncate">{a.email}</p>
+                {a.id !== currentUserId && !a.must_change_password && (
+                  <button type="button" onClick={() => handleResetTwoStep(a)} className="text-[11px] font-medium text-primary hover:underline">
+                    Reset two-step
+                  </button>
+                )}
                 {a.must_change_password && (
                   <span className="inline-block mt-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Invitation pending</span>
                 )}

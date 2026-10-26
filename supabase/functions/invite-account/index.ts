@@ -164,6 +164,20 @@ Deno.serve(async (req) => {
     if (error) return json({ error: error.message }, 400);
     return json({ ok: true });
   }
+  // Turn off two-step verification for someone who lost their authenticator app
+  if (body.action === 'reset-mfa') {
+    const userId = String(body.userId || '');
+    if (!userId) return json({ error: 'Missing account' }, 400);
+    const { data, error } = await admin.auth.admin.mfa.listFactors({ userId });
+    if (error) return json({ error: error.message }, 400);
+    let removed = 0;
+    for (const f of data?.factors || []) {
+      const { error: delError } = await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId });
+      if (delError) return json({ error: delError.message }, 400);
+      removed++;
+    }
+    return json({ ok: true, removed });
+  }
   // Resend a pending invitation with a fresh temporary password
   if (body.action === 'resend') {
     const userId = String(body.userId || '');

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
@@ -24,6 +25,7 @@ interface AnnouncementsProps {
 }
 
 export function Announcements({ userRole, authorName }: AnnouncementsProps) {
+  const t = useT();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,15 +126,15 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
   const paged = usePaged(filteredAnnouncements, 8);
 
-  if (loading) return <LoadingState label="Loading announcements..." />;
+  if (loading) return <LoadingState label={t('Loading announcements...')} />;
   if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Announcements & Events</h2>
-          <p className="text-muted-foreground mt-1">Stay updated with official university circulars and events</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t('Announcements & Events')}</h2>
+          <p className="text-muted-foreground mt-1">{t('Stay updated with official university circulars and events')}</p>
         </div>
         {isAdmin && (
           <button
@@ -271,11 +273,11 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
                         : 'bg-primary/10 text-primary border border-primary/20'
                     }`}
                   >
-                    {ann.category}
+                    {t(ann.category)}
                   </span>
                   {ann.course && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                      {ann.course} ONLY
+                      {t('{program} only', { program: ann.course })}
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
@@ -293,7 +295,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
             <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                Posted by: <span className="font-semibold text-foreground">{ann.author}</span>
+                {t('Posted by')}: <span className="font-semibold text-foreground">{ann.author}</span>
               </p>
               {isAdmin && (
                 <button
@@ -308,14 +310,14 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           </div>
         ))}
 
-        <Pagination {...paged} label="announcements" />
+        <Pagination {...paged} label={t('announcements')} />
 
         {filteredAnnouncements.length === 0 && (
           <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">
             <Megaphone className="mx-auto mb-4 text-muted-foreground/60" size={56} />
-            <h3 className="font-bold text-xl mb-1 text-foreground">No Announcements</h3>
+            <h3 className="font-bold text-xl mb-1 text-foreground">{t('No Announcements')}</h3>
             <p className="text-muted-foreground text-sm">
-              All quiet here! Updates and events will be posted by administrators.
+              {t('All quiet here! Updates and events will be posted by administrators.')}
             </p>
           </div>
         )}

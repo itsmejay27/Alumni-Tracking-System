@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '@/lib/preferences';
 
 /** Philippine mobile number: 11 digits starting with 09. */
 export const isValidMobile = (v: string) => /^09\d{9}$/.test(v);
@@ -17,16 +18,17 @@ export function PhoneInput({
   className?: string;
   id?: string;
 }) {
+  const t = useT();
   const [touched, setTouched] = useState(false);
   const problem =
     !value
       ? required && touched
-        ? 'Mobile number is required'
+        ? t('Mobile number is required')
         : ''
       : !value.startsWith('09')
-        ? 'Must start with 09'
+        ? t('Must start with 09')
         : value.length !== 11
-          ? `${value.length}/11 digits`
+          ? t('{n}/11 digits', { n: value.length })
           : '';
   return (
     <div>

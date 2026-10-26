@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { AlertTriangle, HelpCircle } from 'lucide-react';
 
 interface ConfirmOptions {
@@ -22,6 +23,7 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
 
 /** Mount once near the root of the app. */
 export function ConfirmHost() {
+  const t = useT();
   const [pending, setPending] = useState<Pending | null>(null);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export function ConfirmHost() {
   };
 
   if (!pending) return null;
-  const { title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger } = pending;
+  const { title, message, confirmLabel = t('Confirm'), cancelLabel = t('Cancel'), danger } = pending;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">

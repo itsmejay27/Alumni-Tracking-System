@@ -24,3 +24,16 @@ export async function passwordUpdateError(error: { message: string; code?: strin
   if (error.code === 'same_password') return 'Your new password must be different from your current one.';
   return error.message;
 }
+
+/**
+ * Checks a password without touching the signed-in session (which may already have passed
+ * two-step verification). Uses a separate, memory-only client and signs it out locally.
+ */
+export async function verifyPassword(email: string, password: string): Promise<boolean> {
+  const probe = createClient(url || 'http://localhost', key || 'missing-key', {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'omsu-password-check' },
+  });
+  const { error } = await probe.auth.signInWithPassword({ email, password });
+  if (!error) await probe.auth.signOut({ scope: 'local' });
+  return !error;
+}

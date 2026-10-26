@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { AppToaster } from './components/AppToaster';
 import { ConfirmHost } from './components/ConfirmDialog';
 import { roleLabel } from '@/lib/programs';
+import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
+import { MfaChallenge } from './components/MfaChallenge';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, 
@@ -80,6 +82,15 @@ function profileToUser(p: any): CurrentUser {
 }
 
 export default function App() {
+  return (
+    <PreferencesProvider>
+      <AppInner />
+    </PreferencesProvider>
+  );
+}
+
+function AppInner() {
+  const t = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
@@ -90,6 +101,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  // Two-step verification: true while a signed-in user still has to enter their authenticator code
+  const [needsMfa, setNeedsMfa] = useState<boolean | null>(null);
 
   // Track the Supabase auth session
   useEffect(() => {
@@ -104,8 +117,26 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  const checkMfa = async () => {
+    try {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      setNeedsMfa(!!data && data.nextLevel === 'aal2' && data.currentLevel !== 'aal2');
+    } catch {
+      // Could not read the sign-in level; continue without the extra step rather than hanging
+      setNeedsMfa(false);
+    }
+  };
+  const accessToken = session?.access_token;
+  useEffect(() => {
+    if (!session) {
+      setNeedsMfa(null);
+      return;
+    }
+    checkMfa();
+  }, [accessToken]);
+
   // Load the signed-in user's profile (role decides which screens they see)
-  const userId = session?.user.id;
+  const userId = needsMfa === false ? session?.user.id : undefined;
   useEffect(() => {
     if (!userId) {
       setCurrentUser(null);
@@ -171,6 +202,17 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  useApplyPreferences(!!session && !!currentUser && !needsMfa);
+
+  if (session && needsMfa) {
+    return (
+      <>
+        <MfaChallenge onVerified={checkMfa} />
+        <AppToaster />
+      </>
+    );
+  }
+
   if (!authReady || (session && !currentUser) || (currentUser?.role === 'alumni' && needsLink === null)) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
@@ -233,23 +275,23 @@ export default function App() {
 
   // Nav menu item details
   const adminMenuItems = [
-    { id: 'dashboard', label: 'Analytics', icon: <BarChart3 size={18} /> },
-    { id: 'records', label: 'Alumni Records', icon: <Users size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
-    { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
-    ...(userRole === 'admin' ? [{ id: 'contact', label: 'Contact Info', icon: <PhoneCall size={18} /> }] : []),
-    ...(userRole === 'admin' ? [{ id: 'accounts', label: 'Accounts', icon: <UserCog size={18} /> }] : []),
-    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
+    { id: 'dashboard', label: t('Analytics'), icon: <BarChart3 size={18} /> },
+    { id: 'records', label: t('Alumni Records'), icon: <Users size={18} /> },
+    { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
+    { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
+    ...(userRole === 'admin' ? [{ id: 'contact', label: t('Contact Info'), icon: <PhoneCall size={18} /> }] : []),
+    ...(userRole === 'admin' ? [{ id: 'accounts', label: t('Accounts'), icon: <UserCog size={18} /> }] : []),
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
   const alumniMenuItems = [
-    { id: 'home', label: 'Home', icon: <HomeIcon size={18} /> },
-    { id: 'profile', label: 'My Alumni Profile', icon: <UserCircle size={18} /> },
-    { id: 'officials', label: 'Directory', icon: <Users size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
-    { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
-    { id: 'contact', label: 'Contact Us', icon: <PhoneCall size={18} /> },
-    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
+    { id: 'home', label: t('Home'), icon: <HomeIcon size={18} /> },
+    { id: 'profile', label: t('My Alumni Profile'), icon: <UserCircle size={18} /> },
+    { id: 'officials', label: t('Directory'), icon: <Users size={18} /> },
+    { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
+    { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
+    { id: 'contact', label: t('Contact Us'), icon: <PhoneCall size={18} /> },
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
   const menuItems = isAdmin ? adminMenuItems : alumniMenuItems;
@@ -271,7 +313,7 @@ export default function App() {
           {!sidebarCollapsed && (
             <div className="min-w-0">
               <h1 className="font-extrabold text-sm tracking-tight truncate">{appName}</h1>
-              <p className="text-[11px] text-white/60">Graduate Tracer</p>
+              <p className="text-[11px] text-white/60">{t('Graduate Tracer')}</p>
             </div>
           )}
         </div>
@@ -335,7 +377,7 @@ export default function App() {
             title={sidebarCollapsed ? 'Logout' : undefined}
           >
             <LogOut size={14} />
-            {!sidebarCollapsed && <span>Sign Out</span>}
+            {!sidebarCollapsed && <span>{t('Sign Out')}</span>}
           </button>
         </div>
       </aside>
@@ -351,7 +393,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-extrabold text-sm leading-none">{appName}</h1>
-              <p className="text-[11px] text-white/60 mt-0.5">Graduate Tracer</p>
+              <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Tracer')}</p>
             </div>
           </div>
           <button 
@@ -429,7 +471,7 @@ export default function App() {
                   className="w-full flex items-center justify-center gap-2 py-3 bg-red-600/20 text-red-100 border border-red-500/20 hover:bg-red-600 font-bold text-xs rounded-lg transition-all"
                 >
                   <LogOut size={14} />
-                  Sign Out
+                  {t('Sign Out')}
                 </button>
               </div>
 

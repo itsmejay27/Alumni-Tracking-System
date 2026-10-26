@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import { Mail, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { roleLabel } from '@/lib/programs';
@@ -20,6 +21,7 @@ const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpp
 
 /** Directory of Alumni Affairs and program chairs (real staff accounts). */
 export function CollegeOfficialsDirectory() {
+  const t = useT();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,21 +36,21 @@ export function CollegeOfficialsDirectory() {
 
   const paged = usePaged(staff, 9);
 
-  if (loading) return <LoadingState label="Loading directory..." />;
+  if (loading) return <LoadingState label={t('Loading directory...')} />;
   if (error) return <ErrorState message={error} />;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Directory</h2>
-        <p className="text-muted-foreground mt-1 text-sm">OMSU Alumni Affairs and program chairs</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t('Directory')}</h2>
+        <p className="text-muted-foreground mt-1 text-sm">{t('OMSU Alumni Affairs and program chairs')}</p>
       </div>
 
       {staff.length === 0 ? (
         <div className="bg-card rounded-2xl p-12 text-center shadow-sm">
           <Users className="mx-auto mb-3 text-muted-foreground/60" size={40} />
-          <p className="font-semibold">No staff listed yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Program chairs will appear here once their accounts are set up.</p>
+          <p className="font-semibold">{t('No staff listed yet')}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t('Program chairs will appear here once their accounts are set up.')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -85,7 +87,7 @@ export function CollegeOfficialsDirectory() {
           })}
         </div>
         <div className="bg-card rounded-2xl shadow-sm">
-          <Pagination {...paged} label="people" />
+          <Pagination {...paged} label={t('people')} />
         </div>
         </div>
       )}

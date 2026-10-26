@@ -42,40 +42,43 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --font-weight-medium: 500;
+  /* OMSU navy dark theme */
+  --background: #0b1221;
+  --foreground: #e6eaf2;
+  --card: #121b2f;
+  --card-foreground: #e6eaf2;
+  --popover: #121b2f;
+  --popover-foreground: #e6eaf2;
+  --primary: #3d6bd6;
+  --primary-foreground: #ffffff;
+  --secondary: #1a2540;
+  --secondary-foreground: #e6eaf2;
+  --muted: #1a2540;
+  --muted-foreground: #97a3ba;
+  --accent: #1a2540;
+  --accent-foreground: #c7d4f5;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: #25314d;
+  --input: transparent;
+  --input-background: #0f1829;
+  --switch-background: #334155;
+  --ring: #3d6bd6;
+  --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --chart-1: #6b8fe6;
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --chart-5: #f472b6;
+  --sidebar: #08142e;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #002060;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #ffffff;
 }
 
 @theme inline {
@@ -209,3 +212,29 @@ input[type='password']::-ms-reveal,
 input[type='password']::-ms-clear {
   display: none;
 }
+
+/* Dark mode: soften colours written as fixed light utilities inside the app */
+.dark .bg-white { background-color: var(--card); }
+.dark .bg-slate-50, .dark .bg-gray-50 { background-color: var(--background); }
+.dark .bg-slate-100, .dark .bg-gray-100 { background-color: var(--muted); }
+.dark .bg-slate-200 { background-color: #25314d; }
+.dark .text-slate-900, .dark .text-slate-800, .dark .text-gray-900 { color: var(--foreground); }
+.dark .text-slate-700, .dark .text-slate-600, .dark .text-gray-700 { color: #c3cbdb; }
+.dark .text-slate-500, .dark .text-slate-400 { color: var(--muted-foreground); }
+.dark .border-slate-100, .dark .border-slate-200, .dark .border-slate-300 { border-color: var(--border); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.12); }
+.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.12); }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.12); }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.12); }
+.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.2); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.2); }
+.dark .text-amber-900, .dark .text-amber-800, .dark .text-amber-700 { color: #fcd34d; }
+.dark .text-amber-900\/90 { color: #fcd34d; }
+.dark .text-emerald-800, .dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-red-800, .dark .text-red-700 { color: #fca5a5; }
+.dark .text-blue-700, .dark .text-blue-600 { color: #93c5fd; }
+.dark .bg-\[\#eef2fa\] { background-color: var(--muted); }
+.dark select, .dark input, .dark textarea { color-scheme: dark; }
+.dark [data-sonner-toast] { background: var(--card) !important; color: var(--foreground) !important; border-color: var(--border) !important; }
+.dark [data-sonner-toast] [data-close-button] { background: var(--card) !important; border-color: var(--border) !important; color: var(--muted-foreground) !important; }

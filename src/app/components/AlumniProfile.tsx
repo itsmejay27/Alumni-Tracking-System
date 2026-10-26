@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import {
   User,
   Briefcase,
@@ -54,6 +55,7 @@ const newEntry = (): EmploymentEntry => ({
 });
 
 export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfileProps) {
+  const t = useT();
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<AlumniRecord | null>(null);
 
@@ -138,7 +140,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     e.target.value = '';
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be 2 MB or smaller');
+      toast.error(t('Image must be 2 MB or smaller.'));
       return;
     }
     const reader = new FileReader();
@@ -263,7 +265,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     for (const sct of sections) {
       const problem = validate(sct);
       if (problem) {
-        toast.error(problem);
+        toast.error(t(problem));
         return;
       }
     }
@@ -302,7 +304,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         return nextBl;
       });
       const label = { personal: 'Personal information', education: 'Education', employment: 'Employment', feedback: 'Privacy and feedback' }[section];
-      toast.success(record?.id ? `${label} saved` : 'Your alumni profile has been saved');
+      toast.success(record?.id ? t('{section} saved', { section: t(label) }) : t('Your alumni profile has been saved'));
     } catch (err: any) {
       toast.error(`Could not save: ${err.message}`);
     }
@@ -315,7 +317,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     setAvatarUrl(url);
     try {
       await onUpdateProfile({ ...currentUser, avatarUrl: url });
-      toast.success(url ? 'Photo updated' : 'Photo removed');
+      toast.success(url ? t('Photo updated') : t('Photo removed'));
     } catch (err: any) {
       toast.error(`Could not save photo: ${err.message}`);
     }
@@ -325,7 +327,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     <SaveRow dirty={dirty[section]} busy={savingSection === section} onSave={() => saveSection(section)} label={label} />
   );
 
-  if (loading) return <LoadingState label="Loading your profile..." />;
+  if (loading) return <LoadingState label={t('Loading your profile...')} />;
 
   const checks = [
     !!givenName.trim() && !!lastName.trim(),
@@ -362,31 +364,31 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             </span>
           </label>
           <div className="flex-1 min-w-0 text-center md:text-left space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#f5c400]">My Alumni Profile</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#f5c400]">{t('My Alumni Profile')}</p>
             <h2 className="text-2xl sm:text-3xl font-extrabold truncate">{displayName || 'Your name'}</h2>
             <p className="text-white/80 text-sm">
-              {programName(course)} · Class of {yearGraduated}
+              {programName(course)} · {t('Class of')} {yearGraduated}
               {record?.studentId && ` · ID ${record.studentId}`}
             </p>
             <div className="flex flex-wrap gap-2 justify-center md:justify-start pt-2">
-              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{status}</span>
-              {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">Updated {record.lastUpdated}</span>}
+              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{t(status)}</span>
+              {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">{t('Updated')} {record.lastUpdated}</span>}
               {avatarUrl && (
                 <button type="button" onClick={() => savePhoto('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">
-                  <Trash2 size={12} /> Remove photo
+                  <Trash2 size={12} /> {t('Remove photo')}
                 </button>
               )}
             </div>
           </div>
           <div className="md:w-56 shrink-0 rounded-xl bg-white/10 p-4">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-white/80">Profile complete</span>
+              <span className="text-sm text-white/80">{t('Profile complete')}</span>
               <span className="text-xl font-extrabold">{completion}%</span>
             </div>
             <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden">
               <div className="h-full rounded-full bg-[#f5c400] transition-all duration-500" style={{ width: `${completion}%` }} />
             </div>
-            <p className="text-[11px] text-white/70 mt-2">{completion === 100 ? 'All set. Thank you!' : 'Fill in the remaining details below.'}</p>
+            <p className="text-[11px] text-white/70 mt-2">{completion === 100 ? t('All set. Thank you!') : t('Fill in the remaining details below.')}</p>
           </div>
         </div>
       </section>
@@ -410,19 +412,19 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Sex *">
               <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
-                <option>Female</option>
-                <option>Male</option>
+                <option value="Female">{t('Female')}</option>
+                <option value="Male">{t('Male')}</option>
               </select>
             </Field>
-            <Field label={`Date of birth *${(ageFrom(dateOfBirth) ?? 0) >= 15 ? ` · Age ${ageFrom(dateOfBirth)}` : ''}`}>
+            <Field label={`${t('Date of birth')} *${(ageFrom(dateOfBirth) ?? 0) >= 15 ? ` · ${t('Age')} ${ageFrom(dateOfBirth)}` : ''}`}>
               <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
             </Field>
             <Field label="Civil status *">
               <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
-                <option>Single</option>
-                <option>Married</option>
-                <option>Separated</option>
-                <option>Widowed</option>
+                <option value="Single">{t('Single')}</option>
+                <option value="Married">{t('Married')}</option>
+                <option value="Separated">{t('Separated')}</option>
+                <option value="Widowed">{t('Widowed')}</option>
               </select>
             </Field>
           </div>
@@ -433,12 +435,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           </div>
 
           <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground pt-2 border-t border-border/60">
-            <Users size={15} /> Parents
+            <Users size={15} /> {t('Parents')}
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder="Full name" /></Field>
+            <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
             <Field label="Father's contact number"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-            <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder="Full maiden name" /></Field>
+            <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
             <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
           </div>
 
@@ -479,17 +481,17 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <Briefcase size={18} />
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold text-base">Employment</h3>
+                <h3 className="font-semibold text-base">{t('Employment')}</h3>
                 <p className="text-sm text-muted-foreground truncate">
-                  {status}
-                  {currentJobs[0] && ` · ${currentJobs[0].position || 'Position'} at ${currentJobs[0].company || 'Company'}`}
+                  {t(status)}
+                  {currentJobs[0] && ` · ${currentJobs[0].position || t('Position')} ${t('at')} ${currentJobs[0].company || t('Company')}`}
                   {previousJobs.length > 0 && ` · ${previousJobs.length} previous job${previousJobs.length === 1 ? '' : 's'}`}
                 </p>
               </div>
             </div>
             <span className="inline-flex items-center gap-1 text-sm font-medium text-primary shrink-0">
-              {!employmentOpen && dirty.employment && <span className="text-xs text-amber-600 font-medium mr-1">Not saved</span>}
-              {employmentOpen ? 'Hide' : 'Show'}
+              {!employmentOpen && dirty.employment && <span className="text-xs text-amber-600 font-medium mr-1">{t('Not saved')}</span>}
+              {employmentOpen ? t('Hide') : t('Show')}
               <ChevronDown size={16} className={`transition-transform ${employmentOpen ? 'rotate-180' : ''}`} />
             </span>
           </button>
@@ -498,7 +500,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <div className="px-5 sm:px-6 pb-6 space-y-5 border-t border-border/60 pt-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium mr-1">Current status:</span>
+                  <span className="text-sm font-medium mr-1">{t('Current status')}:</span>
                   {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
                     <button
                       type="button"
@@ -508,13 +510,13 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                         status === st ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'
                       }`}
                     >
-                      {st}
+                      {t(st)}
                     </button>
                   ))}
                 </div>
                 {status !== 'Unemployed' && (
                   <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-                    <Plus size={16} /> Add job
+                    <Plus size={16} /> {t('Add job')}
                   </button>
                 )}
               </div>
@@ -522,13 +524,13 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
               {/* Current job(s) */}
               {status === 'Unemployed' ? (
                 <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-                  You're marked as <strong>unemployed</strong>, so no job details are needed.
-                  {currentJobs.length > 0 && ' When you save, your current job will move to your previous jobs.'} If you find work, choose
-                  Employed or Self-Employed and add the job.
+                  {t("You're marked as unemployed, so no job details are needed.")}
+                  {currentJobs.length > 0 && ` ${t('When you save, your current job will move to your previous jobs.')}`}{' '}
+                  {t('If you find work, choose Employed or Self-Employed and add the job.')}
                 </p>
               ) : currentJobs.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                  No current job recorded. {status !== 'Unemployed' && 'Click "Add job" to add it.'}
+                  No current job recorded. Click "Add job" to add it.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -543,7 +545,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <div>
                   <button type="button" onClick={() => setShowPrevious((v) => !v)} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     <ChevronDown size={16} className={`transition-transform ${showPrevious ? 'rotate-180' : ''}`} />
-                    {showPrevious ? 'Hide' : 'Show'} previous jobs ({previousJobs.length})
+                    {showPrevious ? t('Hide previous jobs') : t('Show previous jobs')} ({previousJobs.length})
                   </button>
                   {showPrevious && (
                     <div className="mt-3 space-y-2">
@@ -552,13 +554,13 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                       ))}
                       {pages > 1 && (
                         <div className="flex items-center justify-between text-sm pt-1">
-                          <span className="text-muted-foreground">Page {page + 1} of {pages}</span>
+                          <span className="text-muted-foreground">{t('Page {page} of {pages}', { page: page + 1, pages })}</span>
                           <div className="flex gap-2">
                             <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
-                              <ChevronLeft size={15} /> Newer
+                              <ChevronLeft size={15} /> {t('Newer')}
                             </button>
                             <button type="button" disabled={page >= pages - 1} onClick={() => setPage((p) => p + 1)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted disabled:opacity-40">
-                              Older <ChevronRight size={15} />
+                              {t('Older')} <ChevronRight size={15} />
                             </button>
                           </div>
                         </div>
@@ -567,7 +569,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                   )}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Saved jobs are kept as your employment history.</p>
+              <p className="text-xs text-muted-foreground">{t('Saved jobs are kept as your employment history.')}</p>
               {saveBar('employment', 'Save employment')}
             </div>
           )}
@@ -599,14 +601,14 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
               value={suggestions}
               onChange={(e) => setSuggestions(e.target.value)}
               className={`${input} resize-none`}
-              placeholder="How can OMSU improve its programs or this tracer study?"
+              placeholder={t('How can OMSU improve its programs or this tracer study?')}
             />
           </Field>
           <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-muted/50 p-4">
             <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
             <span className="text-sm">
-              <span className="font-medium block flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> Let other OMSU alumni find me</span>
-              <span className="text-muted-foreground text-xs">Only your name, program, batch and current position are shown. Addresses, birth date and civil status are never shown.</span>
+              <span className="font-medium block flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> {t('Let other OMSU alumni find me')}</span>
+              <span className="text-muted-foreground text-xs">{t('Only your name, program, batch and current position are shown. Addresses, birth date and civil status are never shown.')}</span>
             </span>
           </label>
           {saveBar('feedback', 'Save')}
@@ -619,13 +621,14 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
 /** Save button at the bottom of a section; shows whether that section has unsaved changes. */
 function SaveRow({ dirty, busy, onSave, label }: { dirty: boolean; busy: boolean; onSave: () => void; label: string }) {
+  const t = useT();
   return (
     <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-4 border-t border-border/60">
       {dirty ? (
-        <span className="text-xs font-medium text-amber-600 sm:mr-auto">You have unsaved changes</span>
+        <span className="text-xs font-medium text-amber-600 sm:mr-auto">{t('You have unsaved changes')}</span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 sm:mr-auto">
-          <CheckCircle2 size={14} /> Saved
+          <CheckCircle2 size={14} /> {t('Saved')}
         </span>
       )}
       <button
@@ -634,19 +637,20 @@ function SaveRow({ dirty, busy, onSave, label }: { dirty: boolean; busy: boolean
         disabled={busy || !dirty}
         className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Save size={16} /> {busy ? 'Saving...' : label}
+        <Save size={16} /> {busy ? t('Saving...') : t(label)}
       </button>
     </div>
   );
 }
 
 function Section({ icon, title, action, children }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  const t = useT();
   return (
     <section className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">{icon}</div>
-          <h3 className="font-semibold text-base">{title}</h3>
+          <h3 className="font-semibold text-base">{t(title)}</h3>
         </div>
         {action}
       </div>
@@ -656,20 +660,22 @@ function Section({ icon, title, action, children }: { icon: React.ReactNode; tit
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const t = useT();
   return (
     <div>
-      <span className={labelCls}>{label}</span>
+      <span className={labelCls}>{label.endsWith(' *') ? `${t(label.slice(0, -2))} *` : t(label)}</span>
       {children}
     </div>
   );
 }
 
 function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
+  const t = useT();
   return (
     <button type="button" onClick={onOpen} className="w-full flex items-center justify-between gap-3 rounded-xl bg-muted/50 hover:bg-muted px-4 py-3 text-left">
       <div className="min-w-0">
         <p className="text-sm font-semibold truncate">
-          {job.position || 'Position not set'} <span className="font-normal text-muted-foreground">at {job.company || '—'}</span>
+          {job.position || t('Position not set')} <span className="font-normal text-muted-foreground">{t('at')} {job.company || '—'}</span>
         </p>
         <p className="text-xs text-muted-foreground truncate">
           {[job.employmentStatus, job.employerType, job.jobLevel].filter(Boolean).join(' · ')}
@@ -679,7 +685,7 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
         </p>
       </div>
       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${job.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
-        {job.endDate ? 'Previous' : 'Current'}
+        {job.endDate ? t('Previous') : t('Current')}
       </span>
     </button>
   );
@@ -701,11 +707,12 @@ function JobModal({
   onSave: (e: EmploymentEntry) => void;
   onRemove?: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<EmploymentEntry>(entry);
   const set = (patch: Partial<EmploymentEntry>) => setDraft((d) => ({ ...d, ...patch }));
   const submit = () => {
     if (!draft.position.trim() || !draft.company.trim()) {
-      toast.error('Enter the position and the company');
+      toast.error(t('Enter the position and the company'));
       return;
     }
     onSave({ ...draft, position: draft.position.trim(), company: draft.company.trim() });
@@ -717,8 +724,8 @@ function JobModal({
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-lg">{isNew ? 'Add job' : locked ? 'Job details' : 'Edit job'}</h3>
-            {locked && <p className="text-xs text-muted-foreground mt-0.5">Saved jobs are kept as history and can't be edited.</p>}
+            <h3 className="font-semibold text-lg">{isNew ? t('Add job') : locked ? t('Job details') : t('Edit job')}</h3>
+            {locked && <p className="text-xs text-muted-foreground mt-0.5">{t("Saved jobs are kept as history and can't be edited.")}</p>}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
             <X size={18} />
@@ -754,7 +761,7 @@ function JobModal({
           <div>
             {onRemove && (
               <button type="button" onClick={onRemove} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50">
-                <Trash2 size={15} /> Remove
+                <Trash2 size={15} /> {t('Remove')}
               </button>
             )}
             {!isNew && !entry.endDate && (
@@ -763,14 +770,14 @@ function JobModal({
                 onClick={() => onSave({ ...draft, endDate: new Date().toISOString().slice(0, 7) })}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50"
               >
-                I no longer work here
+                {t('I no longer work here')}
               </button>
             )}
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">{t('Cancel')}</button>
             <button type="button" onClick={submit} className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground">
-              {isNew ? 'Add job' : 'Done'}
+              {isNew ? t('Add job') : t('Done')}
             </button>
           </div>
         </div>
