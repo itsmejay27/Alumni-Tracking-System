@@ -16,7 +16,8 @@ const json = (body: unknown, status = 200) =>
 const DAILY_LIMIT = 20;
 const MAX_PAGE_CHARS = 60_000;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
-const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+// Tried in order; busy or unavailable models fall through to the next one
+const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
 
 // ---------- Reading a job page safely ----------
 
@@ -193,33 +194,52 @@ async function callGemini(system: string, parts: Part[], schema?: unknown): Prom
   const models = preferred ? [preferred, ...FALLBACK_MODELS.filter((m) => m !== preferred)] : FALLBACK_MODELS;
 
   let lastError = '';
+  let busy = false;
   for (const model of models) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      signal: AbortSignal.timeout(120_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: schema
-          ? { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.3 }
-          : { temperature: 0.6 },
-      }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (res.status === 404) {
-      // Model name not available to this key: try the next one
-      lastError = body?.error?.message || `Model ${model} not found`;
-      continue;
+    // Two tries per model: Google's "high demand" errors usually clear within seconds
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          signal: AbortSignal.timeout(90_000),
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts }],
+            generationConfig: schema
+              ? { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.3 }
+              : { temperature: 0.6 },
+          }),
+        });
+      } catch {
+        lastError = 'The AI service did not answer in time.';
+        busy = true;
+        break; // try the next model
+      }
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 404 || res.status === 400 && /model/i.test(body?.error?.message || '')) {
+        lastError = body?.error?.message || `Model ${model} not found`;
+        break; // model not available to this key: next model
+      }
+      if (res.status === 429 || res.status === 500 || res.status === 503 || res.status === 504) {
+        busy = true;
+        lastError = body?.error?.message || `AI service error (${res.status})`;
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
+          continue;
+        }
+        break; // still busy: next model
+      }
+      if (!res.ok) throw new Error(body?.error?.message || `AI service error (${res.status})`);
+      if (body?.promptFeedback?.blockReason) throw new Error('The AI could not process this content.');
+      const cand = body?.candidates?.[0];
+      const text = (cand?.content?.parts || []).map((p: any) => p.text || '').join('');
+      if (!text) throw new Error(cand?.finishReason === 'SAFETY' ? 'The AI could not process this content.' : 'The AI returned no answer. Please try again.');
+      return text;
     }
-    if (res.status === 429) throw new Error('The AI service is busy or the free quota is used up. Please try again later.');
-    if (!res.ok) throw new Error(body?.error?.message || `AI service error (${res.status})`);
-    if (body?.promptFeedback?.blockReason) throw new Error('The AI could not process this content.');
-    const cand = body?.candidates?.[0];
-    const text = (cand?.content?.parts || []).map((p: any) => p.text || '').join('');
-    if (!text) throw new Error(cand?.finishReason === 'SAFETY' ? 'The AI could not process this content.' : 'The AI returned no answer. Please try again.');
-    return text;
   }
+  if (busy) throw new Error('The AI service is very busy right now. Please try again in a minute.');
   throw new Error(`No Gemini model is available for this API key. ${lastError}`);
 }
 

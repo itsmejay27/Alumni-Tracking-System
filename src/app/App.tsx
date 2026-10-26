@@ -9,7 +9,6 @@ import { LinkStudentId } from './components/LinkStudentId';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
-import { JobAssistant } from './components/JobAssistant';
 import { AlumniProfile } from './components/AlumniProfile';
 import { CollegeOfficialsDirectory } from './components/CollegeOfficialsDirectory';
 import { Announcements } from './components/Announcements';
@@ -36,8 +35,7 @@ import {
   Home as HomeIcon,
   PhoneCall,
   Settings as SettingsIcon,
-  UserCog,
-  Sparkles
+  UserCog
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
@@ -92,8 +90,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  // Job text sent from the Job Board to the AI Job Assistant
-  const [assistantSeed, setAssistantSeed] = useState<string | undefined>();
 
   // Track the Supabase auth session
   useEffect(() => {
@@ -252,7 +248,6 @@ export default function App() {
     { id: 'officials', label: 'Directory', icon: <Users size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
     { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
-    { id: 'assistant', label: 'AI Job Assistant', icon: <Sparkles size={18} /> },
     { id: 'contact', label: 'Contact Us', icon: <PhoneCall size={18} /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
   ];
@@ -460,8 +455,7 @@ export default function App() {
               {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} onExplain={(t) => { setAssistantSeed(t); setActiveTab('assistant'); }} />}
-              {activeTab === 'assistant' && <JobAssistant userId={currentUser.id} initialText={assistantSeed} onSeedUsed={() => setAssistantSeed(undefined)} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'contact' && <ContactView />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>

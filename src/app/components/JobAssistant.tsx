@@ -20,6 +20,7 @@ import {
   Building2,
   Briefcase,
   RotateCcw,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -79,7 +80,7 @@ const fileToBase64 = (file: File) =>
   });
 
 /** AI helper that explains a job posting, its pay and requirements, and helps the user apply. */
-export function JobAssistant({ userId, initialText, onSeedUsed }: { userId?: string; initialText?: string; onSeedUsed?: () => void }) {
+export function JobAssistant({ userId, initialText, onSeedUsed, onClose }: { userId?: string; initialText?: string; onSeedUsed?: () => void; onClose?: () => void }) {
   const [mode, setMode] = useState<Mode>(initialText ? 'text' : 'url');
   const [lang, setLang] = useState<Lang>('en');
   const [url, setUrl] = useState('');
@@ -197,7 +198,7 @@ export function JobAssistant({ userId, initialText, onSeedUsed }: { userId?: str
     setUrl('');
     setText('');
     setFile(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    resultRef.current?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const tab = (id: Mode, icon: React.ReactNode, label: string) => (
@@ -213,35 +214,42 @@ export function JobAssistant({ userId, initialText, onSeedUsed }: { userId?: str
   );
 
   return (
-    <div className="w-full space-y-6 pb-10 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
       {/* Header */}
-      <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white p-6 sm:p-8">
+      <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white p-5 sm:p-6">
         <div
           className="absolute inset-0 opacity-[0.07] pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
         />
         <div className="relative flex flex-col md:flex-row md:items-center gap-4 justify-between">
-          <div className="space-y-2 max-w-2xl">
+          <div className="space-y-1.5 max-w-2xl">
             <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#f5c400]">
               <Sparkles size={14} /> AI Job Assistant
             </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold">Understand any job posting</h2>
-            <p className="text-white/80 text-sm sm:text-base">
+            <h2 className="text-xl sm:text-2xl font-extrabold">Understand any job posting</h2>
+            <p className="text-white/80 text-sm">
               Paste a link, the job text, or a screenshot. Get a simple explanation, the pay per hour, week and month, a skills check, and
               help with your application.
             </p>
           </div>
-          <div className="flex rounded-xl bg-white/10 p-1 self-start md:self-center">
-            {(['en', 'fil'] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setLang(l)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${lang === l ? 'bg-[#f5c400] text-[#002060]' : 'text-white/80 hover:text-white'}`}
-              >
-                {l === 'en' ? 'English' : 'Filipino'}
+          <div className="flex items-center gap-2 self-start md:self-center">
+            <div className="flex rounded-xl bg-white/10 p-1">
+              {(['en', 'fil'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setLang(l)}
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${lang === l ? 'bg-[#f5c400] text-[#002060]' : 'text-white/80 hover:text-white'}`}
+                >
+                  {l === 'en' ? 'English' : 'Filipino'}
+                </button>
+              ))}
+            </div>
+            {onClose && (
+              <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-lg text-white/80 hover:bg-white/10 hover:text-white">
+                <X size={20} />
               </button>
-            ))}
+            )}
           </div>
         </div>
       </section>

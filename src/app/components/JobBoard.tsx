@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { JobAssistant } from './JobAssistant';
 import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
@@ -30,11 +31,11 @@ interface JobBoardProps {
   userRole: string;
   userId: string;
   posterName: string;
-  /** Opens the AI Job Assistant with this job's text */
-  onExplain?: (jobText: string) => void;
 }
 
-export function JobBoard({ userRole, userId, posterName, onExplain }: JobBoardProps) {
+export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
+  // AI assistant pop-up: null = closed, '' = empty, otherwise a job's text to explain
+  const [assistant, setAssistant] = useState<string | null>(null);
   const [showPostForm, setShowPostForm] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'full-time' | 'part-time' | 'contract' | 'internship'>('all');
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -127,6 +128,13 @@ export function JobBoard({ userRole, userId, posterName, onExplain }: JobBoardPr
           </select>
         )}
         <button
+          onClick={() => setAssistant('')}
+          className="flex items-center gap-2 px-4 py-2 bg-[#f5c400] text-[#002060] font-semibold rounded-lg hover:brightness-95 transition"
+        >
+          <Sparkles size={18} />
+          AI Assistant
+        </button>
+        <button
           onClick={() => setShowPostForm(true)}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
         >
@@ -135,6 +143,9 @@ export function JobBoard({ userRole, userId, posterName, onExplain }: JobBoardPr
         </button>
         </div>
       </div>
+
+      {/* AI Job Assistant pop-up */}
+      {assistant !== null && <AssistantModal userId={userId} seed={assistant} onClose={() => setAssistant(null)} />}
 
       {/* Post Job Form */}
       {showPostForm && (
@@ -210,7 +221,7 @@ export function JobBoard({ userRole, userId, posterName, onExplain }: JobBoardPr
             job={job}
             canDelete={isAdmin || job.createdBy === userId}
             onDelete={() => handleDelete(job.id)}
-            onExplain={onExplain ? () => onExplain(jobToText(job)) : undefined}
+            onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
         <Pagination {...paged} label="jobs" />
@@ -329,6 +340,29 @@ function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; can
         </div>
       </div>
     </div>
+  );
+}
+
+function AssistantModal({ userId, seed, onClose }: { userId: string; seed: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="AI Job Assistant">
+      <div className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative w-full max-w-6xl max-h-[96vh] overflow-y-auto rounded-2xl bg-background shadow-2xl p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-200">
+        <JobAssistant userId={userId} initialText={seed || undefined} onClose={onClose} />
+      </div>
+    </div>,
+    document.body
   );
 }
 
