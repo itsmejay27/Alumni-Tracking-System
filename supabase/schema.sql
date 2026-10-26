@@ -354,3 +354,48 @@ revoke execute on function public.keep_record_history() from public, anon, authe
 create trigger alumni_records_keep_history
   before update on public.alumni_records
   for each row execute function public.keep_record_history();
+
+-- Staff invites: Supabase applies app_metadata after inserting the user, so handle_new_user
+-- can't see {staff:true} yet. The invite-account function adds the email here first.
+create table if not exists public.staff_invites (
+  email text primary key,
+  created_at timestamptz not null default now()
+);
+alter table public.staff_invites enable row level security;
+
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare rec_id text; is_staff boolean;
+begin
+  is_staff := coalesce(new.raw_app_meta_data->>'staff', '') = 'true'
+    or exists (select 1 from public.staff_invites
+                where email = lower(new.email) and created_at > now() - interval '15 minutes');
+
+  if not is_staff then
+    select id into rec_id from public.alumni_records
+     where upper(trim(data->>'studentId')) = upper(trim(coalesce(new.raw_user_meta_data->>'student_id', '')))
+       and upper(trim(data->>'lastName')) = upper(trim(coalesce(new.raw_user_meta_data->>'last_name', '')))
+       and user_id is null
+     limit 1
+     for update;
+    if rec_id is null then
+      raise exception 'STUDENT_ID_NOT_FOUND';
+    end if;
+  end if;
+
+  insert into public.profiles (id, email, given_name, last_name)
+  values (
+    new.id,
+    lower(new.email),
+    upper(coalesce(new.raw_user_meta_data->>'given_name', '')),
+    upper(coalesce(new.raw_user_meta_data->>'last_name', ''))
+  );
+
+  if rec_id is not null then
+    update public.alumni_records
+       set user_id = new.id, email = lower(new.email),
+           data = data || jsonb_build_object('email', lower(new.email))
+     where id = rec_id;
+  end if;
+  return new;
+end $$;

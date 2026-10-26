@@ -177,6 +177,9 @@ Deno.serve(async (req) => {
   if (!ROLES[role]) return json({ error: 'Unknown role' }, 400);
 
   const password = tempPassword();
+  // Supabase saves app_metadata only after the user row is inserted, so the sign-up trigger
+  // can't see the staff flag yet. This short-lived entry tells it to skip the Student ID check.
+  await admin.from('staff_invites').upsert({ email, created_at: new Date().toISOString() });
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
@@ -185,6 +188,7 @@ Deno.serve(async (req) => {
     // Marks staff accounts so the sign-up Student ID check does not apply to them
     app_metadata: { staff: true },
   });
+  await admin.from('staff_invites').delete().eq('email', email);
   if (createError || !created.user) {
     const exists = /already/i.test(createError?.message || '');
     return json({ error: exists ? 'An account with this email already exists' : createError?.message || 'Could not create account' }, exists ? 409 : 400);
