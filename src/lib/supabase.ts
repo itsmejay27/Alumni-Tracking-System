@@ -10,3 +10,17 @@ if (!isSupabaseConfigured) {
 }
 
 export const supabase = createClient(url || 'http://localhost', key || 'missing-key');
+
+/**
+ * Turns password-update errors into plain messages. If the session has ended (for example the
+ * password was already changed on another device, which signs out every other device), the user
+ * is signed out here so they can log in again.
+ */
+export async function passwordUpdateError(error: { message: string; code?: string; status?: number }) {
+  if (/session/i.test(error.message) || error.code === 'session_not_found') {
+    await supabase.auth.signOut({ scope: 'local' });
+    return 'Your session has ended, possibly because the password was changed on another device. Please log in again.';
+  }
+  if (error.code === 'same_password') return 'Your new password must be different from your current one.';
+  return error.message;
+}

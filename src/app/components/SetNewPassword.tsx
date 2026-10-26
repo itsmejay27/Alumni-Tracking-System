@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { supabase, passwordUpdateError } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
 import { RevealButton } from './RevealButton';
 import { passwordStrength } from '@/lib/programs';
@@ -31,7 +31,7 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(await passwordUpdateError(error));
       return;
     }
     toast.success('Password updated.');

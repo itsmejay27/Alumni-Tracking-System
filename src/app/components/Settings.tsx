@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ShieldAlert, Key, Eye, EyeOff, Save, User, Mail, Phone, MapPin, Calendar, HelpCircle, Check, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
-import { supabase } from '@/lib/supabase';
+import { supabase, passwordUpdateError } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
 import { passwordStrength } from '@/lib/programs';
 
@@ -70,7 +70,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      toast.error(`Could not change password: ${error.message}`);
+      toast.error(await passwordUpdateError(error));
       return;
     }
 
