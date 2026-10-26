@@ -29,6 +29,17 @@ export const roleLabel = (role: string) => ROLE_LABELS[role] || role;
 
 export const EMPLOYMENT_STATUSES = ['Permanent', 'Probationary', 'Contractual', 'Job Order', 'Self-Employed'] as const;
 export const JOB_LEVELS = ['Rank and File', 'Supervisory', 'Managerial / Executive', 'Job Order'] as const;
+/** Plain-language explanation of each job level, shown next to the choice. */
+export const JOB_LEVEL_HELP: Record<string, string> = {
+  'Rank and File': 'Staff or regular worker (e.g. clerk, teacher, cashier, technician)',
+  Supervisory: 'You lead a small team (e.g. team leader, supervisor, head teacher)',
+  'Managerial / Executive': 'You manage a department or business (e.g. manager, director, owner)',
+  'Job Order': 'Short-term or per-project work, paid per job or per day',
+};
+export const jobLevelLabel = (level: string) => {
+  const help = JOB_LEVEL_HELP[level];
+  return help ? `${level} — ${help}` : level;
+};
 export const EMPLOYER_TYPES = ['Private', 'Government', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business'] as const;
 
 /** Simple password strength rating used on every password form. */

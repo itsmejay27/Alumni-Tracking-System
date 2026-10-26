@@ -28,6 +28,10 @@ export interface ParsedRow {
   jobLevel: string;
   isIP: boolean;
   suggestions: string;
+  fatherName: string;
+  fatherContact: string;
+  motherName: string;
+  motherContact: string;
 }
 
 export interface ParseResult {
@@ -42,6 +46,8 @@ export interface ParseResult {
 // Header text (lower-cased, partial match) for each field. More specific keys come first.
 const COLUMNS: { key: string; match: string[] }[] = [
   { key: 'studentId', match: ['student id', 'student no', 'student number', 'id number', 'id no'] },
+  { key: 'fatherName', match: ["father's name", 'father name', 'name of father'] },
+  { key: 'motherName', match: ["mother's name", 'mother name', 'name of mother'] },
   { key: 'fullName', match: ['name of graduate', 'full name', 'complete name', 'name of alumni'] },
   { key: 'lastName', match: ['last name', 'surname', 'family name'] },
   { key: 'givenName', match: ['first name', 'given name'] },
@@ -144,6 +150,14 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       used.add(idx);
     }
   }
+  // The official sheet puts a "Contact Number" column right after each parent's name
+  for (const parent of ['father', 'mother']) {
+    const i = map[`${parent}Name`];
+    if (i != null && /contact|mobile|phone/.test(lower[i + 1] || '')) {
+      map[`${parent}Contact`] = i + 1;
+      used.add(i + 1);
+    }
+  }
   const format: ParseResult['format'] = map.fullName != null ? 'tracer-sheet' : 'table';
   const get = (r: Cell[], k: string) => (map[k] != null ? text(r[map[k]]) : '');
 
@@ -218,6 +232,10 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       jobLevel: get(r, 'jobLevel'),
       isIP: ip.startsWith('y') || ip === 'true',
       suggestions: get(r, 'suggestions'),
+      fatherName: get(r, 'fatherName').toUpperCase(),
+      fatherContact: get(r, 'fatherContact').replace(/\.0$/, ''),
+      motherName: get(r, 'motherName').toUpperCase(),
+      motherContact: get(r, 'motherContact').replace(/\.0$/, ''),
     });
   }
 

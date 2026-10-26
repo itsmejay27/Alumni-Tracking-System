@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { useAlumniRecords, AlumniRecord, currentJob, isEmployed } from '@/lib/alumni';
+import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
   s === 'Employed'
@@ -504,7 +504,10 @@ function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecor
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Date of Birth</p>
-                <p className="font-bold text-foreground mt-0.5">{record.dateOfBirth}</p>
+                <p className="font-bold text-foreground mt-0.5">
+                  {record.dateOfBirth}
+                  {ageFrom(record.dateOfBirth) != null && <span className="font-medium text-muted-foreground"> · {ageFrom(record.dateOfBirth)} yrs old</span>}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Sex</p>
@@ -521,6 +524,22 @@ function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecor
               <div className="col-span-full">
                 <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Permanent Address</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.permanentAddress}</p>
+              </div>
+              <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-border/40 pt-3 mt-1">
+                <div>
+                  <p className="text-xs text-muted-foreground font-semibold">Father's Name / Contact</p>
+                  <p className="font-semibold text-foreground mt-0.5">
+                    {record.fatherName || '—'}
+                    {record.fatherContact && <span className="font-normal text-muted-foreground"> · {record.fatherContact}</span>}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-semibold">Mother's Name / Contact</p>
+                  <p className="font-semibold text-foreground mt-0.5">
+                    {record.motherName || '—'}
+                    {record.motherContact && <span className="font-normal text-muted-foreground"> · {record.motherContact}</span>}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -5,18 +5,19 @@ import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
-import { PROGRAMS, JOB_LEVELS } from '@/lib/programs';
+import { PROGRAMS, JOB_LEVELS, JOB_LEVEL_HELP } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
 
 interface AnalyticsProps {
   userRole: string;
 }
 
-type Metric = 'rate' | 'employed' | 'unemployed';
+type Metric = 'rate' | 'employed' | 'unemployed' | 'untracked';
 const METRICS: { id: Metric; label: string }[] = [
   { id: 'rate', label: 'Employment rate (%)' },
   { id: 'employed', label: 'Employed (count)' },
   { id: 'unemployed', label: 'Unemployed (count)' },
+  { id: 'untracked', label: 'Not tracked (count)' },
 ];
 
 const isGovernment = (t?: string) => t === 'Government';
@@ -51,14 +52,18 @@ export function Analytics({ userRole }: AnalyticsProps) {
   const jobs = filtered.map(currentJob).filter(Boolean) as NonNullable<ReturnType<typeof currentJob>>[];
   const gov = jobs.filter((j) => isGovernment(j.employerType)).length;
   const priv = jobs.length - gov;
-  const ipCount = filtered.filter((r) => r.isIP).length;
 
   // Line chart: one line per program, x = year graduated
   const chartData = useMemo(() => {
     return years.map((y) => {
       const row: Record<string, number | string | null> = { year: y };
       for (const p of visiblePrograms) {
-        const rs = records.filter((r) => r.course === p.code && r.yearGraduated === y && isTracked(r));
+        const all = records.filter((r) => r.course === p.code && r.yearGraduated === y);
+        if (metric === 'untracked') {
+          row[p.code] = all.length ? all.filter((r) => !isTracked(r)).length : null;
+          continue;
+        }
+        const rs = all.filter(isTracked);
         if (!rs.length) {
           row[p.code] = null;
           continue;
@@ -90,6 +95,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
       tracked: t,
       employed: e,
       unemployed: t - e,
+      untracked: rs.length - t,
       gov: js.filter((j) => isGovernment(j.employerType)).length,
       priv: js.filter((j) => !isGovernment(j.employerType)).length,
     };
@@ -133,7 +139,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
         <Stat label="Unemployed" value={unemployed} />
         <Stat label="Not tracked" value={notTracked} note="no response yet" />
         <Stat label="Government / Private" value={`${gov} / ${priv}`} note="of employed alumni" />
-        <Stat label="Indigenous Peoples (IP)" value={ipCount} note="self-identified" />
+        <Stat label="Response rate" value={`${total ? Math.round((tracked / total) * 100) : 0}%`} note={`${notTracked} still to be tracked`} />
       </div>
 
       {/* Line chart */}
@@ -259,6 +265,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                   <th className="py-2 px-2 font-medium text-right">Responded</th>
                   <th className="py-2 px-2 font-medium text-right">Employed</th>
                   <th className="py-2 px-2 font-medium text-right">Unemployed</th>
+                  <th className="py-2 px-2 font-medium text-right">Not tracked</th>
                   <th className="py-2 px-2 font-medium text-right">Government</th>
                   <th className="py-2 pl-2 font-medium text-right">Private</th>
                 </tr>
@@ -276,6 +283,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.tracked}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.employed}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.unemployed}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{p.untracked}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.gov}</td>
                     <td className="py-2.5 pl-2 text-right tabular-nums">{p.priv}</td>
                   </tr>
@@ -300,7 +308,10 @@ export function Analytics({ userRole }: AnalyticsProps) {
             <tbody>
               {levelTable.map((l) => (
                 <tr key={l.level} className="border-t border-border/60">
-                  <td className="py-2.5 pr-3 font-medium">{l.level}</td>
+                  <td className="py-2.5 pr-3">
+                    <p className="font-medium">{l.level}</p>
+                    {JOB_LEVEL_HELP[l.level] && <p className="text-xs text-muted-foreground">{JOB_LEVEL_HELP[l.level]}</p>}
+                  </td>
                   <td className="py-2.5 px-2 text-right tabular-nums">{l.priv}</td>
                   <td className="py-2.5 pl-2 text-right tabular-nums">{l.gov}</td>
                 </tr>
@@ -483,7 +494,7 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
               <th className="py-2 px-2 font-medium text-right">Response rate</th>
               <th className="py-2 px-2 font-medium text-right">Employed</th>
               <th className="py-2 px-2 font-medium text-right">Unemployed</th>
-              <th className="py-2 pl-2 font-medium text-right">IP</th>
+              <th className="py-2 pl-2 font-medium text-right">Not tracked</th>
             </tr>
           </thead>
           <tbody>
@@ -517,7 +528,7 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
                   <td className="py-2 px-2 text-right tabular-nums">{grads ? `${Math.round((responded.length / grads) * 100)}%` : '–'}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{e}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{responded.length - e}</td>
-                  <td className="py-2 pl-2 text-right tabular-nums">{rs.filter((r) => r.isIP).length}</td>
+                  <td className="py-2 pl-2 text-right tabular-nums">{rs.length - responded.length}</td>
                 </tr>
               );
             })}

@@ -55,6 +55,22 @@ export interface AlumniRecord {
   isIP?: boolean; // member of an Indigenous Peoples group
   ipGroup?: string;
   employmentHistory?: EmploymentEntry[];
+
+  fatherName?: string;
+  fatherContact?: string;
+  motherName?: string;
+  motherContact?: string;
+}
+
+/** Age in years from a YYYY-MM-DD birth date, or null if unknown. */
+export function ageFrom(dateOfBirth: string | undefined): number | null {
+  if (!dateOfBirth) return null;
+  const d = new Date(dateOfBirth);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 120 ? age : null;
 }
 
 const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACTUAL: 'Contractual', 'DAILY WAGE': 'Job Order' };

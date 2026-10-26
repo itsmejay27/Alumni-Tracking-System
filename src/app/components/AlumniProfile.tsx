@@ -18,8 +18,8 @@ import {
 import { toast } from 'sonner';
 
 import { CurrentUser } from '../App';
-import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob } from '@/lib/alumni';
-import { PROGRAMS, EMPLOYMENT_STATUSES, JOB_LEVELS, EMPLOYER_TYPES } from '@/lib/programs';
+import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
+import { PROGRAMS, EMPLOYMENT_STATUSES, JOB_LEVELS, EMPLOYER_TYPES, JOB_LEVEL_HELP } from '@/lib/programs';
 import { LoadingState } from './DataState';
 
 interface AlumniProfileProps {
@@ -69,6 +69,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
   const [permanentAddress, setPermanentAddress] = useState(currentUser?.permanentAddress || '');
   const [isIP, setIsIP] = useState(false);
   const [ipGroup, setIpGroup] = useState('');
+  const [fatherName, setFatherName] = useState('');
+  const [fatherContact, setFatherContact] = useState('');
+  const [motherName, setMotherName] = useState('');
+  const [motherContact, setMotherContact] = useState('');
 
   // Education
   const [course, setCourse] = useState<Course>('BSIT');
@@ -102,6 +106,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         setPermanentAddress((v) => v || rec.permanentAddress);
         setIsIP(!!rec.isIP);
         setIpGroup(rec.ipGroup || '');
+        setFatherName(rec.fatherName || '');
+        setFatherContact(rec.fatherContact || '');
+        setMotherName(rec.motherName || '');
+        setMotherContact(rec.motherContact || '');
         setCourse(rec.course);
         if (rec.yearGraduated) setYearGraduated(rec.yearGraduated);
         setStatus(rec.status && rec.status !== 'Not Tracked' ? rec.status : 'Employed');
@@ -177,7 +185,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     }
 
     setSaving(true);
-    const latest = [...history].reverse().find((h) => !h.endDate);
+    // Marking yourself unemployed ends your current job(s); they stay in your history
+    const month = new Date().toISOString().slice(0, 7);
+    const finalHistory = status === 'Unemployed' ? history.map((h) => (h.endDate ? h : { ...h, endDate: month })) : history;
+    const latest = [...finalHistory].reverse().find((h) => !h.endDate);
     const updatedUser: CurrentUser = {
       ...currentUser,
       givenName: givenName.trim().toUpperCase(),
@@ -214,8 +225,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         permanentAddress: updatedUser.permanentAddress,
         isIP,
         ipGroup: isIP ? ipGroup.trim() : '',
+        fatherName: fatherName.trim().toUpperCase(),
+        fatherContact: fatherContact.trim(),
+        motherName: motherName.trim().toUpperCase(),
+        motherContact: motherContact.trim(),
         status,
-        employmentHistory: history.map((h) => ({ ...h, position: h.position.trim(), company: h.company.trim() })),
+        employmentHistory: finalHistory.map((h) => ({ ...h, position: h.position.trim(), company: h.company.trim() })),
         // Current-job summary fields kept for reports and older screens
         currentPosition: employed ? latest!.position : undefined,
         currentCompany: employed ? latest!.company : undefined,
@@ -229,7 +244,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       });
       await onUpdateProfile(updatedUser);
       setRecord((r) => ({ ...(r as AlumniRecord), id }));
-      setSavedIds(new Set(history.map((h) => h.id)));
+      setHistory(finalHistory);
+      setSavedIds(new Set(finalHistory.map((h) => h.id)));
       setSaved(true);
       toast.success('Your alumni profile has been saved');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -302,7 +318,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <option>Male</option>
               </select>
             </Field>
-            <Field label="Date of birth *"><input type="date" required value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} /></Field>
+            <Field label={`Date of birth *${ageFrom(dateOfBirth) != null ? ` · Age ${ageFrom(dateOfBirth)}` : ''}`}><input type="date" required value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} /></Field>
             <Field label="Civil status *">
               <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
                 <option>Single</option>
@@ -316,6 +332,13 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Present address *"><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
             <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder="Full name" /></Field>
+            <Field label="Father's contact number"><input value={fatherContact} onChange={(e) => setFatherContact(e.target.value)} className={input} placeholder="09XXXXXXXXX" inputMode="tel" /></Field>
+            <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder="Full maiden name" /></Field>
+            <Field label="Mother's contact number"><input value={motherContact} onChange={(e) => setMotherContact(e.target.value)} className={input} placeholder="09XXXXXXXXX" inputMode="tel" /></Field>
           </div>
 
           <div className="rounded-xl bg-muted/50 p-4 space-y-3">
@@ -395,13 +418,21 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                     </button>
                   ))}
                 </div>
-                <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-                  <Plus size={16} /> Add job
-                </button>
+                {status !== 'Unemployed' && (
+                  <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+                    <Plus size={16} /> Add job
+                  </button>
+                )}
               </div>
 
               {/* Current job(s) */}
-              {currentJobs.length === 0 ? (
+              {status === 'Unemployed' ? (
+                <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+                  You're marked as <strong>unemployed</strong>, so no job details are needed.
+                  {currentJobs.length > 0 && ' When you save, your current job will move to your previous jobs.'} If you find work, choose
+                  Employed or Self-Employed and add the job.
+                </p>
+              ) : currentJobs.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
                   No current job recorded. {status !== 'Unemployed' && 'Click "Add job" to add it.'}
                 </p>
@@ -529,7 +560,9 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
         </p>
         <p className="text-xs text-muted-foreground truncate">
           {[job.employmentStatus, job.employerType, job.jobLevel].filter(Boolean).join(' · ')}
-          {(job.startDate || job.endDate) && ` · ${job.startDate || '?'} – ${job.endDate || 'present'}`}
+          {job.startDate && job.endDate && ` · ${job.startDate} – ${job.endDate}`}
+          {job.startDate && !job.endDate && ` · since ${job.startDate}`}
+          {!job.startDate && job.endDate && ` · until ${job.endDate}`}
         </p>
       </div>
       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${job.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -572,7 +605,7 @@ function JobModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-lg">{isNew ? 'Add job' : locked ? 'Job details' : 'Edit job'}</h3>
-            {locked && <p className="text-xs text-muted-foreground mt-0.5">Saved jobs are kept as history. You can only set when it ended.</p>}
+            {locked && <p className="text-xs text-muted-foreground mt-0.5">Saved jobs are kept as history and can't be edited.</p>}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
             <X size={18} />
@@ -590,6 +623,7 @@ function JobModal({
             <select disabled={locked} value={draft.jobLevel} onChange={(e) => set({ jobLevel: e.target.value })} className={input}>
               {JOB_LEVELS.map((x) => <option key={x}>{x}</option>)}
             </select>
+            {JOB_LEVEL_HELP[draft.jobLevel] && <p className="text-xs text-muted-foreground mt-1">{JOB_LEVEL_HELP[draft.jobLevel]}</p>}
           </Field>
           <Field label="Employer type *">
             <select disabled={locked} value={draft.employerType} onChange={(e) => set({ employerType: e.target.value })} className={input}>
@@ -597,10 +631,6 @@ function JobModal({
             </select>
           </Field>
           <Field label="Employer address"><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
-          <Field label="Start (month)"><input type="month" disabled={locked} value={draft.startDate || ''} onChange={(e) => set({ startDate: e.target.value })} className={input} /></Field>
-          <Field label="End (month) — leave empty if current">
-            <input type="month" value={draft.endDate || ''} onChange={(e) => set({ endDate: e.target.value })} className={input} />
-          </Field>
           <div className="md:col-span-2">
             <Field label="Job description">
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
@@ -612,6 +642,15 @@ function JobModal({
             {onRemove && (
               <button type="button" onClick={onRemove} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50">
                 <Trash2 size={15} /> Remove
+              </button>
+            )}
+            {!isNew && !entry.endDate && (
+              <button
+                type="button"
+                onClick={() => onSave({ ...draft, endDate: new Date().toISOString().slice(0, 7) })}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50"
+              >
+                I no longer work here
               </button>
             )}
           </div>
