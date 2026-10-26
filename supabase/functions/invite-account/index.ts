@@ -1,5 +1,5 @@
 // Creates an account for a staff member (program chair, director, etc.) with a
-// temporary password, and emails them an invitation. Only the super admin may call it.
+// temporary password, and emails them an invitation. Only Alumni Affairs may call it.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import nodemailer from 'npm:nodemailer@6.9.16';
 
@@ -10,7 +10,7 @@ const cors = {
 };
 
 const ROLES: Record<string, string> = {
-  'admin': 'Super Admin',
+  'admin': 'Alumni Affairs',
   'admin.bsit': 'BSIT Program Chair',
   'admin.beed': 'BEED Program Chair',
   'admin.bsba-fm': 'BSBA-FM Program Chair',
@@ -72,18 +72,28 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  // Only the super admin may create accounts
+  // Only Alumni Affairs (super admin) may manage accounts
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const { data: caller } = await admin.auth.getUser(token);
   if (!caller?.user) return json({ error: 'Not signed in' }, 401);
   const { data: callerProfile } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
-  if (callerProfile?.role !== 'admin') return json({ error: 'Only the super admin can create accounts' }, 403);
+  if (callerProfile?.role !== 'admin') return json({ error: 'Only Alumni Affairs can manage accounts' }, 403);
 
   let body: any;
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Invalid request' }, 400);
+  }
+
+  // Remove an account (also used to cancel a pending invitation)
+  if (body.action === 'delete') {
+    const userId = String(body.userId || '');
+    if (!userId) return json({ error: 'Missing account' }, 400);
+    if (userId === caller.user.id) return json({ error: "You can't remove your own account" }, 400);
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) return json({ error: error.message }, 400);
+    return json({ ok: true });
   }
   const email = String(body.email || '').trim().toLowerCase();
   const givenName = String(body.givenName || '').trim();

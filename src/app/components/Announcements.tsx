@@ -3,6 +3,7 @@ import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCir
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { courseScopeForRole } from '@/lib/alumni';
+import { roleLabel } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
 
 interface Announcement {
@@ -17,9 +18,10 @@ interface Announcement {
 
 interface AnnouncementsProps {
   userRole: string;
+  authorName: string;
 }
 
-export function Announcements({ userRole }: AnnouncementsProps) {
+export function Announcements({ userRole, authorName }: AnnouncementsProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
       content,
       category,
       course,
-      author: userRole === 'admin' ? 'Super Admin' : `${adminCourse} Admin`,
+      author: `${authorName} · ${roleLabel(userRole)}`,
     });
     if (error) {
       toast.error(`Could not post announcement: ${error.message}`);
@@ -108,13 +110,13 @@ export function Announcements({ userRole }: AnnouncementsProps) {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Announcements & Events</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Announcements & Events</h2>
           <p className="text-muted-foreground mt-1">Stay updated with official university circulars and events</p>
         </div>
         {isAdmin && (
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all shadow-md shadow-primary/10"
+            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all"
           >
             <Plus size={18} />
             Post Announcement
@@ -125,7 +127,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
       {showAddForm && (
         <form
           onSubmit={handleAdd}
-          className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300"
+          className="bg-card rounded-2xl p-6 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-300"
         >
           <div className="flex justify-between items-center pb-2 border-b border-border">
             <h3 className="text-lg font-bold text-foreground">Post New Announcement</h3>
@@ -146,7 +148,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm"
+                className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                 placeholder="e.g. 2026 Grand Alumni Homecoming"
               />
             </div>
@@ -156,7 +158,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
-                className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
               >
                 <option value="General">General Notice</option>
                 <option value="Event">Event</option>
@@ -171,7 +173,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
                 <select
                   value={targetCourse}
                   onChange={(e) => setTargetCourse(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
                 >
                   <option value="all">All Alumni (Global)</option>
                   <option value="BSIT">BSIT Only</option>
@@ -191,7 +193,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
               rows={4}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm"
+              className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
               placeholder="Write the details here..."
             />
           </div>
@@ -210,7 +212,7 @@ export function Announcements({ userRole }: AnnouncementsProps) {
         {filteredAnnouncements.map((ann) => (
           <div
             key={ann.id}
-            className="bg-card border border-border/80 rounded-2xl p-6 shadow-md transition-all hover:shadow-lg relative overflow-hidden flex flex-col justify-between"
+            className="bg-card rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between"
           >
             <div className="flex items-start gap-4">
               <div

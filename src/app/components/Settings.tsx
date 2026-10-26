@@ -3,6 +3,8 @@ import { ShieldAlert, Key, Eye, EyeOff, Save, User, Mail, Phone, MapPin, Calenda
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase } from '@/lib/supabase';
+import { PasswordStrength } from './PasswordStrength';
+import { passwordStrength } from '@/lib/programs';
 
 interface SettingsProps {
   currentUser: CurrentUser | null;
@@ -43,6 +45,11 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
 
     if (newPassword.length < 8) {
       toast.error('New password must be at least 8 characters long.');
+      return;
+    }
+
+    if (passwordStrength(newPassword).label === 'Weak') {
+      toast.error('Please choose a stronger password.');
       return;
     }
 
@@ -138,7 +145,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
   return (
     <div className="max-w-4xl mx-auto py-2 space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Account Settings</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Account Settings</h2>
         <p className="text-muted-foreground mt-1">Manage your academic credentials, profile details, and account security</p>
       </div>
 
@@ -169,7 +176,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
       </div>
 
       {activeTab === 'profile' ? (
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-6">
+        <div className="bg-card rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center gap-3 border-b border-border pb-3">
             <User className="text-primary" size={20} />
             <h3 className="font-bold text-lg text-foreground">Edit Profile Information</h3>
@@ -408,7 +415,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
           </form>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
+        <div className="bg-card rounded-2xl p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
           <div className="flex items-center gap-3 border-b border-border pb-3">
             <Key className="text-primary" size={20} />
             <h3 className="font-bold text-lg text-foreground">Change Password</h3>
@@ -457,6 +464,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
                   {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              <PasswordStrength password={newPassword} />
             </div>
 
             {/* Confirm Password */}
@@ -500,7 +508,7 @@ export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
         <div className="space-y-1 text-xs text-amber-900/90 dark:text-amber-200/80 leading-relaxed">
           <p className="font-bold">Security Best Practices</p>
           <p>
-            Choose a strong, unique password that you do not use elsewhere. Do not share your OMSU tracer credentials with anyone. Authorized admins will never ask you for your account password. Keep your demographic fields accurate for official registrar reports.
+            Choose a strong, unique password that you do not use elsewhere. Do not share your OMSU tracer credentials with anyone. Alumni Affairs and program chairs will never ask for your password.
           </p>
         </div>
       </div>

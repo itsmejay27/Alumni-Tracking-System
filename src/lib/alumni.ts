@@ -3,6 +3,21 @@ import { supabase } from './supabase';
 
 export type Course = 'BSIT' | 'BEED' | 'BSBA-FM' | 'BSBA-OM' | 'BSOA';
 
+/** One job in an alumnus's employment history. New updates are added, never overwritten. */
+export interface EmploymentEntry {
+  id: string;
+  position: string;
+  company: string;
+  employerType: string;
+  employmentStatus: string; // Permanent, Probationary, Contractual, Job Order, Self-Employed
+  jobLevel: string; // Rank and File, Supervisory, Managerial / Executive, Job Order
+  employerAddress?: string;
+  jobDescription?: string;
+  startDate?: string; // YYYY-MM
+  endDate?: string | null; // YYYY-MM, empty = current job
+  recordedAt: string; // ISO date the entry was added
+}
+
 export interface AlumniRecord {
   id: string;
   studentId: string;
@@ -35,7 +50,36 @@ export interface AlumniRecord {
   lastUpdated: string;
   suggestions?: string;
   isPublic?: boolean;
+
+  jobLevel?: string;
+  isIP?: boolean; // member of an Indigenous Peoples group
+  ipGroup?: string;
+  employmentHistory?: EmploymentEntry[];
 }
+
+const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACTUAL: 'Contractual', 'DAILY WAGE': 'Job Order' };
+
+/** The alumnus's current job, from the newest history entry or the older single-job fields. */
+export function currentJob(r: AlumniRecord): EmploymentEntry | null {
+  const current = (r.employmentHistory || []).filter((e) => !e.endDate);
+  if (current.length) return current[current.length - 1];
+  if (r.status !== 'Unemployed' && (r.currentPosition || r.currentCompany)) {
+    return {
+      id: 'legacy',
+      position: r.currentPosition || '',
+      company: r.currentCompany || '',
+      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Private',
+      employmentStatus: r.status === 'Self-Employed' ? 'Self-Employed' : LEGACY_STATUS[r.employmentStatus || ''] || r.employmentStatus || '',
+      jobLevel: r.jobLevel || (r.employmentStatus === 'DAILY WAGE' ? 'Job Order' : 'Rank and File'),
+      employerAddress: r.employerAddress,
+      jobDescription: r.jobDescription,
+      recordedAt: '',
+    };
+  }
+  return null;
+}
+
+export const isEmployed = (r: AlumniRecord) => r.status === 'Employed' || r.status === 'Self-Employed';
 
 interface AlumniRow {
   id: string;

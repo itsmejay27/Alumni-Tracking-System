@@ -14,7 +14,9 @@ import { Announcements } from './components/Announcements';
 import { Home as HomeView } from './components/Home';
 import { Contact as ContactView } from './components/Contact';
 import { Settings as SettingsView } from './components/Settings';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
+import { AppToaster } from './components/AppToaster';
+import { roleLabel } from '@/lib/programs';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, 
@@ -182,7 +184,7 @@ export default function App() {
               : undefined
           }
         />
-        <Toaster position="top-right" closeButton richColors />
+        <AppToaster />
       </>
     );
   }
@@ -190,12 +192,9 @@ export default function App() {
   if (!session || !currentUser) {
     return (
       <>
-        {authScreen ? (
-          <LoginPage key={authScreen} initialMode={authScreen} onBack={() => setAuthScreen(null)} />
-        ) : (
-          <LandingPage onSignIn={() => setAuthScreen('signin')} onSignUp={() => setAuthScreen('signup')} />
-        )}
-        <Toaster position="top-right" closeButton richColors />
+        <LandingPage onSignIn={() => setAuthScreen('signin')} onSignUp={() => setAuthScreen('signup')} />
+        {authScreen && <LoginPage key={authScreen} initialMode={authScreen} onClose={() => setAuthScreen(null)} />}
+        <AppToaster />
       </>
     );
   }
@@ -204,21 +203,9 @@ export default function App() {
   const isAdmin = userRole.startsWith('admin');
 
   // Convert role to clean label
-  const getRoleLabel = () => {
-    if (userRole === 'admin') return 'Super Admin';
-    if (userRole === 'admin.beed') return 'BEED Chair';
-    if (userRole === 'admin.bsit') return 'BSIT Chair';
-    if (userRole === 'admin.bsba-fm') return 'BSBA-FM Chair';
-    if (userRole === 'admin.bsba-om') return 'BSBA-OM Chair';
-    if (userRole === 'admin.bsoa') return 'BSOA Chair';
-    return 'Alumni Member';
-  };
-
-  const getSubLabel = () => {
-    if (userRole === 'admin') return 'Director';
-    if (userRole.startsWith('admin.')) return 'Program Chair';
-    return 'OMSU Graduate';
-  };
+  const getRoleLabel = () => roleLabel(userRole);
+  const getSubLabel = () => roleLabel(userRole);
+  const appName = isAdmin ? 'OMSU Tracer' : 'OMSU Alumni';
 
   // Nav menu item details
   const adminMenuItems = [
@@ -226,14 +213,15 @@ export default function App() {
     { id: 'records', label: 'Alumni Records', icon: <Users size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
     { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
+    ...(userRole === 'admin' ? [{ id: 'contact', label: 'Contact Info', icon: <PhoneCall size={18} /> }] : []),
     ...(userRole === 'admin' ? [{ id: 'accounts', label: 'Accounts', icon: <UserCog size={18} /> }] : []),
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
   ];
 
   const alumniMenuItems = [
     { id: 'home', label: 'Home', icon: <HomeIcon size={18} /> },
-    { id: 'profile', label: 'Tracer Survey Form', icon: <UserCircle size={18} /> },
-    { id: 'officials', label: 'University Officials', icon: <Users size={18} /> },
+    { id: 'profile', label: 'My Alumni Profile', icon: <UserCircle size={18} /> },
+    { id: 'officials', label: 'Directory', icon: <Users size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
     { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
     { id: 'contact', label: 'Contact Us', icon: <PhoneCall size={18} /> },
@@ -258,8 +246,8 @@ export default function App() {
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm tracking-tight truncate">OMSU Tracer</h1>
-              <p className="text-[10px] text-white/65 font-bold tracking-widest uppercase">Tracer Platform</p>
+              <h1 className="font-extrabold text-sm tracking-tight truncate">{appName}</h1>
+              <p className="text-[11px] text-white/60">Graduate Tracer</p>
             </div>
           )}
         </div>
@@ -278,9 +266,9 @@ export default function App() {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg font-semibold text-sm transition-all relative ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors relative ${
                 activeTab === item.id 
-                  ? 'bg-white/10 text-white border-l-4 border-white' 
+                  ? 'bg-white/12 text-white' 
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
               title={sidebarCollapsed ? item.label : undefined}
@@ -310,7 +298,7 @@ export default function App() {
                 <p className="font-bold text-xs truncate leading-tight text-white">
                   {currentUser ? `${currentUser.givenName} ${currentUser.lastName}`.trim() : getRoleLabel()}
                 </p>
-                <p className="text-[10px] text-white/60 truncate mt-0.5">{currentUser?.title || getSubLabel()}</p>
+                <p className="text-[10px] text-white/60 truncate mt-0.5">{getSubLabel()}</p>
               </div>
             )}
           </div>
@@ -338,8 +326,8 @@ export default function App() {
               <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm leading-none">OMSU Alumni</h1>
-              <p className="text-[9px] text-white/75 tracking-wider font-bold uppercase mt-0.5">Tracer Platform</p>
+              <h1 className="font-extrabold text-sm leading-none">{appName}</h1>
+              <p className="text-[11px] text-white/60 mt-0.5">Graduate Tracer</p>
             </div>
           </div>
           <button 
@@ -361,7 +349,7 @@ export default function App() {
                     <div className="w-9 h-9 bg-white border rounded-full overflow-hidden p-0.5">
                       <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
                     </div>
-                    <span className="font-extrabold text-sm">OMSU Navigation</span>
+                    <span className="font-extrabold text-sm">{appName}</span>
                   </div>
                   <button 
                     onClick={() => setMobileMenuOpen(false)}
@@ -379,9 +367,9 @@ export default function App() {
                         setActiveTab(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg font-semibold text-sm transition-all ${
+                      className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors ${
                         activeTab === item.id 
-                          ? 'bg-white/15 text-white border-l-4 border-white' 
+                          ? 'bg-white/12 text-white' 
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
@@ -409,7 +397,7 @@ export default function App() {
                     <p className="font-bold text-xs truncate leading-tight text-white">
                       {currentUser ? `${currentUser.givenName} ${currentUser.lastName}`.trim() : getRoleLabel()}
                     </p>
-                    <p className="text-[10px] text-white/60 truncate mt-0.5">{currentUser?.title || getSubLabel()}</p>
+                    <p className="text-[10px] text-white/60 truncate mt-0.5">{getSubLabel()}</p>
                   </div>
                 </div>
                 <button
@@ -431,8 +419,9 @@ export default function App() {
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
-              {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'contact' && userRole === 'admin' && <ContactView editable />}
               {activeTab === 'accounts' && userRole === 'admin' && <AccountsManager currentUserId={currentUser.id} />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
@@ -441,8 +430,8 @@ export default function App() {
               {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} />}
               {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
-              {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'contact' && <ContactView />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
@@ -450,7 +439,7 @@ export default function App() {
         </main>
       </div>
 
-      <Toaster position="top-right" closeButton richColors />
+      <AppToaster />
     </div>
   );
 }

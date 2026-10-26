@@ -11,7 +11,7 @@ export function Home({ onStartSurvey }: HomeProps) {
     <div className="max-w-3xl mx-auto py-4 space-y-8 animate-in fade-in duration-300">
       
       {/* Hero Welcome Card */}
-      <div className="bg-card border border-border rounded-xl p-8 text-center space-y-6 shadow-sm">
+      <div className="bg-card rounded-2xl p-8 text-center space-y-6 shadow-sm">
         <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mx-auto border border-border p-1 shadow-sm overflow-hidden">
           <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
         </div>
@@ -22,7 +22,7 @@ export function Home({ onStartSurvey }: HomeProps) {
       </div>
 
       {/* Main Statement */}
-      <div className="bg-card border border-border rounded-xl p-8 space-y-6 shadow-sm leading-relaxed text-foreground">
+      <div className="bg-card rounded-2xl p-8 space-y-6 shadow-sm leading-relaxed text-foreground">
         <div className="flex items-center gap-3 border-b border-border pb-4">
           <FileText className="text-primary" size={22} />
           <h3 className="text-lg font-bold text-foreground">Tracer Study Introduction</h3>
@@ -47,7 +47,7 @@ export function Home({ onStartSurvey }: HomeProps) {
             onClick={onStartSurvey}
             className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/95 transition-all text-sm text-center shrink-0"
           >
-            Go to Profile Form
+            Open My Alumni Profile
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { UserPlus, Copy, Mail, ShieldCheck, X, Search } from 'lucide-react';
+import { UserPlus, Copy, Mail, ShieldCheck, X, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { LoadingState, ErrorState } from './DataState';
@@ -10,7 +10,7 @@ const ROLE_OPTIONS = [
   { value: 'admin.bsba-fm', label: 'BSBA-FM Program Chair' },
   { value: 'admin.bsba-om', label: 'BSBA-OM Program Chair' },
   { value: 'admin.bsoa', label: 'BSOA Program Chair' },
-  { value: 'admin', label: 'Super Admin' },
+  { value: 'admin', label: 'Alumni Affairs' },
   { value: 'alumni', label: 'Alumni Member' },
 ];
 const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
@@ -124,6 +124,35 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     load();
   };
 
+  const invokeError = async (error: any) => {
+    let message = error.message;
+    try {
+      const body = await error.context?.json();
+      if (body?.error) message = body.error;
+    } catch {
+      /* keep default message */
+    }
+    return message as string;
+  };
+
+  const handleRemove = async (acc: Account) => {
+    const pending = acc.must_change_password;
+    const name = `${acc.given_name} ${acc.last_name}`.trim() || acc.email;
+    const ok = window.confirm(
+      pending
+        ? `Cancel the invitation for ${name}? Their account will be deleted and the temporary password will stop working.`
+        : `Remove the account of ${name}? They will no longer be able to sign in. Their tracer record (if any) is kept.`
+    );
+    if (!ok) return;
+    const { error } = await supabase.functions.invoke('invite-account', { body: { action: 'delete', userId: acc.id } });
+    if (error) {
+      toast.error(await invokeError(error));
+      return;
+    }
+    toast.success(pending ? 'Invitation cancelled' : 'Account removed');
+    setAccounts((list) => list.filter((a) => a.id !== acc.id));
+  };
+
   const visible = accounts.filter((a) => {
     if (showStaffOnly && !a.role.startsWith('admin')) return false;
     const q = search.toLowerCase();
@@ -137,12 +166,12 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Manage Accounts</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Manage Accounts</h2>
           <p className="text-muted-foreground mt-1">Create accounts for program chairs and staff, and assign their roles</p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl font-semibold shadow-sm hover:bg-primary/95"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/95"
         >
           {showForm ? <X size={18} /> : <UserPlus size={18} />}
           {showForm ? 'Cancel' : 'Create Account'}
@@ -150,7 +179,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {result && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+        <div className="bg-emerald-50 rounded-2xl p-5 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <ShieldCheck className="text-emerald-600 shrink-0 mt-0.5" size={20} />
@@ -187,7 +216,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       )}
 
       {showForm && (
-        <form onSubmit={handleInvite} className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
+        <form onSubmit={handleInvite} className="bg-card rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-border">
             <Mail size={18} className="text-primary" />
             <h3 className="font-bold">Invite a new account</h3>
@@ -245,7 +274,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
         </form>
       )}
 
-      <div className="bg-card border border-border rounded-xl shadow-sm">
+      <div className="bg-card rounded-2xl shadow-sm">
         <div className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center border-b border-border">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -272,14 +301,15 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 </p>
                 <p className="text-sm text-muted-foreground truncate">{a.email}</p>
                 {a.must_change_password && (
-                  <p className="text-xs text-amber-600 font-semibold mt-0.5">Invitation pending — has not changed temporary password yet</p>
+                  <span className="inline-block mt-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Invitation pending</span>
                 )}
               </div>
+              <div className="flex items-center gap-2 md:w-auto">
               <select
                 value={a.role}
                 disabled={a.id === currentUserId}
                 onChange={(e) => handleRoleChange(a, e.target.value)}
-                className="px-3 py-2 bg-input-background border border-border rounded-lg text-sm font-medium disabled:opacity-60 md:w-56"
+                className="px-3 py-2 bg-input-background border border-border rounded-lg text-sm disabled:opacity-60 w-full md:w-56"
               >
                 {ROLE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -287,6 +317,17 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                   </option>
                 ))}
               </select>
+              {a.id !== currentUserId && (
+                <button
+                  onClick={() => handleRemove(a)}
+                  title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 shrink-0"
+                >
+                  <Trash2 size={15} />
+                  <span className="hidden sm:inline">{a.must_change_password ? 'Cancel invite' : 'Remove'}</span>
+                </button>
+              )}
+              </div>
             </div>
           ))}
           {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No accounts found.</p>}

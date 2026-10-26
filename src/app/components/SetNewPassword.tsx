@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { PasswordStrength } from './PasswordStrength';
+import { passwordStrength } from '@/lib/programs';
 
 /** Shown after someone opens a password-reset link from their email. */
 export function SetNewPassword({ onDone, message }: { onDone: () => void | Promise<void>; message?: string }) {
@@ -13,6 +15,10 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
     e.preventDefault();
     if (password.length < 8) {
       toast.error('Password must be at least 8 characters.');
+      return;
+    }
+    if (passwordStrength(password).label === 'Weak') {
+      toast.error('Please choose a stronger password.');
       return;
     }
     if (password !== confirm) {
@@ -51,6 +57,7 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
             </div>
           </div>
         ))}
+        <PasswordStrength password={password} />
         <button
           type="submit"
           disabled={busy}

@@ -3,6 +3,8 @@ import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2 } from
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { LoadingState, ErrorState } from './DataState';
+import { PROGRAMS } from '@/lib/programs';
+import { courseScopeForRole, fetchMyRecord } from '@/lib/alumni';
 
 interface JobPosting {
   id: string;
@@ -17,6 +19,8 @@ interface JobPosting {
   postedDate: string;
   contactEmail: string;
   createdBy: string | null;
+  program: string | null;
+  createdAt: string;
 }
 
 interface JobBoardProps {
@@ -29,6 +33,16 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   const [showPostForm, setShowPostForm] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'full-time' | 'part-time' | 'contract' | 'internship'>('all');
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [sortBy, setSortBy] = useState<'match' | 'newest'>('match');
+  const [myProgram, setMyProgram] = useState<string | null>(courseScopeForRole(userRole));
+
+  // Alumni see jobs for their own program first
+  useEffect(() => {
+    if (userRole !== 'alumni') return;
+    fetchMyRecord(userId)
+      .then((r) => r && setMyProgram(r.course))
+      .catch(() => {});
+  }, [userId, userRole]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const isAdmin = userRole.startsWith('admin');
@@ -56,6 +70,8 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           postedDate: new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           contactEmail: j.contact_email,
           createdBy: j.created_by,
+          program: j.program,
+          createdAt: j.created_at,
         }))
       );
     }
@@ -76,9 +92,13 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
     setJobs((list) => list.filter((j) => j.id !== id));
   };
 
-  const filteredJobs = filterType === 'all'
-    ? jobs
-    : jobs.filter(job => job.type === filterType);
+  const typeFiltered = filterType === 'all' ? jobs : jobs.filter((job) => job.type === filterType);
+  const matchScore = (j: JobPosting) => (myProgram && j.program === myProgram ? 2 : j.program ? 0 : 1);
+  const filteredJobs = [...typeFiltered].sort((a, b) =>
+    sortBy === 'match' && myProgram
+      ? matchScore(b) - matchScore(a) || b.createdAt.localeCompare(a.createdAt)
+      : b.createdAt.localeCompare(a.createdAt)
+  );
 
   if (loading) return <LoadingState label="Loading job postings..." />;
   if (loadError) return <ErrorState message={loadError} />;
@@ -87,11 +107,18 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
-          <h2 className="text-xl font-medium">Job Board</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Job Board</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredJobs.length} job opportunities available
+            {filteredJobs.length} job opportunities{myProgram ? ` · ${myProgram} jobs shown first` : ''}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        {myProgram && (
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="filter-select">
+            <option value="match">Best match</option>
+            <option value="newest">Newest</option>
+          </select>
+        )}
         <button
           onClick={() => setShowPostForm(!showPostForm)}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
@@ -99,19 +126,21 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           {showPostForm ? <X size={18} /> : <Plus size={18} />}
           {showPostForm ? 'Cancel' : 'Post a Job'}
         </button>
+        </div>
       </div>
 
       {/* Post Job Form */}
       {showPostForm && (
         <JobPostingForm
           posterName={posterName}
+          defaultProgram={courseScopeForRole(userRole) || myProgram || ''}
           onClose={() => setShowPostForm(false)}
           onPosted={() => { setShowPostForm(false); load(); }}
         />
       )}
 
       {/* Filter */}
-      <div className="bg-card border border-border rounded-lg p-4">
+      <div className="bg-card rounded-2xl shadow-sm p-4">
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setFilterType('all')}
@@ -177,7 +206,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           />
         ))}
         {filteredJobs.length === 0 && (
-          <div className="bg-card border border-border rounded-lg p-12 text-center">
+          <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
             <p className="font-medium">No job postings yet</p>
             <p className="text-sm text-muted-foreground mt-1">Be the first to share an opportunity with fellow alumni.</p>
@@ -192,15 +221,21 @@ function JobCard({ job, canDelete, onDelete }: { job: JobPosting; canDelete: boo
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-card border border-border rounded-lg p-5">
+    <div className="bg-card rounded-2xl shadow-sm p-5">
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <h3 className="font-medium text-lg mb-1">{job.title}</h3>
+          <h3 className="font-semibold text-lg mb-1">{job.title}</h3>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Building2 size={16} />
               {job.company}
             </div>
+            {job.program && (
+              <>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-xs font-medium rounded-full bg-primary/10 text-primary px-2 py-0.5">{job.program}</span>
+              </>
+            )}
             <span className="text-muted-foreground">•</span>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin size={16} />
@@ -289,7 +324,7 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
   );
 }
 
-function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string; onClose: () => void; onPosted: () => void }) {
+function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { posterName: string; defaultProgram: string; onClose: () => void; onPosted: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -300,6 +335,7 @@ function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string;
     description: '',
     requirements: '',
     contactEmail: '',
+    program: defaultProgram,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -316,6 +352,7 @@ function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string;
       requirements: formData.requirements.split('\n').map((r) => r.trim()).filter(Boolean),
       contact_email: formData.contactEmail.trim(),
       posted_by: posterName,
+      program: formData.program || null,
       created_by: user?.id,
     });
     setSubmitting(false);
@@ -328,7 +365,7 @@ function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string;
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-6">
+    <div className="bg-card rounded-2xl shadow-sm p-6">
       <h3 className="text-lg font-medium mb-4">Post a Job Opportunity</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -392,6 +429,20 @@ function JobPostingForm({ posterName, onClose, onPosted }: { posterName: string;
               className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="e.g. ₱25,000 - ₱35,000/month"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1.5">Related Program</label>
+            <select
+              value={formData.program}
+              onChange={(e) => setFormData({ ...formData, program: e.target.value })}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Any program</option>
+              {PROGRAMS.map((p) => (
+                <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>

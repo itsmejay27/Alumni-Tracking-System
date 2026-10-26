@@ -168,3 +168,77 @@ create policy "jobs: signed-in users post" on public.jobs for insert to authenti
   with check (created_by = (select auth.uid()));
 create policy "jobs: owner or admin delete" on public.jobs for delete to authenticated
   using (created_by = (select auth.uid()) or (select public.app_role()) like 'admin%');
+
+-- ---------------------------------------------------------------------------
+-- Panel feedback additions
+-- ---------------------------------------------------------------------------
+
+-- Editable site info (Contact Us details), readable by everyone, editable by Alumni Affairs
+create table if not exists public.site_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.site_settings enable row level security;
+create policy "settings: anyone reads" on public.site_settings for select to anon, authenticated using (true);
+create policy "settings: alumni affairs writes" on public.site_settings for insert to authenticated
+  with check ((select public.app_role()) = 'admin');
+create policy "settings: alumni affairs updates" on public.site_settings for update to authenticated
+  using ((select public.app_role()) = 'admin') with check ((select public.app_role()) = 'admin');
+
+-- Job posts can target a program so alumni see best matches first
+alter table public.jobs add column if not exists program text
+  check (program in ('BSIT','BEED','BSBA-FM','BSBA-OM','BSOA'));
+create policy "jobs: owner or admin update" on public.jobs for update to authenticated
+  using (created_by = (select auth.uid()) or (select public.app_role()) like 'admin%')
+  with check (created_by = (select auth.uid()) or (select public.app_role()) like 'admin%');
+
+-- Enrollment and graduate totals per program and year
+create table if not exists public.batch_totals (
+  course text not null check (course in ('BSIT','BEED','BSBA-FM','BSBA-OM','BSOA')),
+  year_graduated int not null check (year_graduated between 1966 and 2100),
+  enrolled int check (enrolled >= 0),
+  graduated int check (graduated >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (course, year_graduated)
+);
+alter table public.batch_totals enable row level security;
+create policy "batch totals: admins read" on public.batch_totals for select to authenticated
+  using ((select public.app_role()) like 'admin%');
+create policy "batch totals: scoped admin insert" on public.batch_totals for insert to authenticated
+  with check ((select public.app_role()) = 'admin' or course = (select public.admin_course()));
+create policy "batch totals: scoped admin update" on public.batch_totals for update to authenticated
+  using ((select public.app_role()) = 'admin' or course = (select public.admin_course()))
+  with check ((select public.app_role()) = 'admin' or course = (select public.admin_course()));
+create policy "batch totals: scoped admin delete" on public.batch_totals for delete to authenticated
+  using ((select public.app_role()) = 'admin' or course = (select public.admin_course()));
+
+-- Log of update reminders sent by program chairs (written by the send-reminders function)
+create table if not exists public.reminder_log (
+  id uuid primary key default gen_random_uuid(),
+  course text,
+  sent_by uuid references auth.users(id) on delete set null,
+  recipients int not null default 0,
+  min_years int not null default 1,
+  created_at timestamptz not null default now()
+);
+alter table public.reminder_log enable row level security;
+create policy "reminders: admins read" on public.reminder_log for select to authenticated
+  using ((select public.app_role()) = 'admin' or course = (select public.admin_course()));
+create index if not exists reminder_log_sent_by_idx on public.reminder_log(sent_by);
+
+-- Program chairs can import (CSV) records for their own program
+create policy "records: program chair imports" on public.alumni_records for insert to authenticated
+  with check (user_id is null and course = (select public.admin_course()));
+
+-- Staff directory visible to signed-in users (names, titles and emails of staff only)
+create or replace function public.staff_directory()
+returns table (id uuid, given_name text, last_name text, middle_name text, role text, title text, email text, avatar_url text)
+language sql stable security definer set search_path = '' as $$
+  select p.id, p.given_name, p.last_name, p.middle_name, p.role, p.title, p.email, p.avatar_url
+  from public.profiles p
+  where p.role like 'admin%' and p.must_change_password = false
+  order by case when p.role = 'admin' then 0 else 1 end, p.role, p.last_name
+$$;
+revoke execute on function public.staff_directory() from public, anon;
+grant execute on function public.staff_directory() to authenticated;

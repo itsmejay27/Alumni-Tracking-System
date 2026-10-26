@@ -179,3 +179,18 @@
     line-height: 1.5;
   }
 }
+
+@layer components {
+  .filter-select {
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    font-size: 0.875rem;
+    color: var(--foreground);
+  }
+  .filter-select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+}

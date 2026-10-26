@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
-import { useAlumniRecords, AlumniRecord } from '@/lib/alumni';
+import { useAlumniRecords, AlumniRecord, currentJob } from '@/lib/alumni';
+import { CsvImport } from './CsvImport';
+import { Upload } from 'lucide-react';
 import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X } from 'lucide-react';
 
 interface AlumniRecordsProps {
@@ -14,7 +16,8 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedRecord, setSelectedRecord] = useState<AlumniRecord | null>(null);
   const [viewTab, setViewTab] = useState<'records' | 'suggestions'>('records');
-  const { records, loading, error } = useAlumniRecords();
+  const { records, loading, error, reload } = useAlumniRecords();
+  const [showImport, setShowImport] = useState(false);
 
   const isSuperAdmin = userRole === 'admin';
   
@@ -59,7 +62,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
 
   const handleDownload = () => {
-    const scopeName = courseScope || (filterCourse === 'all' ? 'All Courses' : filterCourse);
+    const scopeName = courseScope || (filterCourse === 'all' ? 'All Programs' : filterCourse);
     const csvContent = generateCSV(filteredRecords);
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -108,19 +111,26 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       {/* Header */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">
-            {courseScope ? `${courseScope} Department Records` : 'University Alumni Registry'}
+          <h2 className="text-2xl font-bold tracking-tight">
+            {courseScope ? `${courseScope} Alumni Records` : 'Alumni Records'}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {courseScope ? `Managing OMSU ${courseScope} Alumni submissions` : 'Central OMSU Alumni tracking system'}
+            {courseScope ? `Tracer records of ${courseScope} graduates` : 'Tracer records of all OMSU graduates'}
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-muted/70"
+          >
+            <Upload size={16} />
+            Import CSV
+          </button>
           <button
             onClick={handleDownload}
             disabled={filteredRecords.length === 0}
-            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-[#001740] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-[#001740] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={18} />
             Export CSV
@@ -157,7 +167,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       {viewTab === 'records' ? (
         <>
           {/* Filters */}
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <div className="bg-card rounded-2xl p-5 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Search */}
               <div className="relative md:col-span-1">
@@ -183,7 +193,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     <option value={courseScope}>{courseScope} Department</option>
                   ) : (
                     <>
-                      <option value="all">All Courses</option>
+                      <option value="all">All Programs</option>
                       {courses.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -227,7 +237,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             {/* Mobile Cards (visible on mobile only) */}
             <div className="block md:hidden space-y-4">
               {filteredRecords.map((record) => (
-                <div key={record.id} className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+                <div key={record.id} className="bg-card rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex justify-between items-start gap-2">
                     <div>
                       <span className="font-mono text-xs text-primary font-bold">{record.studentId}</span>
@@ -249,12 +259,12 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 
                   <div className="grid grid-cols-2 gap-3 text-xs bg-muted/40 p-3 rounded-lg border border-border/50">
                     <div>
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Course</span>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Program</span>
                       <span className="font-bold text-foreground">{record.course}</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Batch</span>
-                      <span className="font-bold text-foreground">{record.batch}</span>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Graduated</span>
+                      <span className="font-bold text-foreground">{record.yearGraduated || record.batch}</span>
                     </div>
                     {record.status !== 'Unemployed' && (
                       <div className="col-span-2 border-t border-border/30 pt-2 mt-1">
@@ -277,15 +287,15 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             </div>
 
             {/* Desktop Table (visible on desktop only) */}
-            <div className="hidden md:block bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+            <div className="hidden md:block bg-card rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-muted/50 border-b border-border/70">
                     <tr>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Student ID</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">Student ID</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Name</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Course</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Batch</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Program</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">Graduated</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Current Position</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Action</th>
@@ -294,7 +304,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <tbody className="divide-y divide-border/60">
                     {filteredRecords.map((record) => (
                       <tr key={record.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-4 font-mono text-sm text-primary font-bold">{record.studentId}</td>
+                        <td className="px-6 py-4 font-mono text-sm text-primary font-bold whitespace-nowrap">{record.studentId || '—'}</td>
                         <td className="px-6 py-4">
                           <div className="font-semibold text-foreground">{record.givenName} {record.lastName}</div>
                           <div className="text-xs text-muted-foreground">{record.email}</div>
@@ -302,7 +312,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                         <td className="px-6 py-4">
                           <span className="font-bold text-xs px-2.5 py-1 bg-muted rounded-lg border border-border/40">{record.course}</span>
                         </td>
-                        <td className="px-6 py-4 font-medium">{record.batch}</td>
+                        <td className="px-6 py-4 font-medium whitespace-nowrap">{record.yearGraduated || record.batch}</td>
                         <td className="px-6 py-4">
                           <span
                             className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
@@ -342,7 +352,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             </div>
 
             {filteredRecords.length === 0 && (
-              <div className="bg-card border border-border rounded-xl text-center py-16 shadow-sm">
+              <div className="bg-card rounded-2xl text-center py-16 shadow-sm">
                 <Filter className="mx-auto mb-3 text-muted-foreground/60" size={48} />
                 <h4 className="font-bold text-lg mb-0.5">No Records Found</h4>
                 <p className="text-muted-foreground text-sm max-w-sm mx-auto">Try refining your filters or query to locate alumni profiles.</p>
@@ -410,6 +420,8 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       )}
 
       {/* Detail Modal */}
+      {showImport && <CsvImport scope={courseScope as any} onDone={reload} onClose={() => setShowImport(false)} />}
+
       {selectedRecord && (
         <RecordDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
       )}
@@ -420,7 +432,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-card border border-border rounded-xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button Top Right */}
         <button
@@ -522,55 +534,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
               <Briefcase size={16} className="text-primary" /> Career Status
             </h4>
-            {record.status !== 'Unemployed' ? (
-              <div className="bg-emerald-500/[0.03] border border-emerald-500/20 rounded-2xl p-5 text-sm space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-emerald-700 font-semibold">Job Title</p>
-                    <p className="font-bold text-foreground mt-0.5">{record.currentPosition}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-emerald-700 font-semibold">Organization / Employer</p>
-                    <p className="font-bold text-foreground mt-0.5">{record.currentCompany}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-emerald-700 font-semibold">Company Sector</p>
-                    <p className="font-bold text-foreground mt-0.5">{record.employerType}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-emerald-500/10 pt-3">
-                  <div>
-                    <p className="text-xs text-emerald-700 font-semibold">Job Engagement Type</p>
-                    <span className="inline-block mt-1 font-bold text-xs bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded border border-emerald-500/20">
-                      {record.employmentStatus}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-emerald-700 font-semibold">Length of Service</p>
-                    <p className="font-bold text-foreground mt-0.5">{record.lengthOfService}</p>
-                  </div>
-                </div>
-
-                {record.employerAddress && (
-                  <div className="border-t border-emerald-500/10 pt-3">
-                    <p className="text-xs text-emerald-700 font-semibold">Employer Worksite Address</p>
-                    <p className="font-semibold text-foreground mt-0.5">{record.employerAddress}</p>
-                  </div>
-                )}
-
-                {record.jobDescription && (
-                  <div className="border-t border-emerald-500/10 pt-3">
-                    <p className="text-xs text-emerald-700 font-semibold">Primary Duties / Description</p>
-                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{record.jobDescription}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-amber-500/[0.03] border border-amber-500/20 rounded-2xl p-5 text-sm italic text-amber-800">
-                This alumni is currently seeking professional employment opportunity and actively building career skills.
-              </div>
-            )}
+            <EmploymentHistory record={record} />
           </div>
 
           {/* SUGGESTIONS & FEEDBACK */}
@@ -600,3 +564,42 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
   );
 }
 
+
+function EmploymentHistory({ record }: { record: AlumniRecord }) {
+  const history = record.employmentHistory?.length
+    ? [...record.employmentHistory].reverse()
+    : currentJob(record)
+    ? [currentJob(record)!]
+    : [];
+  if (record.status === 'Unemployed' && history.every((h) => h.endDate)) {
+    return (
+      <div className="rounded-2xl bg-amber-50 p-5 text-sm text-amber-900">
+        Currently not employed.
+        {history.length > 0 && <HistoryList items={history} />}
+      </div>
+    );
+  }
+  return history.length ? <HistoryList items={history} /> : <p className="text-sm text-muted-foreground">No employment details recorded.</p>;
+}
+
+function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJob>>[] }) {
+  return (
+    <ol className="space-y-3 mt-3">
+      {items.map((j, i) => (
+        <li key={j.id + i} className="rounded-2xl bg-muted/50 p-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="font-semibold text-foreground">{j.position || 'Position not given'}</span>
+            <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${j.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
+              {j.endDate ? `Until ${j.endDate}` : 'Current'}
+            </span>
+          </div>
+          <p className="text-muted-foreground">{j.company}</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {[j.employerType, j.employmentStatus, j.jobLevel, j.startDate && `since ${j.startDate}`].filter(Boolean).join(' · ')}
+          </p>
+          {j.jobDescription && <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{j.jobDescription}</p>}
+        </li>
+      ))}
+    </ol>
+  );
+}

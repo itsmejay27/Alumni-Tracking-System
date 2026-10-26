@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
-import { User, Lock, ArrowLeft, Mail } from 'lucide-react';
+import { User, Lock, X, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { PasswordStrength } from './PasswordStrength';
+import { passwordStrength } from '@/lib/programs';
 
 export type AuthMode = 'signin' | 'signup' | 'reset';
 
 interface LoginPageProps {
   initialMode?: AuthMode;
-  onBack: () => void;
+  onClose: () => void;
 }
 
 const inputClass =
-  'w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:border-[#002060] focus:ring-1 focus:ring-[#002060] text-sm font-medium';
-const labelClass = 'block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2';
+  'w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#002060] focus:ring-2 focus:ring-[#002060]/15 text-sm';
+const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
-export function LoginPage({ initialMode = 'signin', onBack }: LoginPageProps) {
+/** Sign-in / sign-up form shown in a panel that slides in from the right of the landing page. */
+export function LoginPage({ initialMode = 'signin', onClose }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +61,8 @@ export function LoginPage({ initialMode = 'signin', onBack }: LoginPageProps) {
     } else if (mode === 'signup') {
       if (password.length < 8) {
         setError('Password must be at least 8 characters.');
+      } else if (passwordStrength(password).label === 'Weak') {
+        setError('Please choose a stronger password.');
       } else if (password !== confirmPassword) {
         setError('Passwords do not match.');
       } else {
@@ -91,28 +96,33 @@ export function LoginPage({ initialMode = 'signin', onBack }: LoginPageProps) {
     setBusy(false);
   };
 
-  const title = mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Alumni Account' : 'Reset Password';
+  const title = mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create Alumni Account' : 'Reset Password';
 
   return (
-    <div className="size-full min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-lg">
-        <button
-          onClick={onBack}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-[#002060]"
-        >
-          <ArrowLeft size={16} /> Back to home
-        </button>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-md">
-          <div className="text-center mb-8">
-            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow border border-slate-200 overflow-hidden p-1">
-              <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
-            </div>
-            <h1 className="text-2xl font-black text-[#002060]">OMSU Alumni Graduate Tracer</h1>
-            <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-1.5">
-              Occidental Mindoro State University
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300">
+        <div className="flex items-center justify-between px-6 pt-5">
+          <div className="flex items-center gap-2.5">
+            <img src={logo} alt="OMSU Logo" className="w-9 h-9 object-contain" />
+            <span className="text-sm font-bold text-[#002060]">OMSU Alumni Tracer</span>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="p-2 rounded-full text-slate-500 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 sm:px-8 pt-8 pb-10">
+          <div className="mb-7">
+            <h1 className="text-2xl font-extrabold text-slate-900">
+              {mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Reset password'}
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              {mode === 'signin'
+                ? 'Sign in to update your tracer record.'
+                : mode === 'signup'
+                ? 'For graduates of Occidental Mindoro State University.'
+                : "We'll email you a link to set a new password."}
             </p>
-            <p className="text-sm font-bold text-slate-700 mt-5">{title}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -166,6 +176,7 @@ export function LoginPage({ initialMode = 'signin', onBack }: LoginPageProps) {
                     placeholder="••••••••"
                   />
                 </div>
+                {mode === 'signup' && <PasswordStrength password={password} />}
               </div>
             )}
 
@@ -188,20 +199,20 @@ export function LoginPage({ initialMode = 'signin', onBack }: LoginPageProps) {
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
-                <p className="text-xs font-bold text-red-600">{error}</p>
+              <div className="bg-red-50 rounded-xl px-4 py-3">
+                <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
             {notice && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3.5">
-                <p className="text-xs font-bold text-emerald-700">{notice}</p>
+              <div className="bg-emerald-50 rounded-xl px-4 py-3">
+                <p className="text-sm text-emerald-800">{notice}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={busy}
-              className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-lg font-bold transition-colors text-sm shadow-sm disabled:opacity-60"
+              className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-xl font-semibold transition-colors text-sm shadow-sm disabled:opacity-60"
             >
               {busy
                 ? 'Please wait...'
