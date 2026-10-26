@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
@@ -124,11 +125,11 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           </select>
         )}
         <button
-          onClick={() => setShowPostForm(!showPostForm)}
+          onClick={() => setShowPostForm(true)}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
         >
-          {showPostForm ? <X size={18} /> : <Plus size={18} />}
-          {showPostForm ? 'Cancel' : 'Post a Job'}
+          <Plus size={18} />
+          Post a Job
         </button>
         </div>
       </div>
@@ -369,9 +370,27 @@ function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { pos
     onPosted();
   };
 
-  return (
-    <div className="bg-card rounded-2xl shadow-sm p-6">
-      <h3 className="text-lg font-medium mb-4">Post a Job Opportunity</h3>
+  // Close with the Escape key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !submitting && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, submitting]);
+
+  // Rendered on <body> so the backdrop covers the whole screen
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Post a job">
+      <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !submitting && onClose()} />
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="flex items-start justify-between gap-3 mb-5">
+        <div>
+          <h3 className="font-semibold text-lg">Post a Job Opportunity</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Fields marked * are required.</p>
+        </div>
+        <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+          <X size={18} />
+        </button>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -488,7 +507,7 @@ function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { pos
           <p className="text-xs text-muted-foreground mt-1">Enter each requirement on a new line</p>
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-row-reverse gap-3 pt-2">
           <button
             type="submit"
             disabled={submitting}
@@ -505,6 +524,8 @@ function JobPostingForm({ posterName, defaultProgram, onClose, onPosted }: { pos
           </button>
         </div>
       </form>
-    </div>
+      </div>
+    </div>,
+    document.body
   );
 }
