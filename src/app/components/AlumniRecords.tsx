@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
-import { useAlumniRecords, AlumniRecord, currentJob } from '@/lib/alumni';
+import { useAlumniRecords, AlumniRecord, currentJob, isEmployed } from '@/lib/alumni';
+
+const statusClass = (s: string) =>
+  s === 'Employed'
+    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
+    : s === 'Self-Employed'
+    ? 'bg-blue-500/10 text-blue-700 border-blue-500/20'
+    : s === 'Unemployed'
+    ? 'bg-amber-500/10 text-amber-700 border-amber-500/20'
+    : 'bg-slate-500/10 text-slate-600 border-slate-500/20';
 import { CsvImport } from './CsvImport';
 import { Pagination, usePaged } from './Pagination';
 import { Upload } from 'lucide-react';
@@ -129,7 +138,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-muted/70"
           >
             <Upload size={16} />
-            Import CSV
+            Import
           </button>
           <button
             onClick={handleDownload}
@@ -231,6 +240,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <option value="Employed">Employed</option>
                   <option value="Self-Employed">Self-Employed</option>
                   <option value="Unemployed">Unemployed</option>
+                  <option value="Not Tracked">Not tracked</option>
                 </select>
               </div>
             </div>
@@ -250,11 +260,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     </div>
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-bold border shrink-0 ${
-                        record.status === 'Employed'
-                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                          : record.status === 'Self-Employed'
-                          ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                          : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        statusClass(record.status)
                       }`}
                     >
                       {record.status}
@@ -270,7 +276,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                       <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Graduated</span>
                       <span className="font-bold text-foreground">{record.yearGraduated || record.batch}</span>
                     </div>
-                    {record.status !== 'Unemployed' && (
+                    {isEmployed(record) && (
                       <div className="col-span-2 border-t border-border/30 pt-2 mt-1">
                         <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Current Job</span>
                         <span className="font-semibold text-foreground text-xs block mt-0.5 leading-snug">
@@ -320,24 +326,20 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                         <td className="px-6 py-4">
                           <span
                             className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                              record.status === 'Employed'
-                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                : record.status === 'Self-Employed'
-                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                                : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                              statusClass(record.status)
                             }`}
                           >
                             {record.status}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          {record.status !== 'Unemployed' ? (
+                          {isEmployed(record) ? (
                             <div className="text-xs">
                               <p className="font-semibold text-foreground truncate max-w-[180px]">{record.currentPosition}</p>
                               <p className="text-muted-foreground truncate max-w-[180px]">{record.currentCompany}</p>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">Actively seeking work</span>
+                            <span className="text-xs text-muted-foreground italic">{record.status === 'Not Tracked' ? 'No response yet' : 'Seeking work'}</span>
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -426,7 +428,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       )}
 
       {/* Detail Modal */}
-      {showImport && <CsvImport scope={courseScope as any} onDone={reload} onClose={() => setShowImport(false)} />}
+      {showImport && <CsvImport scope={courseScope as any} existing={records} onDone={reload} onClose={() => setShowImport(false)} />}
 
       {selectedRecord && (
         <RecordDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
@@ -462,11 +464,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           </div>
           <span
             className={`px-3.5 py-1.5 rounded-full text-xs font-bold border shrink-0 text-center self-start sm:self-auto ${
-              record.status === 'Employed'
-                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                : record.status === 'Self-Employed'
-                ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+              statusClass(record.status)
             }`}
           >
             {record.status}
@@ -577,10 +575,10 @@ function EmploymentHistory({ record }: { record: AlumniRecord }) {
     : currentJob(record)
     ? [currentJob(record)!]
     : [];
-  if (record.status === 'Unemployed' && history.every((h) => h.endDate)) {
+  if (!isEmployed(record) && history.every((h) => h.endDate)) {
     return (
       <div className="rounded-2xl bg-amber-50 p-5 text-sm text-amber-900">
-        Currently not employed.
+        {record.status === 'Not Tracked' ? 'This graduate has not answered the tracer yet.' : 'Currently not employed.'}
         {history.length > 0 && <HistoryList items={history} />}
       </div>
     );

@@ -35,6 +35,9 @@ interface InviteResult {
   emailError: string | null;
 }
 
+const actionBtn =
+  'w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-lg border bg-card text-sm font-medium disabled:opacity-50';
+
 const inputClass =
   'w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm';
 
@@ -208,11 +211,11 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
           <p className="text-muted-foreground mt-1">Create accounts for program chairs and staff, and assign their roles</p>
         </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => setShowForm(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/95"
         >
-          {showForm ? <X size={18} /> : <UserPlus size={18} />}
-          {showForm ? 'Cancel' : 'Create Account'}
+          <UserPlus size={18} />
+          Create Account
         </button>
       </div>
 
@@ -249,10 +252,22 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       )}
 
       {showForm && (
-        <form onSubmit={handleInvite} className="bg-card rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border">
-            <Mail size={18} className="text-primary" />
-            <h3 className="font-bold">Invite a new account</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Create account">
+          <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-150" onClick={() => !sending && setShowForm(false)} />
+        <form onSubmit={handleInvite} className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-4 animate-in zoom-in-95 fade-in duration-150">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Mail size={18} />
+              </div>
+              <div>
+                <h3 className="font-semibold">Create account</h3>
+                <p className="text-xs text-muted-foreground">They'll get an email with a temporary password.</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => setShowForm(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+              <X size={18} />
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -295,16 +310,22 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            A temporary password will be generated and emailed to this person. They will be asked to change it when they first sign in.
+            They will be asked to change the temporary password the first time they sign in.
           </p>
-          <button
-            type="submit"
-            disabled={sending}
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold text-sm disabled:opacity-60"
-          >
-            {sending ? 'Creating account...' : 'Create Account & Send Invitation'}
-          </button>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={sending}
+              className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60"
+            >
+              {sending ? 'Creating...' : 'Create & send invitation'}
+            </button>
+          </div>
         </form>
+        </div>
       )}
 
       <div className="bg-card rounded-2xl shadow-sm">
@@ -337,40 +358,45 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                   <span className="inline-block mt-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Invitation pending</span>
                 )}
               </div>
-              <div className="flex items-center gap-2 md:w-auto">
-              <select
-                value={a.role}
-                disabled={a.id === currentUserId}
-                onChange={(e) => handleRoleChange(a, e.target.value)}
-                className="px-3 py-2 bg-input-background border border-border rounded-lg text-sm disabled:opacity-60 w-full md:w-56"
-              >
-                {ROLE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              {a.must_change_password && (
-                <button
-                  onClick={() => handleResend(a)}
-                  disabled={resending === a.id}
-                  title="Send a new invitation with a new temporary password"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 shrink-0 disabled:opacity-50"
+              <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+                <select
+                  value={a.role}
+                  disabled={a.id === currentUserId}
+                  onChange={(e) => handleRoleChange(a, e.target.value)}
+                  className="h-9 px-3 bg-input-background border border-border rounded-lg text-sm disabled:opacity-60 w-full md:w-56"
                 >
-                  <RefreshCw size={15} className={resending === a.id ? 'animate-spin' : ''} />
-                  <span className="hidden sm:inline">{resending === a.id ? 'Sending...' : 'Resend'}</span>
-                </button>
-              )}
-              {a.id !== currentUserId && (
-                <button
-                  onClick={() => handleRemove(a)}
-                  title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 shrink-0"
-                >
-                  <Trash2 size={15} />
-                  <span className="hidden sm:inline">{a.must_change_password ? 'Cancel invite' : 'Remove'}</span>
-                </button>
-              )}
+                  {ROLE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {/* Two fixed-width action slots so every row lines up */}
+                <div className="w-[7.5rem]">
+                  {a.must_change_password && (
+                    <button
+                      onClick={() => handleResend(a)}
+                      disabled={resending === a.id}
+                      title="Send a new invitation with a new temporary password"
+                      className={actionBtn + ' text-primary border-primary/25 hover:bg-primary/5'}
+                    >
+                      <RefreshCw size={14} className={resending === a.id ? 'animate-spin' : ''} />
+                      {resending === a.id ? 'Sending' : 'Resend'}
+                    </button>
+                  )}
+                </div>
+                <div className="w-[7.5rem]">
+                  {a.id !== currentUserId && (
+                    <button
+                      onClick={() => handleRemove(a)}
+                      title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}
+                      className={actionBtn + ' text-red-600 border-red-200 hover:bg-red-50'}
+                    >
+                      {a.must_change_password ? <X size={14} /> : <Trash2 size={14} />}
+                      {a.must_change_password ? 'Cancel' : 'Remove'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

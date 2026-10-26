@@ -92,7 +92,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         setGivenName((v) => v || rec.givenName);
         setMiddleName((v) => v || rec.middleName);
         setLastName((v) => v || rec.lastName);
-        if (rec.sex) setSex(rec.sex);
+        if (rec.sex) setSex(rec.sex as 'Male' | 'Female');
         setDateOfBirth((v) => v || rec.dateOfBirth);
         if (rec.civilStatus) setCivilStatus(rec.civilStatus);
         setMobileNo((v) => v || rec.mobileNo);
@@ -103,7 +103,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         setIpGroup(rec.ipGroup || '');
         setCourse(rec.course);
         if (rec.yearGraduated) setYearGraduated(rec.yearGraduated);
-        setStatus(rec.status || 'Employed');
+        setStatus(rec.status && rec.status !== 'Not Tracked' ? rec.status : 'Employed');
         // Older imported records only had one job: turn it into the first history entry
         let h = rec.employmentHistory || [];
         if (!h.length) {

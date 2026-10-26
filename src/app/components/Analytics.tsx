@@ -4,7 +4,7 @@ import { Send, Table2, LineChart as LineIcon, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
-import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, useAlumniRecords } from '@/lib/alumni';
+import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
 import { PROGRAMS, JOB_LEVELS } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
 
@@ -43,9 +43,11 @@ export function Analytics({ userRole }: AnalyticsProps) {
 
   // Headline numbers
   const total = filtered.length;
+  const tracked = filtered.filter(isTracked).length;
+  const notTracked = total - tracked;
   const employed = filtered.filter(isEmployed).length;
-  const unemployed = total - employed;
-  const rate = total ? Math.round((employed / total) * 100) : 0;
+  const unemployed = tracked - employed;
+  const rate = tracked ? Math.round((employed / tracked) * 100) : 0;
   const jobs = filtered.map(currentJob).filter(Boolean) as NonNullable<ReturnType<typeof currentJob>>[];
   const gov = jobs.filter((j) => isGovernment(j.employerType)).length;
   const priv = jobs.length - gov;
@@ -56,7 +58,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
     return years.map((y) => {
       const row: Record<string, number | string | null> = { year: y };
       for (const p of visiblePrograms) {
-        const rs = records.filter((r) => r.course === p.code && r.yearGraduated === y);
+        const rs = records.filter((r) => r.course === p.code && r.yearGraduated === y && isTracked(r));
         if (!rs.length) {
           row[p.code] = null;
           continue;
@@ -81,11 +83,13 @@ export function Analytics({ userRole }: AnalyticsProps) {
     const rs = filtered.filter((r) => r.course === p.code);
     const js = rs.map(currentJob).filter(Boolean) as NonNullable<ReturnType<typeof currentJob>>[];
     const e = rs.filter(isEmployed).length;
+    const t = rs.filter(isTracked).length;
     return {
       ...p,
       total: rs.length,
+      tracked: t,
       employed: e,
-      unemployed: rs.length - e,
+      unemployed: t - e,
       gov: js.filter((j) => isGovernment(j.employerType)).length,
       priv: js.filter((j) => !isGovernment(j.employerType)).length,
     };
@@ -123,10 +127,11 @@ export function Analytics({ userRole }: AnalyticsProps) {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Stat label="Alumni tracked" value={total} />
-        <Stat label="Employed" value={employed} note={`${rate}% employment rate`} />
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <Stat label="Graduates on file" value={total} note={`${tracked} responded`} />
+        <Stat label="Employed" value={employed} note={`${rate}% of those who responded`} />
         <Stat label="Unemployed" value={unemployed} />
+        <Stat label="Not tracked" value={notTracked} note="no response yet" />
         <Stat label="Government / Private" value={`${gov} / ${priv}`} note="of employed alumni" />
         <Stat label="Indigenous Peoples (IP)" value={ipCount} note="self-identified" />
       </div>
@@ -250,7 +255,8 @@ export function Analytics({ userRole }: AnalyticsProps) {
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="py-2 pr-3 font-medium">Program</th>
-                  <th className="py-2 px-2 font-medium text-right">Tracked</th>
+                  <th className="py-2 px-2 font-medium text-right">Graduates</th>
+                  <th className="py-2 px-2 font-medium text-right">Responded</th>
                   <th className="py-2 px-2 font-medium text-right">Employed</th>
                   <th className="py-2 px-2 font-medium text-right">Unemployed</th>
                   <th className="py-2 px-2 font-medium text-right">Government</th>
@@ -267,6 +273,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                       </span>
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.total}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{p.tracked}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.employed}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.unemployed}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.gov}</td>
@@ -437,7 +444,7 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
         <div>
           <h3 className="font-semibold">Enrollment, graduates and response rate</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Enter enrolled and graduate counts per batch; tracked counts come from tracer records.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Enter enrolled and graduate counts per batch. If graduates is blank, the number of graduates on file is used.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {programs.length > 1 && (
@@ -472,7 +479,7 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
               <th className="py-2 pr-3 font-medium">Year graduated</th>
               <th className="py-2 px-2 font-medium">Enrolled</th>
               <th className="py-2 px-2 font-medium">Graduates</th>
-              <th className="py-2 px-2 font-medium text-right">Tracked</th>
+              <th className="py-2 px-2 font-medium text-right">Responded</th>
               <th className="py-2 px-2 font-medium text-right">Response rate</th>
               <th className="py-2 px-2 font-medium text-right">Employed</th>
               <th className="py-2 px-2 font-medium text-right">Unemployed</th>
@@ -487,7 +494,9 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
             )}
             {years.map((y) => {
               const rs = records.filter((r) => r.course === course && r.yearGraduated === y);
-              const grads = Number(valueOf(y, 'graduated')) || 0;
+              const responded = rs.filter(isTracked);
+              // Without an entered count, the graduates on file are used
+              const grads = Number(valueOf(y, 'graduated')) || rs.length;
               const e = rs.filter(isEmployed).length;
               return (
                 <tr key={y} className="border-t border-border/60">
@@ -500,13 +509,14 @@ function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs:
                         inputMode="numeric"
                         className="w-20 px-2 py-1 rounded-md bg-input-background border border-border text-sm tabular-nums"
                         aria-label={`${f} ${y}`}
+                        placeholder={f === 'graduated' ? String(rs.length) : ''}
                       />
                     </td>
                   ))}
-                  <td className="py-2 px-2 text-right tabular-nums">{rs.length}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{grads ? `${Math.round((rs.length / grads) * 100)}%` : '–'}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{responded.length}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{grads ? `${Math.round((responded.length / grads) * 100)}%` : '–'}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{e}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{rs.length - e}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{responded.length - e}</td>
                   <td className="py-2 pl-2 text-right tabular-nums">{rs.filter((r) => r.isIP).length}</td>
                 </tr>
               );

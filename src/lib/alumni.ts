@@ -28,7 +28,7 @@ export interface AlumniRecord {
   email: string;
   batch: string;
   yearGraduated: number;
-  sex: 'Female' | 'Male';
+  sex: 'Female' | 'Male' | '';
   dateOfBirth: string;
   civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
   mobileNo: string;
@@ -37,7 +37,7 @@ export interface AlumniRecord {
   permanentAddress: string;
   course: Course;
 
-  status: 'Employed' | 'Self-Employed' | 'Unemployed';
+  status: 'Employed' | 'Self-Employed' | 'Unemployed' | 'Not Tracked';
   employmentStatus?: 'PERMANENT' | 'CONTRACTUAL' | 'DAILY WAGE';
   currentPosition?: string;
   currentCompany?: string;
@@ -63,7 +63,7 @@ const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACT
 export function currentJob(r: AlumniRecord): EmploymentEntry | null {
   const current = (r.employmentHistory || []).filter((e) => !e.endDate);
   if (current.length) return current[current.length - 1];
-  if (r.status !== 'Unemployed' && (r.currentPosition || r.currentCompany)) {
+  if (isEmployed(r) && (r.currentPosition || r.currentCompany)) {
     return {
       id: 'legacy',
       position: r.currentPosition || '',
@@ -80,6 +80,8 @@ export function currentJob(r: AlumniRecord): EmploymentEntry | null {
 }
 
 export const isEmployed = (r: AlumniRecord) => r.status === 'Employed' || r.status === 'Self-Employed';
+/** Graduates whose employment status is known (they answered the tracer). */
+export const isTracked = (r: AlumniRecord) => r.status !== 'Not Tracked';
 
 interface AlumniRow {
   id: string;
