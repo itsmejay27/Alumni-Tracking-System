@@ -27,16 +27,29 @@ You can change anyone's role from the same screen.
 
 ### Setting up invitation emails
 
-The invitation is sent by the `invite-account` Supabase Edge Function using a Gmail account.
-In Supabase → Edge Functions → Secrets, add:
+The invitation is sent by the `invite-account` Supabase Edge Function. Add the secrets below in
+Supabase → Edge Functions → Secrets. Use **either** Resend **or** Gmail.
+
+**Option A – Resend (recommended)**
+
+| Name | Value |
+| --- | --- |
+| `RESEND_API_KEY` | API key from resend.com → API Keys |
+| `RESEND_FROM` | sender, e.g. `OMSU Alumni Tracer <noreply@yourdomain.com>` (needs a domain verified in Resend) |
+| `SITE_URL` | the live site address |
+
+Without a verified domain, Resend only lets you send from `onboarding@resend.dev` to the
+email address of your own Resend account, which is fine for testing only.
+
+**Option B – Gmail**
 
 | Name | Value |
 | --- | --- |
 | `SMTP_USER` | the Gmail address that sends the emails |
-| `SMTP_PASS` | a Gmail **App Password** for that account (Google Account → Security → 2-Step Verification → App passwords) |
-| `SITE_URL` | the live site address, e.g. `https://omsu-alumni-tracer-itsmejay27s-projects.vercel.app` |
+| `SMTP_PASS` | a Gmail **App Password** (Google Account → Security → 2-Step Verification → App passwords) |
+| `SITE_URL` | the live site address |
 
-Optional: `SMTP_HOST` / `SMTP_PORT` (defaults `smtp.gmail.com` / `465`) and `SMTP_FROM`.
+If `RESEND_API_KEY` is set, Resend is used; otherwise Gmail.
 
 ### The first super admin
 

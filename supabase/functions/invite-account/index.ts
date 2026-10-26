@@ -117,39 +117,58 @@ Deno.serve(async (req) => {
     return json({ error: `Could not set up profile: ${profileError.message}` }, 500);
   }
 
-  // Send the invitation email if SMTP is configured (e.g. a Gmail account with an app password)
+  // Send the invitation email: Resend if RESEND_API_KEY is set, otherwise SMTP (e.g. Gmail)
   let emailSent = false;
   let emailError: string | null = null;
+  const message = invitationEmail({
+    name: `${givenName} ${lastName}`,
+    roleLabel: title,
+    email,
+    password,
+    siteUrl,
+  });
+  const subject = 'Your OMSU Alumni Tracer account';
+  const resendKey = Deno.env.get('RESEND_API_KEY');
   const smtpUser = Deno.env.get('SMTP_USER');
   const smtpPass = Deno.env.get('SMTP_PASS');
-  if (smtpUser && smtpPass) {
-    try {
+  try {
+    if (resendKey) {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>',
+          to: [email],
+          subject,
+          html: message.html,
+          text: message.text,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail?.message || `Resend returned ${res.status}`);
+      }
+      emailSent = true;
+    } else if (smtpUser && smtpPass) {
       const transport = nodemailer.createTransport({
         host: Deno.env.get('SMTP_HOST') || 'smtp.gmail.com',
         port: Number(Deno.env.get('SMTP_PORT') || 465),
         secure: true,
         auth: { user: smtpUser, pass: smtpPass },
       });
-      const { html, text } = invitationEmail({
-        name: `${givenName} ${lastName}`,
-        roleLabel: title,
-        email,
-        password,
-        siteUrl,
-      });
       await transport.sendMail({
         from: `"OMSU Alumni Tracer" <${Deno.env.get('SMTP_FROM') || smtpUser}>`,
         to: email,
-        subject: 'Your OMSU Alumni Tracer account',
-        html,
-        text,
+        subject,
+        html: message.html,
+        text: message.text,
       });
       emailSent = true;
-    } catch (err) {
-      emailError = err instanceof Error ? err.message : String(err);
+    } else {
+      emailError = 'Email sending is not set up yet';
     }
-  } else {
-    emailError = 'Email sending is not set up yet';
+  } catch (err) {
+    emailError = err instanceof Error ? err.message : String(err);
   }
 
   // The temporary password is returned once so the admin can share it if the email fails
