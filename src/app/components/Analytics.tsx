@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Send, Table2, LineChart as LineIcon, Save } from 'lucide-react';
+import { Send, Table2, LineChart as LineIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
@@ -322,7 +322,6 @@ export function Analytics({ userRole }: AnalyticsProps) {
         </div>
       </div>
 
-      <BatchTotals records={inProgram} programs={visiblePrograms.map((p) => p.code)} />
 
       <ReminderPanel scope={scope} />
     </div>
@@ -373,168 +372,6 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-2xl font-bold mt-1 tabular-nums">{value}</p>
       {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
-    </div>
-  );
-}
-
-/** Enrollment and graduate counts per batch, with tracer response rate. Editable by chairs. */
-function BatchTotals({ records, programs }: { records: AlumniRecord[]; programs: Course[] }) {
-  const [totals, setTotals] = useState<BatchTotal[]>([]);
-  const [draft, setDraft] = useState<Record<string, { enrolled: string; graduated: string }>>({});
-  const [saving, setSaving] = useState(false);
-  const [addYear, setAddYear] = useState('');
-  const [course, setCourse] = useState<Course>(programs[0]);
-
-  useEffect(() => {
-    if (!programs.includes(course)) setCourse(programs[0]);
-  }, [programs.join(',')]);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from('batch_totals').select('*');
-    setTotals((data as BatchTotal[]) || []);
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const yearsFromRecords = records.filter((r) => r.course === course).map((r) => r.yearGraduated);
-  const yearsFromTotals = totals.filter((t) => t.course === course).map((t) => t.year_graduated);
-  const years = Array.from(new Set([...yearsFromRecords, ...yearsFromTotals].filter(Boolean))).sort((a, b) => b - a);
-
-  const key = (y: number) => `${course}:${y}`;
-  const valueOf = (y: number, field: 'enrolled' | 'graduated') => {
-    const d = draft[key(y)];
-    if (d) return d[field];
-    const t = totals.find((x) => x.course === course && x.year_graduated === y);
-    return t?.[field] == null ? '' : String(t[field]);
-  };
-  const setValue = (y: number, field: 'enrolled' | 'graduated', v: string) => {
-    setDraft((d) => ({
-      ...d,
-      [key(y)]: { enrolled: valueOf(y, 'enrolled'), graduated: valueOf(y, 'graduated'), ...d[key(y)], [field]: v.replace(/\D/g, '') },
-    }));
-  };
-
-  const save = async () => {
-    const rows = Object.entries(draft).map(([k, v]) => {
-      const [c, y] = k.split(':');
-      return {
-        course: c,
-        year_graduated: Number(y),
-        enrolled: v.enrolled === '' ? null : Number(v.enrolled),
-        graduated: v.graduated === '' ? null : Number(v.graduated),
-        updated_at: new Date().toISOString(),
-      };
-    });
-    if (!rows.length) return;
-    setSaving(true);
-    const { error } = await supabase.from('batch_totals').upsert(rows);
-    setSaving(false);
-    if (error) {
-      toast.error(`Could not save: ${error.message}`);
-      return;
-    }
-    toast.success('Batch totals saved');
-    setDraft({});
-    load();
-  };
-
-  const addBatch = () => {
-    const y = Number(addYear);
-    if (!y || y < 1966 || y > 2100) {
-      toast.error('Enter a valid year, e.g. 2025');
-      return;
-    }
-    setDraft((d) => ({ ...d, [key(y)]: d[key(y)] || { enrolled: '', graduated: '' } }));
-    setTotals((t) => (t.some((x) => x.course === course && x.year_graduated === y) ? t : [...t, { course, year_graduated: y, enrolled: null, graduated: null }]));
-    setAddYear('');
-  };
-
-  return (
-    <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="font-semibold">Enrollment, graduates and response rate</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Enter enrolled and graduate counts per batch. If graduates is blank, the number of graduates on file is used.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {programs.length > 1 && (
-            <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className="filter-select">
-              {programs.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          )}
-          <input
-            value={addYear}
-            onChange={(e) => setAddYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            placeholder="Year"
-            className="w-20 px-3 py-2 rounded-lg bg-input-background border border-border text-sm"
-          />
-          <button onClick={addBatch} className="px-3 py-2 rounded-lg text-sm font-medium bg-muted hover:bg-muted/70">
-            Add batch
-          </button>
-          <button
-            onClick={save}
-            disabled={saving || !Object.keys(draft).length}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-50"
-          >
-            <Save size={14} /> {saving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted-foreground">
-              <th className="py-2 pr-3 font-medium">Year graduated</th>
-              <th className="py-2 px-2 font-medium">Enrolled</th>
-              <th className="py-2 px-2 font-medium">Graduates</th>
-              <th className="py-2 px-2 font-medium text-right">Responded</th>
-              <th className="py-2 px-2 font-medium text-right">Response rate</th>
-              <th className="py-2 px-2 font-medium text-right">Employed</th>
-              <th className="py-2 px-2 font-medium text-right">Unemployed</th>
-              <th className="py-2 pl-2 font-medium text-right">Not tracked</th>
-            </tr>
-          </thead>
-          <tbody>
-            {years.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-muted-foreground">No batches yet. Add a year to start.</td>
-              </tr>
-            )}
-            {years.map((y) => {
-              const rs = records.filter((r) => r.course === course && r.yearGraduated === y);
-              const responded = rs.filter(isTracked);
-              // Without an entered count, the graduates on file are used
-              const grads = Number(valueOf(y, 'graduated')) || rs.length;
-              const e = rs.filter(isEmployed).length;
-              return (
-                <tr key={y} className="border-t border-border/60">
-                  <td className="py-2 pr-3 font-medium">{y}</td>
-                  {(['enrolled', 'graduated'] as const).map((f) => (
-                    <td key={f} className="py-2 px-2">
-                      <input
-                        value={valueOf(y, f)}
-                        onChange={(ev) => setValue(y, f, ev.target.value)}
-                        inputMode="numeric"
-                        className="w-20 px-2 py-1 rounded-md bg-input-background border border-border text-sm tabular-nums"
-                        aria-label={`${f} ${y}`}
-                        placeholder={f === 'graduated' ? String(rs.length) : ''}
-                      />
-                    </td>
-                  ))}
-                  <td className="py-2 px-2 text-right tabular-nums">{responded.length}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{grads ? `${Math.round((responded.length / grads) * 100)}%` : '–'}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{e}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{responded.length - e}</td>
-                  <td className="py-2 pl-2 text-right tabular-nums">{rs.length - responded.length}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
