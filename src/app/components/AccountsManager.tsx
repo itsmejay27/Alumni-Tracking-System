@@ -47,7 +47,8 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showStaffOnly, setShowStaffOnly] = useState(true);
+  const [roleFilter, setRoleFilter] = useState('staff');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   const [showForm, setShowForm] = useState(false);
@@ -187,20 +188,16 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     setAccounts((list) => list.filter((a) => a.id !== acc.id));
   };
 
-  const paged = usePaged(
-    accounts.filter((a) => {
-      if (showStaffOnly && !a.role.startsWith('admin')) return false;
-      const q = search.toLowerCase();
-      return !q || a.email.includes(q) || `${a.given_name} ${a.last_name}`.toLowerCase().includes(q);
-    }),
-    10
-  );
-
   const visible = accounts.filter((a) => {
-    if (showStaffOnly && !a.role.startsWith('admin')) return false;
+    if (roleFilter === 'staff' && !a.role.startsWith('admin')) return false;
+    if (roleFilter !== 'staff' && roleFilter !== 'all' && a.role !== roleFilter) return false;
+    if (statusFilter === 'pending' && !a.must_change_password) return false;
+    if (statusFilter === 'active' && a.must_change_password) return false;
     const q = search.toLowerCase();
     return !q || a.email.includes(q) || `${a.given_name} ${a.last_name}`.toLowerCase().includes(q);
   });
+  const paged = usePaged(visible, 10);
+  const filtersOn = roleFilter !== 'staff' || statusFilter !== 'all' || !!search;
 
   if (loading) return <LoadingState label="Loading accounts..." />;
   if (loadError) return <ErrorState message={loadError} />;
@@ -344,10 +341,33 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
               className="w-full pl-9 pr-3 py-2 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={showStaffOnly} onChange={(e) => setShowStaffOnly(e.target.checked)} />
-            Staff accounts only
-          </label>
+<select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="filter-select sm:w-52" aria-label="Filter by role">
+            <option value="staff">All staff</option>
+            {STAFF_ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+            <option value="alumni">Alumni members</option>
+            <option value="all">Everyone</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select sm:w-44" aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="pending">Invitation pending</option>
+          </select>
+          {filtersOn && (
+            <button
+              onClick={() => {
+                setRoleFilter('staff');
+                setStatusFilter('all');
+                setSearch('');
+              }}
+              className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
         <div className="divide-y divide-border">
