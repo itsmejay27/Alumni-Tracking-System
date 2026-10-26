@@ -4,6 +4,7 @@ import { LoginPage, AuthMode } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
+import { AccountsManager } from './components/AccountsManager';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
@@ -29,7 +30,8 @@ import {
   GraduationCap,
   Home as HomeIcon,
   PhoneCall,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  UserCog
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
@@ -49,6 +51,7 @@ export interface CurrentUser {
   facebookName: string;
   avatarUrl?: string;
   title?: string;
+  mustChangePassword?: boolean;
 }
 
 function profileToUser(p: any): CurrentUser {
@@ -68,6 +71,7 @@ function profileToUser(p: any): CurrentUser {
     facebookName: p.facebook_name,
     avatarUrl: p.avatar_url,
     title: p.title,
+    mustChangePassword: p.must_change_password,
   };
 }
 
@@ -160,10 +164,24 @@ export default function App() {
     );
   }
 
-  if (recoveringPassword && session) {
+  if (session && currentUser && (recoveringPassword || currentUser.mustChangePassword)) {
+    const finish = async () => {
+      if (currentUser.mustChangePassword) {
+        await supabase.from('profiles').update({ must_change_password: false }).eq('id', currentUser.id);
+        setCurrentUser({ ...currentUser, mustChangePassword: false });
+      }
+      setRecoveringPassword(false);
+    };
     return (
       <>
-        <SetNewPassword onDone={() => setRecoveringPassword(false)} />
+        <SetNewPassword
+          onDone={finish}
+          message={
+            currentUser.mustChangePassword
+              ? 'Welcome! You signed in with a temporary password. Please choose your own password to continue.'
+              : undefined
+          }
+        />
         <Toaster position="top-right" closeButton richColors />
       </>
     );
@@ -208,6 +226,7 @@ export default function App() {
     { id: 'records', label: 'Alumni Records', icon: <Users size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
     { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
+    ...(userRole === 'admin' ? [{ id: 'accounts', label: 'Accounts', icon: <UserCog size={18} /> }] : []),
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
   ];
 
@@ -414,6 +433,7 @@ export default function App() {
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} />}
               {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'accounts' && userRole === 'admin' && <AccountsManager currentUserId={currentUser.id} />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
           ) : (

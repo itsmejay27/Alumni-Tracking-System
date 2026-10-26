@@ -15,18 +15,39 @@ React + Vite frontend, Supabase for login and data, deployed on Vercel.
 There are no built-in demo accounts. Everyone signs up with their own email from the
 landing page and starts as an **alumni** account.
 
-To make someone an administrator, run this in the Supabase SQL editor after they sign up:
+### Creating staff accounts (program chairs, directors)
+
+Sign in as the super admin and open **Accounts** in the sidebar. Enter the person's name,
+email and department, then click **Create Account & Send Invitation**. The system creates the
+account with a temporary password and emails it to them. On their first sign-in they must
+choose their own password. The temporary password is also shown to you once, in case the
+email doesn't arrive.
+
+You can change anyone's role from the same screen.
+
+### Setting up invitation emails
+
+The invitation is sent by the `invite-account` Supabase Edge Function using a Gmail account.
+In Supabase → Edge Functions → Secrets, add:
+
+| Name | Value |
+| --- | --- |
+| `SMTP_USER` | the Gmail address that sends the emails |
+| `SMTP_PASS` | a Gmail **App Password** for that account (Google Account → Security → 2-Step Verification → App passwords) |
+| `SITE_URL` | the live site address, e.g. `https://omsu-alumni-tracer-itsmejay27s-projects.vercel.app` |
+
+Optional: `SMTP_HOST` / `SMTP_PORT` (defaults `smtp.gmail.com` / `465`) and `SMTP_FROM`.
+
+### The first super admin
+
+The very first super admin has to be set by hand. Sign up on the site, then run this in the
+Supabase SQL editor:
 
 ```sql
--- Super admin (sees every program)
 update public.profiles set role = 'admin', title = 'Campus Director' where email = 'person@example.com';
-
--- Program chair (sees only their program). Roles:
--- admin.bsit, admin.beed, admin.bsba-fm, admin.bsba-om, admin.bsoa
-update public.profiles set role = 'admin.bsit', title = 'BSIT Program Chair' where email = 'person@example.com';
 ```
 
-The user needs to sign out and back in to see the admin screens.
+Sign out and back in to see the admin screens.
 
 ## Database
 
@@ -36,6 +57,8 @@ The schema lives in `supabase/schema.sql` (tables, row level security and trigge
 - `alumni_records` – tracer survey answers; imported BSIT records are linked to an account
   automatically when an alumnus signs up with the same email
 - `announcements`, `jobs`
+
+The account-invitation function lives in `supabase/functions/invite-account/`.
 
 ## Deploying (Vercel)
 

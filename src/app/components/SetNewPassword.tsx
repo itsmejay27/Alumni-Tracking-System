@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
 /** Shown after someone opens a password-reset link from their email. */
-export function SetNewPassword({ onDone }: { onDone: () => void }) {
+export function SetNewPassword({ onDone, message }: { onDone: () => void | Promise<void>; message?: string }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,13 +27,14 @@ export function SetNewPassword({ onDone }: { onDone: () => void }) {
       return;
     }
     toast.success('Password updated.');
-    onDone();
+    await onDone();
   };
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-8 shadow-md space-y-5">
         <h1 className="text-xl font-black text-[#002060]">Set a new password</h1>
+        {message && <p className="text-sm text-slate-600">{message}</p>}
         {[{ v: password, set: setPassword, label: 'New Password' }, { v: confirm, set: setConfirm, label: 'Confirm Password' }].map((f) => (
           <div key={f.label}>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{f.label}</label>
