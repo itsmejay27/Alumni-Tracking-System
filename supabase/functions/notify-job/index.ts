@@ -1,6 +1,7 @@
 // Emails a new Job Board posting to everyone, or only the job's program (its alumni and chair),
-// as the poster chose. Only the person who posted the job can trigger it, each job is emailed
-// once, and people who turned off job emails in Settings are skipped.
+// as the poster chose. Called by the poster (Alumni Affairs posts go live at once) or by Alumni
+// Affairs when approving someone else's job. Each job is emailed once, only after approval, and
+// people who turned off job emails in Settings are skipped.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 const cors = {
@@ -73,14 +74,16 @@ Deno.serve(async (req) => {
   if (!caller?.user) return json({ error: 'Not signed in' }, 401);
   const { data: profile } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
   const isStaff = (profile?.role || '').startsWith('admin');
+  const isAffairs = profile?.role === 'admin';
 
   const { jobId, audience } = await req.json().catch(() => ({}));
   const { data: job } = await admin.from('jobs').select('*').eq('id', jobId).single();
   if (!job) return json({ error: 'Job not found' }, 404);
-  if (job.created_by !== caller.user.id) return json({ error: 'Only the person who posted this job can email it' }, 403);
+  if (job.created_by !== caller.user.id && !isAffairs) return json({ error: 'Only the person who posted this job can email it' }, 403);
+  if (job.status && job.status !== 'approved') return json({ error: 'This job is waiting for approval. It is emailed once approved.' }, 409);
   if (job.emailed_at) return json({ ok: true, sent: 0, note: 'Already emailed' });
 
-  if (!isStaff) {
+  if (!isStaff && job.created_by === caller.user.id) {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const { count } = await admin
       .from('ai_usage')
@@ -94,7 +97,8 @@ Deno.serve(async (req) => {
   }
 
   // Recipients: everyone, or only the job's program (its alumni and chair), as the poster chose
-  const department = audience === 'department' && job.program ? job.program : null;
+  const wanted = job.email_audience || audience;
+  const department = wanted === 'department' && job.program ? job.program : null;
   let ids: string[];
   try {
     ids = (await recipientIds(admin, department)).filter((id) => id !== caller.user.id);
@@ -121,12 +125,17 @@ Deno.serve(async (req) => {
       .in('id', ids.slice(i, i + 500));
     emails.push(...(ps || []).filter((p) => p.email && wantsJob(p)).map((p) => p.email as string));
   }
-  // The poster always gets a copy as confirmation
-  if (caller.user.email && !emails.includes(caller.user.email.toLowerCase())) emails.push(caller.user.email.toLowerCase());
+  // The poster always gets a copy as confirmation (also when Alumni Affairs approved it)
+  let posterEmail = job.created_by === caller.user.id ? caller.user.email : null;
+  if (!posterEmail && job.created_by) {
+    const { data: poster } = await admin.from('profiles').select('email').eq('id', job.created_by).maybeSingle();
+    posterEmail = poster?.email || null;
+  }
+  if (posterEmail && !emails.includes(posterEmail.toLowerCase())) emails.push(posterEmail.toLowerCase());
 
   // Mark first so a retry can never send twice
   await admin.from('jobs').update({ emailed_at: new Date().toISOString() }).eq('id', job.id);
-  if (!isStaff) await admin.from('ai_usage').insert({ user_id: caller.user.id, action: 'job-email' });
+  if (!isStaff && job.created_by === caller.user.id) await admin.from('ai_usage').insert({ user_id: caller.user.id, action: 'job-email' });
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
   const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>';

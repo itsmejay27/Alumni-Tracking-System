@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail } from 'lucide-react';
+import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail, CheckCircle2, XCircle, Hourglass } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -26,6 +26,10 @@ interface JobPosting {
   createdBy: string | null;
   program: string | null;
   createdAt: string;
+  // Jobs from anyone but Alumni Affairs wait for approval before they go live
+  status: 'pending' | 'approved' | 'rejected';
+  emailAudience: 'everyone' | 'department' | null;
+  reviewNote: string | null;
 }
 
 interface JobBoardProps {
@@ -55,7 +59,9 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   }, [userId, userRole]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const isAdmin = userRole.startsWith('admin');
+  // Only Alumni Affairs approves jobs and can remove anyone's post
+  const isAffairs = userRole === 'admin';
+  const [view, setView] = useState<'live' | 'review'>('live');
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -82,6 +88,10 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           createdBy: j.created_by,
           program: j.program,
           createdAt: j.created_at,
+          // Before the approval update is installed every job counts as approved
+          status: j.status || 'approved',
+          emailAudience: j.email_audience || null,
+          reviewNote: j.review_note || null,
         }))
       );
     }
@@ -93,7 +103,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
   }, [load]);
 
   const handleDelete = async (id: string) => {
-    if (!(await confirmDialog({ title: t('Remove this job posting?'), confirmLabel: t('Remove'), danger: true }))) return;
+    if (!(await confirmDialog({ title: t('Remove this job posting?'), message: t('It will be removed for everyone.'), confirmLabel: t('Remove'), danger: true }))) return;
     const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
     if (error || !data?.length) {
       toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
@@ -102,7 +112,50 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
     setJobs((list) => list.filter((j) => j.id !== id));
   };
 
-  const typeFiltered = filterType === 'all' ? jobs : jobs.filter((job) => job.type === filterType);
+  const handleApprove = async (job: JobPosting) => {
+    const { data, error } = await supabase
+      .from('jobs')
+      .update({ status: 'approved', reviewed_by: userId, reviewed_at: new Date().toISOString(), review_note: null })
+      .eq('id', job.id)
+      .select('id');
+    if (error || !data?.length) {
+      toast.error(error ? `Could not approve: ${error.message}` : t('Could not approve this job.'));
+      return;
+    }
+    // Send the email the poster asked for, now that the job is live
+    if (job.emailAudience) {
+      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-job', {
+        body: { jobId: job.id, audience: job.emailAudience },
+      });
+      if (mailError) toast.warning(t('Job approved, but the email could not be sent.'));
+      else toast.success(t('Job approved and emailed to {n} people.', { n: mail?.sent ?? 0 }));
+    } else {
+      toast.success(t('Job approved. It is now on the Job Board.'));
+    }
+    load();
+  };
+
+  const handleReject = async (job: JobPosting) => {
+    if (!(await confirmDialog({ title: t('Reject this job?'), message: t('It will not appear on the Job Board. The poster will see it was not approved and can remove it.'), confirmLabel: t('Reject'), danger: true }))) return;
+    const { error } = await supabase
+      .from('jobs')
+      .update({ status: 'rejected', reviewed_by: userId, reviewed_at: new Date().toISOString() })
+      .eq('id', job.id);
+    if (error) {
+      toast.error(`Could not reject: ${error.message}`);
+      return;
+    }
+    toast.success(t('Job rejected.'));
+    load();
+  };
+
+  const liveJobs = jobs.filter((j) => j.status === 'approved');
+  const pendingJobs = jobs.filter((j) => j.status === 'pending');
+  // A poster's own jobs that are waiting or were not approved
+  const mySubmissions = jobs.filter((j) => j.status !== 'approved' && j.createdBy === userId);
+
+  const shown = isAffairs && view === 'review' ? pendingJobs : liveJobs;
+  const typeFiltered = filterType === 'all' ? shown : shown.filter((job) => job.type === filterType);
   const matchScore = (j: JobPosting) => (myProgram && j.program === myProgram ? 2 : j.program ? 0 : 1);
   const filteredJobs = [...typeFiltered].sort((a, b) =>
     sortBy === 'match' && myProgram
@@ -166,11 +219,68 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       {showPostForm && (
         <JobPostingForm
           posterName={posterName}
+          needsApproval={!isAffairs}
           defaultProgram={courseScopeForRole(userRole) || myProgram || ''}
           initial={postPrefill}
           onClose={() => { setShowPostForm(false); setPostPrefill(undefined); }}
           onPosted={() => { setShowPostForm(false); setPostPrefill(undefined); load(); }}
         />
+      )}
+
+      {/* Alumni Affairs: switch between live jobs and jobs waiting for approval */}
+      {isAffairs && (
+        <div className="flex gap-2">
+          {(
+            [
+              ['live', t('Live jobs'), liveJobs.length],
+              ['review', t('Waiting for approval'), pendingJobs.length],
+            ] as const
+          ).map(([value, label, count]) => (
+            <button
+              key={value}
+              onClick={() => setView(value)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                view === value ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'
+              }`}
+            >
+              {label}
+              <span
+                className={`min-w-6 px-1.5 py-0.5 rounded-full text-xs ${
+                  value === 'review' && count > 0 ? 'bg-[#f5c400] text-[#002060]' : 'bg-muted text-muted-foreground'
+                } ${view === value && value === 'live' ? 'bg-white/20 text-white' : ''}`}
+              >
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Everyone else: their own posts that are waiting or were not approved */}
+      {!isAffairs && mySubmissions.length > 0 && (
+        <div className="bg-card rounded-2xl shadow-sm p-4 space-y-2">
+          <p className="text-sm font-semibold">{t('Your posts waiting for approval')}</p>
+          {mySubmissions.map((job) => (
+            <div key={job.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-sm truncate">{job.title}</p>
+                <p className="text-xs text-muted-foreground truncate">{job.company}</p>
+              </div>
+              {job.status === 'pending' ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-amber-500/10 text-amber-600">
+                  <Hourglass size={12} /> {t('Waiting for Alumni Affairs')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-red-500/10 text-red-600">
+                  <XCircle size={12} /> {t('Not approved')}
+                </span>
+              )}
+              <button onClick={() => handleDelete(job.id)} className="flex items-center gap-1 text-xs text-destructive hover:underline">
+                <Trash2 size={13} /> {t('Remove')}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Filter */}
@@ -235,8 +345,9 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           <JobCard
             key={job.id}
             job={job}
-            canDelete={isAdmin || job.createdBy === userId}
+            canDelete={isAffairs || job.createdBy === userId}
             onDelete={() => handleDelete(job.id)}
+            review={job.status === 'pending' && isAffairs ? { onApprove: () => handleApprove(job), onReject: () => handleReject(job) } : undefined}
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
@@ -244,8 +355,10 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
-            <p className="font-medium">{t('No job postings yet')}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t('Be the first to share an opportunity with fellow alumni.')}</p>
+            <p className="font-medium">{isAffairs && view === 'review' ? t('No jobs waiting for approval') : t('No job postings yet')}</p>
+            {!(isAffairs && view === 'review') && (
+              <p className="text-sm text-muted-foreground mt-1">{t('Be the first to share an opportunity with fellow alumni.')}</p>
+            )}
           </div>
         )}
       </div>
@@ -269,7 +382,19 @@ const jobToText = (j: JobPosting) =>
     `Contact: ${j.contactEmail}`,
   ].join('\n');
 
-function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; canDelete: boolean; onDelete: () => void; onExplain?: () => void }) {
+function JobCard({
+  job,
+  canDelete,
+  onDelete,
+  onExplain,
+  review,
+}: {
+  job: JobPosting;
+  canDelete: boolean;
+  onDelete: () => void;
+  onExplain?: () => void;
+  review?: { onApprove: () => void; onReject: () => void };
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
 
@@ -291,6 +416,24 @@ function JobCard({ job, canDelete, onDelete, onExplain }: { job: JobPosting; can
       )}
 
       <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{job.description}</p>
+
+      {review && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 rounded-xl bg-amber-500/10 px-3 py-2.5">
+          <span className="text-xs font-medium text-amber-700 flex-1 min-w-40">
+            {job.emailAudience
+              ? job.emailAudience === 'department' && job.program
+                ? t('Will be emailed to the {program} department when approved.', { program: job.program })
+                : t('Will be emailed to everyone when approved.')
+              : t('No email requested.')}
+          </span>
+          <button onClick={review.onReject} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-500/10">
+            <XCircle size={15} /> {t('Reject')}
+          </button>
+          <button onClick={review.onApprove} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
+            <CheckCircle2 size={15} /> {t('Approve')}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
@@ -490,12 +633,14 @@ export interface JobFormData {
 
 function JobPostingForm({
   posterName,
+  needsApproval,
   defaultProgram,
   initial,
   onClose,
   onPosted,
 }: {
   posterName: string;
+  needsApproval: boolean;
   defaultProgram: string;
   initial?: Partial<JobFormData>;
   onClose: () => void;
@@ -525,7 +670,8 @@ function JobPostingForm({
     e.preventDefault();
     setSubmitting(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { data: created, error } = await supabase.from('jobs').insert({
+    const emailAudience = emailAlumni ? (formData.program ? audience : 'everyone') : null;
+    const row = {
       title: formData.title.trim(),
       company: formData.company.trim(),
       location: formData.location.trim(),
@@ -537,15 +683,27 @@ function JobPostingForm({
       posted_by: posterName,
       program: formData.program || null,
       created_by: user?.id,
-    }).select('id').single();
+    };
+    let { data: created, error } = await supabase
+      .from('jobs')
+      .insert({ ...row, email_audience: emailAudience })
+      .select('id, status')
+      .single();
+    // Database without the approval update yet: post the old way
+    if (error && /email_audience|status/.test(error.message)) {
+      ({ data: created, error } = await supabase.from('jobs').insert(row).select('id').single() as any);
+    }
     if (error) {
       setSubmitting(false);
       toast.error(`Could not post job: ${error.message}`);
       return;
     }
-    if (emailAlumni && created) {
+    const live = !created?.status || created.status === 'approved';
+    if (!live) {
+      toast.success(t('Sent to Alumni Affairs for approval. It will appear on the Job Board once approved.'));
+    } else if (emailAudience && created) {
       const { data: mail, error: mailError } = await supabase.functions.invoke('notify-job', {
-        body: { jobId: created.id, audience: formData.program ? audience : 'everyone' },
+        body: { jobId: created.id, audience: emailAudience },
       });
       if (mailError) {
         let message = 'Job posted, but the email could not be sent.';
@@ -584,6 +742,11 @@ function JobPostingForm({
           <p className="text-xs text-muted-foreground mt-0.5">
             {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : t('Fields marked * are required.')}
           </p>
+          {needsApproval && (
+            <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-700 px-2.5 py-1.5">
+              <Hourglass size={13} /> {t('Alumni Affairs reviews every job before it goes live. Any email is sent after approval.')}
+            </p>
+          )}
         </div>
         <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
           <X size={18} />
