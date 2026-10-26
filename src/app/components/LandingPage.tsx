@@ -20,6 +20,7 @@ import {
   Lock,
   GraduationCap,
   Building2,
+  Flag,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { PROGRAMS } from '@/lib/programs';
@@ -250,10 +251,10 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="max-w-2xl mb-10">
           <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">About OMSU</p>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">Vision, Mission and Core Values</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">Vision, Mission, Goals and Core Values</h2>
           <p className="text-lg text-slate-700 mt-3">
-            Occidental Mindoro State University became a state university under Republic Act No. 11587 in 2021, serving the province
-            through instruction, research, extension and production.
+            Formerly Occidental Mindoro State College, OMSU was converted into a state university under Republic Act No. 11587 and
+            serves the province through instruction, research, extension and production.
           </p>
         </div>
         <div className="grid md:grid-cols-2 gap-5">
@@ -272,10 +273,27 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
             <p className="text-[15px] leading-relaxed text-slate-700 whitespace-pre-line">{about.mission}</p>
           </div>
         </div>
+        {about.goals.length > 0 && (
+          <div className="mt-5 rounded-2xl bg-white ring-1 ring-[#002060]/15 p-7 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-xl bg-[#f5c400] text-[#002060] flex items-center justify-center"><Flag size={20} /></span>
+              <h3 className="text-xl font-bold text-[#002060]">Goals and Objectives</h3>
+            </div>
+            <ol className="grid md:grid-cols-2 gap-x-8 gap-y-3">
+              {about.goals.map((g, i) => (
+                <li key={i} className="flex gap-3 text-[15px] text-slate-700 leading-relaxed">
+                  <span className="w-6 h-6 mt-0.5 rounded-full bg-[#eef2fa] text-[#002060] text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                  {g}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         {about.coreValues.length > 0 && (
           <div className="mt-8">
             <h3 className="flex items-center gap-2 text-lg font-bold text-[#002060] mb-4">
               <Heart size={18} className="text-[#b38f00]" /> Core Values
+              <span className="text-sm font-semibold text-slate-500">· {about.coreValues.map((v) => v.title.charAt(0)).join('')}</span>
             </h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {about.coreValues.map((v) => (

@@ -20,14 +20,14 @@ export function AboutEditor() {
   }, [info]);
 
   const save = async () => {
-    const cleaned = { ...draft, coreValues: draft.coreValues.filter((v) => v.title.trim()) };
+    const cleaned = { ...draft, goals: draft.goals.map((g) => g.trim()).filter(Boolean), coreValues: draft.coreValues.filter((v) => v.title.trim()) };
     setSaving(true);
     try {
       await saveAboutInfo(cleaned);
       setCurrent(cleaned);
       setDraft(cleaned);
       setEditing(false);
-      toast.success('Vision, Mission and Core Values updated');
+      toast.success('Vision, Mission, Goals and Core Values updated');
     } catch (err: any) {
       toast.error(`Could not save: ${err.message}`);
     }
@@ -41,7 +41,7 @@ export function AboutEditor() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4">
         <div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground">Vision, Mission and Core Values</h3>
+          <h3 className="text-xl font-bold tracking-tight text-foreground">Vision, Mission, Goals and Core Values</h3>
           <p className="text-muted-foreground mt-1 text-sm">Shown in the About OMSU section of the landing page.</p>
         </div>
         {!editing && (
@@ -64,12 +64,21 @@ export function AboutEditor() {
             <span className="text-sm font-medium">Mission</span>
             <textarea rows={4} value={draft.mission} onChange={(e) => setDraft({ ...draft, mission: e.target.value })} className={field} />
           </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium">Goals and Objectives (one per line)</span>
+            <textarea
+              rows={7}
+              value={draft.goals.join('\n')}
+              onChange={(e) => setDraft({ ...draft, goals: e.target.value.split('\n') })}
+              className={field}
+            />
+          </label>
           <div className="space-y-2">
             <span className="text-sm font-medium">Core Values</span>
             {draft.coreValues.map((v, i) => (
               <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
                 <input placeholder="Value" value={v.title} onChange={(e) => setValue(i, 'title', e.target.value)} className={field} />
-                <input placeholder="Short description (optional)" value={v.text} onChange={(e) => setValue(i, 'text', e.target.value)} className={field} />
+                <textarea rows={2} placeholder="Description (optional)" value={v.text} onChange={(e) => setValue(i, 'text', e.target.value)} className={field} />
                 <button
                   onClick={() => setDraft({ ...draft, coreValues: draft.coreValues.filter((_, j) => j !== i) })}
                   aria-label="Remove value"
@@ -114,6 +123,12 @@ export function AboutEditor() {
           <div className="bg-card rounded-2xl p-6 shadow-sm space-y-2">
             <p className="flex items-center gap-2 font-semibold"><Target size={16} className="text-primary" /> Mission</p>
             <p className="text-sm text-muted-foreground whitespace-pre-line">{current.mission}</p>
+          </div>
+          <div className="bg-card rounded-2xl p-6 shadow-sm space-y-2 md:col-span-2">
+            <p className="font-semibold">Goals and Objectives</p>
+            <ol className="list-decimal pl-5 text-sm text-muted-foreground space-y-1">
+              {current.goals.map((g, i) => <li key={i}>{g}</li>)}
+            </ol>
           </div>
           <div className="bg-card rounded-2xl p-6 shadow-sm space-y-2 md:col-span-2">
             <p className="flex items-center gap-2 font-semibold"><Heart size={16} className="text-primary" /> Core Values</p>

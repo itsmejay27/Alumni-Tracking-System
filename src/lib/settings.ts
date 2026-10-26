@@ -52,23 +52,53 @@ export interface CoreValue {
 export interface AboutInfo {
   vision: string;
   mission: string;
+  goals: string[];
   coreValues: CoreValue[];
 }
 
-// Starter text from OMSC/OMSU materials. Alumni Affairs can replace it with the official wording.
+// Official OMSU VMGO (omsu.edu.ph, last updated May 11, 2026). Alumni Affairs can edit it in Contact Info.
 export const DEFAULT_ABOUT: AboutInfo = {
-  vision:
-    'A premier higher education institution that develops globally competitive, locally responsive, innovative professionals and life-long learners.',
+  vision: 'A locally and globally recognized leading institution of higher learning.',
   mission:
-    'Occidental Mindoro State University produces intellectual and human capital by developing excellent graduates through outcomes-based instruction, research, advisory services, community engagement, and sustainable production.',
+    'To provide quality instruction, research, extension, and production services that transform lives and empower communities in the Southern Tagalog.',
+  goals: [
+    'To continually increase access to quality education;',
+    'To ensure a high completion rate of students admitted in respective programs;',
+    'To improve the adequacy of facilities and infrastructure that is in line with specified regulations and requirements;',
+    'To progressively increase internal research funding and dissemination of research findings that positively impact communities;',
+    'To improve recruitment of qualified staff and continuously enhance their skills, expertise, and competency;',
+    'To attain student satisfaction; and',
+    'To achieve set of performance targets.',
+  ],
   coreValues: [
-    { title: 'Obedience to God', text: 'Upholding ethical and moral standards in all we do.' },
-    { title: 'Mindfulness', text: 'Being present, aware and considerate of others.' },
-    { title: 'Service-Oriented', text: 'Serving students and communities with excellence.' },
-    { title: 'Commitment', text: 'Dedication to the mission and goals of the University.' },
-    { title: 'Integrity & Ingenuity', text: 'Honest work and creative solutions to real problems.' },
-    { title: 'Accountability', text: 'Taking responsibility for our actions and results.' },
-    { title: 'Nationalism', text: 'Pride in, and responsibility towards, the country.' },
+    {
+      title: 'Obedience to God',
+      text: "The OMSCIANs, though with different religious orientations, believe in God and adhere to His teachings and commandments. They carry out their responsibilities with enthusiasm for they see God's presence in every person they serve and meet.",
+    },
+    {
+      title: 'Mindfulness',
+      text: 'The OMSCIANs are gender sensitive, fully aware and responsible of their actions, attentive to the needs of their clientele and thoughtful towards others.',
+    },
+    {
+      title: 'Service-Orientedness',
+      text: 'The OMSCIANs provide services that meet and satisfy the expectations and need of their clientele even before those needs are articulated. They make themselves available to others and endure that the services they offer are continuously improved in order to achieve quality and customer satisfaction.',
+    },
+    {
+      title: 'Commitment',
+      text: "The OMSCIANs are committed to the attainment of the Institution's vision and mission. They have established a resilient bond with the institution and they work not because of monetary compensation or any extrinsic reward but rather spurred intrinsically with love and sensitivity to one's responsibility.",
+    },
+    {
+      title: 'Integrity and Ingenuity',
+      text: 'The OMSCIANs embrace the value of integrity and ingenuity. They adhere to moral an ethical principle. They are trustworthy, reliable and with unquestionable moral integrity who set aside their personal interests and prioritize the welfare of the people they serve. They think and act as one in dealing with decision and collectively take advantage of opportunities and thereby overcome problems.',
+    },
+    {
+      title: 'Accountability',
+      text: 'The OMSCIANs acknowledge and assume responsibility for their actions and decisions in the implementation within the scope of their role or position encompassing all sectors of the institutions and be answerable for resulting consequences.',
+    },
+    {
+      title: 'Nationalism',
+      text: 'The OMSCIANs are devoted not only for the interest of the Filipino people but for the interest of the academic community to achieve greater height of progress and development in promoting national consciousness and interest.',
+    },
   ],
 };
 
