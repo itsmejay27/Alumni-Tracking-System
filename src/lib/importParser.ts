@@ -99,6 +99,14 @@ function toStatus(v: string): ParsedRow['status'] {
   return 'Not Tracked';
 }
 
+/** Keeps digits only and restores the leading 0 Excel drops from mobile numbers (9171234567 -> 09171234567). */
+const toPhone = (v: string) => {
+  const d = v.replace(/\.0$/, '').replace(/\D/g, '');
+  if (/^9\d{9}$/.test(d)) return `0${d}`;
+  if (/^639\d{9}$/.test(d)) return `0${d.slice(2)}`;
+  return d;
+};
+
 const toYear = (v: string) => {
   const years = v.match(/(19|20)\d{2}/g);
   return years ? Number(years[years.length - 1]) : 0;
@@ -222,7 +230,7 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       sex: /^f/i.test(sexText) ? 'Female' : /^m/i.test(sexText) ? 'Male' : currentSex,
       dateOfBirth: get(r, 'dateOfBirth').slice(0, 10),
       civilStatus: get(r, 'civilStatus') || 'Single',
-      mobileNo: get(r, 'mobileNo').replace(/\.0$/, ''),
+      mobileNo: toPhone(get(r, 'mobileNo')),
       presentAddress: get(r, 'presentAddress'),
       status: toStatus(get(r, 'status')),
       position: get(r, 'position'),
@@ -233,9 +241,9 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       isIP: ip.startsWith('y') || ip === 'true',
       suggestions: get(r, 'suggestions'),
       fatherName: get(r, 'fatherName').toUpperCase(),
-      fatherContact: get(r, 'fatherContact').replace(/\.0$/, ''),
+      fatherContact: toPhone(get(r, 'fatherContact')),
       motherName: get(r, 'motherName').toUpperCase(),
-      motherContact: get(r, 'motherContact').replace(/\.0$/, ''),
+      motherContact: toPhone(get(r, 'motherContact')),
     });
   }
 

@@ -457,7 +457,7 @@ export default function App() {
               {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'contact' && <ContactView />}
-              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>
           )}
         </main>

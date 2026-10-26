@@ -4,7 +4,6 @@ import {
   Briefcase,
   GraduationCap,
   Save,
-  ImageIcon,
   Trash2,
   Plus,
   ChevronLeft,
@@ -14,13 +13,16 @@ import {
   CheckCircle2,
   X,
   ChevronDown,
+  Camera,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { CurrentUser } from '../App';
 import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
-import { PROGRAMS, EMPLOYMENT_STATUSES, JOB_LEVELS, EMPLOYER_TYPES, JOB_LEVEL_HELP } from '@/lib/programs';
+import { PROGRAMS, EMPLOYMENT_STATUSES, JOB_LEVELS, EMPLOYER_TYPES, JOB_LEVEL_HELP, programName } from '@/lib/programs';
 import { LoadingState } from './DataState';
+import { PhoneInput, isValidMobile } from './PhoneInput';
 
 interface AlumniProfileProps {
   currentUser: CurrentUser | null;
@@ -30,6 +32,8 @@ interface AlumniProfileProps {
 const THIS_YEAR = new Date().getFullYear();
 const GRAD_YEARS = Array.from({ length: THIS_YEAR - 1999 }, (_, i) => THIS_YEAR - i);
 const PAGE_SIZE = 5;
+// Graduates are at least 15 years old
+const MAX_BIRTH_DATE = `${THIS_YEAR - 15}-12-31`;
 
 const input =
   'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm disabled:opacity-70 disabled:cursor-not-allowed';
@@ -174,6 +178,22 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     e.preventDefault();
     if (!currentUser) return;
 
+    if (!isValidMobile(mobileNo)) {
+      toast.error('Enter an 11-digit mobile number starting with 09');
+      return;
+    }
+    for (const [label, v] of [["Father's", fatherContact], ["Mother's", motherContact]] as const) {
+      if (v && !isValidMobile(v)) {
+        toast.error(`${label} contact number must be 11 digits starting with 09`);
+        return;
+      }
+    }
+    const age = ageFrom(dateOfBirth);
+    if (age == null || age < 15) {
+      toast.error('Please enter your correct date of birth');
+      return;
+    }
+
     const hasCurrentJob = history.some((h) => !h.endDate);
     if (status !== 'Unemployed' && !hasCurrentJob) {
       toast.error('Add your current job under Employment History, or set your status to Unemployed');
@@ -258,12 +278,69 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
   if (loading) return <LoadingState label="Loading your profile..." />;
 
+  const checks = [
+    !!givenName.trim() && !!lastName.trim(),
+    isValidMobile(mobileNo),
+    (ageFrom(dateOfBirth) ?? 0) >= 15,
+    !!presentAddress.trim(),
+    !!permanentAddress.trim(),
+    !!fatherName.trim() || !!motherName.trim(),
+    status === 'Unemployed' || currentJobs.length > 0,
+    !!avatarUrl,
+  ];
+  const completion = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  const initials = `${givenName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'OM';
+  const displayName = `${givenName} ${middleName ? middleName[0] + '. ' : ''}${lastName}`.trim();
+
   return (
     <div className="w-full space-y-6 pb-12 animate-in fade-in duration-300">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">My Alumni Profile</h2>
-        <p className="text-muted-foreground text-sm mt-1">Keep your details and employment history up to date for the OMSU graduate tracer study.</p>
-      </div>
+      {/* Profile header */}
+      <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white">
+        <div
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
+        />
+        <div className="relative flex flex-col md:flex-row md:items-center gap-6 p-6 sm:p-8">
+          <label className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden shrink-0 cursor-pointer self-center md:self-auto" title="Change photo">
+            <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center text-3xl font-black text-[#f5c400]">{initials}</span>
+            )}
+            <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera size={22} />
+            </span>
+          </label>
+          <div className="flex-1 min-w-0 text-center md:text-left space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#f5c400]">My Alumni Profile</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold truncate">{displayName || 'Your name'}</h2>
+            <p className="text-white/80 text-sm">
+              {programName(course)} · Class of {yearGraduated}
+              {record?.studentId && ` · ID ${record.studentId}`}
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center md:justify-start pt-2">
+              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{status}</span>
+              {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">Updated {record.lastUpdated}</span>}
+              {avatarUrl && (
+                <button type="button" onClick={() => setAvatarUrl('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">
+                  <Trash2 size={12} /> Remove photo
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="md:w-56 shrink-0 rounded-xl bg-white/10 p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-white/80">Profile complete</span>
+              <span className="text-xl font-extrabold">{completion}%</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden">
+              <div className="h-full rounded-full bg-[#f5c400] transition-all duration-500" style={{ width: `${completion}%` }} />
+            </div>
+            <p className="text-[11px] text-white/70 mt-2">{completion === 100 ? 'All set. Thank you!' : 'Fill in the remaining details below.'}</p>
+          </div>
+        </div>
+      </section>
 
       {saved && (
         <div className="bg-emerald-50 rounded-2xl px-5 py-4 flex items-center gap-3">
@@ -275,30 +352,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* PERSONAL */}
         <Section icon={<User size={18} />} title="Personal information">
-          <div className="flex flex-col sm:flex-row items-center gap-5">
-            <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
-              {avatarUrl ? <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" /> : <ImageIcon className="text-muted-foreground/60" size={30} />}
-            </div>
-            <div className="space-y-2 text-center sm:text-left">
-              <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary text-sm font-semibold cursor-pointer hover:bg-primary/15">
-                  <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
-                  {avatarUrl ? 'Change photo' : 'Upload photo'}
-                </label>
-                {avatarUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setAvatarUrl('')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 size={15} /> Remove photo
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">PNG or JPG, up to 2 MB. Removing it deletes it from your record when you save.</p>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} /></Field>
             <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} /></Field>
@@ -307,7 +360,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Email"><input readOnly value={currentUser?.email || ''} className={`${input} bg-muted text-muted-foreground`} /></Field>
-            <Field label="Mobile number *"><input required value={mobileNo} onChange={(e) => setMobileNo(e.target.value)} className={input} placeholder="09XXXXXXXXX" /></Field>
+            <Field label="Mobile number *"><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
             <Field label="Facebook name"><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
           </div>
 
@@ -318,7 +371,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <option>Male</option>
               </select>
             </Field>
-            <Field label={`Date of birth *${ageFrom(dateOfBirth) != null ? ` · Age ${ageFrom(dateOfBirth)}` : ''}`}><input type="date" required value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} /></Field>
+            <Field label={`Date of birth *${(ageFrom(dateOfBirth) ?? 0) >= 15 ? ` · Age ${ageFrom(dateOfBirth)}` : ''}`}>
+              <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
+            </Field>
             <Field label="Civil status *">
               <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
                 <option>Single</option>
@@ -334,43 +389,16 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
           </div>
 
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground pt-2 border-t border-border/60">
+            <Users size={15} /> Parents
+          </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder="Full name" /></Field>
-            <Field label="Father's contact number"><input value={fatherContact} onChange={(e) => setFatherContact(e.target.value)} className={input} placeholder="09XXXXXXXXX" inputMode="tel" /></Field>
+            <Field label="Father's contact number"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
             <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder="Full maiden name" /></Field>
-            <Field label="Mother's contact number"><input value={motherContact} onChange={(e) => setMotherContact(e.target.value)} className={input} placeholder="09XXXXXXXXX" inputMode="tel" /></Field>
+            <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
           </div>
 
-          <div className="rounded-xl bg-muted/50 p-4 space-y-3">
-            <p className="text-sm font-medium">Are you a member of an Indigenous Peoples (IP) group?</p>
-            <div className="flex gap-5 text-sm">
-              <label className="flex items-center gap-2"><input type="radio" checked={!isIP} onChange={() => setIsIP(false)} /> No</label>
-              <label className="flex items-center gap-2"><input type="radio" checked={isIP} onChange={() => setIsIP(true)} /> Yes</label>
-            </div>
-            {isIP && (
-              <input value={ipGroup} onChange={(e) => setIpGroup(e.target.value)} placeholder="IP group (e.g. Mangyan – Iraya)" className={input} />
-            )}
-          </div>
-        </Section>
-
-        {/* EDUCATION */}
-        <Section icon={<GraduationCap size={18} />} title="Education">
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4">
-            <Field label="Program *">
-              <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
-                {PROGRAMS.map((p) => (
-                  <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Year graduated *">
-              <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
-                {GRAD_YEARS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
         </Section>
 
         {/* EMPLOYMENT (collapsed to a one-line summary until opened) */}
@@ -517,10 +545,13 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           />
         </Section>
 
-        <div className="flex justify-end">
-          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold disabled:opacity-60">
-            <Save size={18} /> {saving ? 'Saving...' : 'Save profile'}
-          </button>
+        <div className="sticky bottom-3 z-20">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-card/95 backdrop-blur shadow-lg ring-1 ring-border px-4 sm:px-5 py-3">
+            <p className="text-xs sm:text-sm text-muted-foreground">Changes are saved to your tracer record when you click Save.</p>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60 shrink-0">
+              <Save size={16} /> {saving ? 'Saving...' : 'Save profile'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

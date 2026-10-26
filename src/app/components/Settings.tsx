@@ -1,516 +1,318 @@
 import React, { useState, useRef } from 'react';
-import { ShieldAlert, Key, Eye, EyeOff, Save, User, Mail, Phone, MapPin, Calendar, HelpCircle, Check, Camera } from 'lucide-react';
+import { ShieldCheck, KeyRound, Save, User, Mail, Camera, Trash2, ArrowRight, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase, passwordUpdateError } from '@/lib/supabase';
 import { PasswordStrength } from './PasswordStrength';
-import { passwordStrength } from '@/lib/programs';
+import { passwordStrength, roleLabel } from '@/lib/programs';
+import { PhoneInput, isValidMobile } from './PhoneInput';
+import { RevealButton } from './RevealButton';
 
 interface SettingsProps {
   currentUser: CurrentUser | null;
   onUpdateProfile: (updated: CurrentUser) => Promise<void> | void;
+  /** Alumni keep their full personal details in My Alumni Profile */
+  onOpenProfile?: () => void;
 }
 
-export function Settings({ currentUser, onUpdateProfile }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
-  
-  // Security form state
+type Tab = 'account' | 'password';
+
+const input =
+  'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm';
+
+export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: SettingsProps) {
+  const [tab, setTab] = useState<Tab>('account');
+
+  // Account
+  const [givenName, setGivenName] = useState(currentUser?.givenName || '');
+  const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
+  const [lastName, setLastName] = useState(currentUser?.lastName || '');
+  const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
+  const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Password
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [show, setShow] = useState({ current: false, next: false, confirm: false });
+  const [savingPassword, setSavingPassword] = useState(false);
 
-  // Profile form state (initialized from currentUser prop)
-  const [givenName, setGivenName] = useState(currentUser?.givenName || '');
-  const [lastName, setLastName] = useState(currentUser?.lastName || '');
-  const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
-  const [email] = useState(currentUser?.email || '');
-  const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
-  const [presentAddress, setPresentAddress] = useState(currentUser?.presentAddress || '');
-  const [permanentAddress, setPermanentAddress] = useState(currentUser?.permanentAddress || '');
-  const [sex, setSex] = useState<'Male' | 'Female'>(currentUser?.sex || 'Male');
-  const [civilStatus, setCivilStatus] = useState<'Single' | 'Married' | 'Separated' | 'Widowed'>(currentUser?.civilStatus || 'Single');
-  const [dateOfBirth, setDateOfBirth] = useState(currentUser?.dateOfBirth || '');
-  const [facebookName, setFacebookName] = useState(currentUser?.facebookName || '');
-  const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const isAlumni = currentUser?.role === 'alumni';
+  const initials = `${givenName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'OM';
+  const displayName = `${givenName} ${lastName}`.trim();
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be 2 MB or smaller.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => setAvatarUrl(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (newPassword.length < 8) {
-      toast.error('New password must be at least 8 characters long.');
+    if (!currentUser) return;
+    if (!givenName.trim() || !lastName.trim()) {
+      toast.error('First and last name are required.');
       return;
     }
-
-    if (passwordStrength(newPassword).label === 'Weak') {
-      toast.error('Please choose a stronger password.');
+    if (mobileNo && !isValidMobile(mobileNo)) {
+      toast.error('Enter an 11-digit mobile number starting with 09');
       return;
     }
+    setSavingProfile(true);
+    try {
+      await onUpdateProfile({
+        ...currentUser,
+        givenName: givenName.trim().toUpperCase(),
+        middleName: middleName.trim().toUpperCase(),
+        lastName: lastName.trim().toUpperCase(),
+        mobileNo,
+        avatarUrl,
+      });
+      toast.success('Your account details have been saved.');
+    } catch (err: any) {
+      toast.error(`Could not save: ${err.message}`);
+    }
+    setSavingProfile(false);
+  };
 
+  const savePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8 || passwordStrength(newPassword).label === 'Weak') {
+      toast.error('Please choose a stronger password (at least 8 characters).');
+      return;
+    }
     if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match. Please verify.');
+      toast.error('New passwords do not match.');
       return;
     }
-
+    setSavingPassword(true);
     // Confirm the current password before changing it
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: currentUser?.email || '',
       password: currentPassword,
     });
     if (signInError) {
+      setSavingPassword(false);
       toast.error('Current password is incorrect.');
       return;
     }
-
     const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setSavingPassword(false);
     if (error) {
       toast.error(await passwordUpdateError(error));
       return;
     }
-
     toast.success('Your password has been changed.');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('Image must be 2 MB or smaller.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setAvatarUrl(base64);
-        toast.info('Profile picture draft uploaded! Click "Save Changes" to apply.');
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!givenName.trim() || !lastName.trim()) {
-      toast.error('First and Last names are strictly required.');
-      return;
-    }
-
-    setIsSavingProfile(true);
-
-    if (!currentUser) {
-      toast.error('No active session found.');
-      setIsSavingProfile(false);
-      return;
-    }
-
-    const updated: CurrentUser = {
-      ...currentUser,
-      givenName: givenName.trim().toUpperCase(),
-      lastName: lastName.trim().toUpperCase(),
-      middleName: middleName.trim().toUpperCase(),
-      mobileNo: mobileNo.trim(),
-      presentAddress: presentAddress.trim(),
-      permanentAddress: permanentAddress.trim(),
-      sex,
-      civilStatus,
-      dateOfBirth,
-      facebookName: facebookName.trim(),
-      avatarUrl,
-    };
-    try {
-      await onUpdateProfile(updated);
-      toast.success('Your profile details have been saved.');
-    } catch (err: any) {
-      toast.error(`Could not save profile: ${err.message}`);
-    }
-    setIsSavingProfile(false);
-  };
-
-  const selectPredefinedAvatar = (avatarHex: string) => {
-    // Generate a beautiful svg or canvas initials avatar
-    setAvatarUrl(avatarHex);
-    toast.info('Initial avatar selected! Click "Save Changes" to save.');
-  };
+  const navItem = (id: Tab, icon: React.ReactNode, label: string, sub: string) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+        tab === id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'
+      }`}
+    >
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tab === id ? 'bg-white/15' : 'bg-primary/10 text-primary'}`}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className={`block text-xs truncate ${tab === id ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>{sub}</span>
+      </span>
+    </button>
+  );
 
   return (
-    <div className="w-full py-2 space-y-6 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Account Settings</h2>
-        <p className="text-muted-foreground mt-1">Your profile details and password</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Settings</h2>
+        <p className="text-muted-foreground text-sm mt-1">Manage your account and sign-in security</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-border pb-px">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`px-5 py-3 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'profile'
-              ? 'border-primary text-primary bg-primary/5 rounded-t-lg'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <User size={16} />
-          Profile Details
-        </button>
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`px-5 py-3 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'security'
-              ? 'border-primary text-primary bg-primary/5 rounded-t-lg'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Key size={16} />
-          Account Security
-        </button>
-      </div>
-
-      {activeTab === 'profile' ? (
-        <div className="bg-card rounded-2xl p-6 shadow-sm space-y-6">
-          <div className="flex items-center gap-3 border-b border-border pb-3">
-            <User className="text-primary" size={20} />
-            <h3 className="font-bold text-lg text-foreground">Edit Profile Information</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
+        {/* Left: who you are + section menu */}
+        <aside className="bg-card rounded-2xl shadow-sm p-5 space-y-5 lg:sticky lg:top-4">
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className="w-20 h-20 rounded-full bg-primary/10 text-primary overflow-hidden flex items-center justify-center text-2xl font-black">
+              {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
+            </div>
+            <div className="min-w-0 w-full">
+              <p className="font-bold truncate">{displayName || 'Your name'}</p>
+              <p className="text-xs text-muted-foreground truncate">{currentUser?.email}</p>
+              <span className="inline-block mt-2 rounded-full bg-primary/10 text-primary text-xs font-semibold px-2.5 py-0.5">
+                {roleLabel(currentUser?.role || '')}
+              </span>
+            </div>
           </div>
+          <nav className="space-y-1.5">
+            {navItem('account', <User size={16} />, 'Account', 'Name, photo and mobile')}
+            {navItem('password', <KeyRound size={16} />, 'Password', 'Change your password')}
+          </nav>
+        </aside>
 
-          <form onSubmit={handleProfileSubmit} className="space-y-6">
-            {/* Avatar Section */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">Profile Picture</label>
-              <div className="flex flex-col sm:flex-row items-center gap-6 p-4 bg-muted/20 border border-border rounded-xl">
-                <div className="relative w-24 h-24 bg-card border-2 border-border rounded-xl flex items-center justify-center overflow-hidden shrink-0 shadow-sm group">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Profile Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-primary/10 text-primary font-black text-2xl flex items-center justify-center uppercase">
-                      {(givenName[0] || '') + (lastName[0] || '') || 'OM'}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200"
-                  >
-                    <Camera size={18} />
+        {/* Right: the selected section */}
+        {tab === 'account' ? (
+          <form onSubmit={saveProfile} className="bg-card rounded-2xl shadow-sm divide-y divide-border/70">
+            <div className="p-5 sm:p-6">
+              <h3 className="font-semibold text-lg">Account</h3>
+              <p className="text-sm text-muted-foreground">How your name and photo appear in the system.</p>
+            </div>
+
+            <div className="p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-5">
+              <div className="relative w-20 h-20 rounded-full bg-primary/10 text-primary overflow-hidden flex items-center justify-center text-2xl font-black shrink-0">
+                {avatarUrl ? <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" /> : initials}
+              </div>
+              <div className="text-center sm:text-left space-y-2">
+                <input type="file" ref={fileRef} accept="image/*" onChange={handleImage} className="hidden" />
+                <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                  <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/15">
+                    <Camera size={15} /> {avatarUrl ? 'Change photo' : 'Upload photo'}
                   </button>
-                </div>
-
-                <div className="space-y-2.5 text-center sm:text-left flex-1">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3.5 py-2 bg-primary text-primary-foreground hover:bg-[#001740] font-bold text-xs rounded-lg transition-colors shadow-sm"
-                    >
-                      Choose Photo File
+                  {avatarUrl && (
+                    <button type="button" onClick={() => setAvatarUrl('')} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
+                      <Trash2 size={15} /> Remove
                     </button>
-                    {avatarUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setAvatarUrl('')}
-                        className="px-3.5 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold text-xs rounded-lg transition-colors border border-border"
-                      >
-                        Reset Picture
-                      </button>
-                    )}
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">JPG or PNG, up to 2 MB.</p>
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field label="First name *">
+                  <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={`${input} uppercase`} />
+                </Field>
+                <Field label="Middle name">
+                  <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={`${input} uppercase`} />
+                </Field>
+                <Field label="Last name *">
+                  <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={`${input} uppercase`} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Email (used to sign in)">
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input readOnly value={currentUser?.email || ''} className={`${input} pl-9 bg-muted text-muted-foreground`} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground">JPG, PNG or WEBP, up to 2 MB.</p>
-                </div>
+                </Field>
+                <Field label={isAlumni ? 'Mobile number *' : 'Mobile number'}>
+                  <PhoneInput required={isAlumni} value={mobileNo} onChange={setMobileNo} className={input} />
+                </Field>
               </div>
             </div>
 
-            {/* Grid of Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Given Name */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">First / Given Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={givenName}
-                  onChange={(e) => setGivenName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
-                  placeholder="e.g. JUAN"
-                />
-              </div>
-
-              {/* Middle Name */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Middle Name</label>
-                <input
-                  type="text"
-                  value={middleName}
-                  onChange={(e) => setMiddleName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
-                  placeholder="e.g. MENDOZA"
-                />
-              </div>
-
-              {/* Last Name */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Last Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm uppercase"
-                  placeholder="e.g. DELA CRUZ"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Email */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Email</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    readOnly
-                    title="This is your sign-in email"
-                    className="w-full pl-10 pr-4 py-2.5 bg-muted border border-border rounded-lg focus:outline-none text-sm font-medium text-muted-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Mobile */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Mobile Number *</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="text"
-                    required
-                    value={mobileNo}
-                    onChange={(e) => setMobileNo(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                    placeholder="e.g. 09171234567"
-                  />
-                </div>
-              </div>
-
-              {/* Facebook Name */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Facebook Username *</label>
-                <input
-                  type="text"
-                  required
-                  value={facebookName}
-                  onChange={(e) => setFacebookName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="e.g. Juan Dela Cruz"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Sex */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Sex *</label>
-                <select
-                  value={sex}
-                  onChange={(e) => setSex(e.target.value as 'Male' | 'Female')}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
+            {isAlumni && onOpenProfile && (
+              <div className="p-5 sm:p-6">
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className="w-full flex items-center justify-between gap-3 rounded-xl bg-muted/60 hover:bg-muted px-4 py-3 text-left"
                 >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
+                  <span>
+                    <span className="block text-sm font-semibold">Address, birth date, parents and employment</span>
+                    <span className="block text-xs text-muted-foreground">These are in My Alumni Profile.</span>
+                  </span>
+                  <ArrowRight size={18} className="text-primary shrink-0" />
+                </button>
               </div>
+            )}
 
-              {/* Civil Status */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Civil Status *</label>
-                <select
-                  value={civilStatus}
-                  onChange={(e) => setCivilStatus(e.target.value as any)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
-                >
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Separated">Separated</option>
-                  <option value="Widowed">Widowed</option>
-                </select>
-              </div>
-
-              {/* Date of Birth */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block">Date of Birth *</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="date"
-                    required
-                    value={dateOfBirth}
-                    onChange={(e) => setDateOfBirth(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Addresses */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2">
-              {/* Present Address */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block flex items-center gap-1">
-                  <MapPin size={14} className="text-primary" /> Present Address *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={presentAddress}
-                  onChange={(e) => setPresentAddress(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="Complete current street, barangay, municipality, province"
-                />
-              </div>
-
-              {/* Permanent Address */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground block flex items-center gap-1">
-                  <MapPin size={14} className="text-primary" /> Permanent Address *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={permanentAddress}
-                  onChange={(e) => setPermanentAddress(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="Complete permanent address"
-                />
-              </div>
-            </div>
-
-            {/* Form actions */}
-            <div className="pt-4 border-t border-border/50 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSavingProfile}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-[#001740] active:scale-[0.99] transition-all text-sm shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
-              >
-                <Save size={16} />
-                {isSavingProfile ? 'Saving Changes...' : 'Save Profile Changes'}
+            <div className="p-5 sm:p-6 flex justify-end">
+              <button type="submit" disabled={savingProfile} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60">
+                <Save size={16} /> {savingProfile ? 'Saving...' : 'Save changes'}
               </button>
             </div>
           </form>
-        </div>
-      ) : (
-        <div className="bg-card rounded-2xl p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
-          <div className="flex items-center gap-3 border-b border-border pb-3">
-            <Key className="text-primary" size={20} />
-            <h3 className="font-bold text-lg text-foreground">Change Password</h3>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_18rem] gap-6 items-start">
+            <form onSubmit={savePassword} className="bg-card rounded-2xl shadow-sm divide-y divide-border/70">
+              <div className="p-5 sm:p-6">
+                <h3 className="font-semibold text-lg">Change password</h3>
+                <p className="text-sm text-muted-foreground">You'll stay signed in on this device. Other devices will be signed out.</p>
+              </div>
+              <div className="p-5 sm:p-6 space-y-4 max-w-xl">
+                <PasswordField label="Current password *" value={currentPassword} onChange={setCurrentPassword} shown={show.current} onToggle={() => setShow((s) => ({ ...s, current: !s.current }))} autoComplete="current-password" />
+                <div>
+                  <PasswordField label="New password *" value={newPassword} onChange={setNewPassword} shown={show.next} onToggle={() => setShow((s) => ({ ...s, next: !s.next }))} autoComplete="new-password" />
+                  <PasswordStrength password={newPassword} />
+                </div>
+                <PasswordField label="Confirm new password *" value={confirmPassword} onChange={setConfirmPassword} shown={show.confirm} onToggle={() => setShow((s) => ({ ...s, confirm: !s.confirm }))} autoComplete="new-password" />
+                {confirmPassword && newPassword !== confirmPassword && <p className="text-xs text-red-600">Passwords don't match yet.</p>}
+              </div>
+              <div className="p-5 sm:p-6 flex justify-end">
+                <button type="submit" disabled={savingPassword} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60">
+                  <Lock size={16} /> {savingPassword ? 'Updating...' : 'Update password'}
+                </button>
+              </div>
+            </form>
+
+            <div className="rounded-2xl bg-amber-50 p-5 space-y-2">
+              <p className="flex items-center gap-2 font-semibold text-amber-900">
+                <ShieldCheck size={18} /> Stay safe
+              </p>
+              <ul className="text-sm text-amber-900/90 space-y-1.5 list-disc pl-5">
+                <li>Use at least 8 characters with upper and lower case letters and a number.</li>
+                <li>Don't reuse a password from another site.</li>
+                <li>Alumni Affairs and program chairs will never ask for your password.</li>
+              </ul>
+            </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-xl">
-            {/* Current Password */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground block">Current Password *</label>
-              <div className="relative">
-                <input
-                  type={showCurrent ? 'text' : 'password'}
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="Enter current password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(!showCurrent)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-medium text-foreground mb-1.5">{label}</span>
+      {children}
+    </label>
+  );
+}
 
-            {/* New Password */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground block">New Password *</label>
-              <div className="relative">
-                <input
-                  type={showNew ? 'text' : 'password'}
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="Minimum 8 characters"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(!showNew)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <PasswordStrength password={newPassword} />
-            </div>
-
-            {/* Confirm Password */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground block">Confirm New Password *</label>
-              <div className="relative">
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-4 pr-11 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                  placeholder="Re-type new password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-[#001740] active:scale-[0.99] transition-all text-sm shadow-sm"
-              >
-                <Save size={16} />
-                Update Password
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Notice Card */}
-      <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-5 flex gap-4">
-        <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={20} />
-        <div className="space-y-1 text-xs text-amber-900/90 dark:text-amber-200/80 leading-relaxed">
-          <p className="font-bold">Security Best Practices</p>
-          <p>
-            Choose a strong, unique password that you do not use elsewhere. Do not share your OMSU tracer credentials with anyone. Alumni Affairs and program chairs will never ask for your password.
-          </p>
-        </div>
+function PasswordField({
+  label,
+  value,
+  onChange,
+  shown,
+  onToggle,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  shown: boolean;
+  onToggle: () => void;
+  autoComplete: string;
+}) {
+  return (
+    <div>
+      <span className="block text-sm font-medium text-foreground mb-1.5">{label}</span>
+      <div className="relative">
+        <input
+          type={shown ? 'text' : 'password'}
+          required
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${input} pr-11`}
+        />
+        <RevealButton shown={shown} onToggle={onToggle} />
       </div>
     </div>
   );
