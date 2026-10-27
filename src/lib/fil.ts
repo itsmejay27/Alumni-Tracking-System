@@ -411,4 +411,6 @@ export const FIL: Record<string, string> = {
   "Delete": "Burahin",
   "Only Alumni Affairs can delete announcements.": "Ang Alumni Affairs lang ang maaaring magbura ng anunsyo.",
   "Announcement deleted.": "Nabura ang anunsyo.",
+  "Photo updated.": "Na-update ang larawan.",
+  "Photo removed.": "Inalis ang larawan.",
 };

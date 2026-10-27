@@ -6,7 +6,6 @@ import {
   User,
   Mail,
   Camera,
-  Trash2,
   ArrowRight,
   Lock,
   Bell,
@@ -69,6 +68,28 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
   }, []);
 
   const initials = `${currentUser?.givenName?.[0] || ''}${currentUser?.lastName?.[0] || ''}`.toUpperCase() || 'OM';
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const savePhoto = async (avatarUrl: string) => {
+    if (!currentUser) return;
+    setSavingPhoto(true);
+    try {
+      await onUpdateProfile({ ...currentUser, avatarUrl });
+      toast.success(avatarUrl ? t('Photo updated.') : t('Photo removed.'));
+    } catch (err: any) {
+      toast.error(`${t('Could not save')}: ${err.message}`);
+    }
+    setSavingPhoto(false);
+  };
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return toast.error(t('Image must be 2 MB or smaller.'));
+    const reader = new FileReader();
+    reader.onloadend = () => savePhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
   const name = `${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim();
 
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
@@ -88,9 +109,40 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
         />
         <div className="relative p-6 sm:p-8 flex flex-col md:flex-row md:items-center gap-5">
-          <div className="w-20 h-20 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden flex items-center justify-center text-2xl font-black text-[#f5c400] shrink-0 self-center md:self-auto">
-            {currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
-          </div>
+          {isAlumni ? (
+            <div className="w-20 h-20 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden flex items-center justify-center text-2xl font-black text-[#f5c400] shrink-0 self-center md:self-auto">
+              {currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
+            </div>
+          ) : (
+            <div className="relative shrink-0 self-center md:self-auto">
+              <input type="file" ref={photoRef} accept="image/*" onChange={handlePhoto} className="hidden" />
+              <button
+                type="button"
+                onClick={() => photoRef.current?.click()}
+                disabled={savingPhoto}
+                title={t('Change photo')}
+                className="group relative w-20 h-20 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden flex items-center justify-center text-2xl font-black text-[#f5c400]"
+              >
+                {currentUser?.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
+                <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <Camera size={20} className="text-white" />
+                </span>
+              </button>
+              <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-[#f5c400] text-[#002060] flex items-center justify-center ring-2 ring-[#002060]">
+                <Camera size={14} />
+              </span>
+              {currentUser?.avatarUrl && (
+                <button
+                  type="button"
+                  onClick={() => savePhoto('')}
+                  disabled={savingPhoto}
+                  className="block mx-auto mt-1.5 text-[11px] text-white/70 hover:text-white hover:underline"
+                >
+                  {t('Remove photo')}
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex-1 min-w-0 text-center md:text-left">
             <p className="text-xs font-semibold uppercase tracking-wider text-[#f5c400]">{t('Settings')}</p>
             <h2 className="text-2xl font-extrabold truncate">{name || currentUser?.email}</h2>
@@ -171,20 +223,7 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
   const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
   const [lastName, setLastName] = useState(currentUser?.lastName || '');
   const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
-  const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const initials = `${givenName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'OM';
-
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return toast.error(t('Image must be 2 MB or smaller.'));
-    const reader = new FileReader();
-    reader.onloadend = () => setAvatarUrl(reader.result as string);
-    reader.readAsDataURL(file);
-  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,7 +238,6 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
         middleName: middleName.trim().toUpperCase(),
         lastName: lastName.trim().toUpperCase(),
         mobileNo,
-        avatarUrl,
       });
       toast.success(t('Your account details have been saved.'));
     } catch (err: any) {
@@ -209,26 +247,7 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
   };
 
   return (
-    <form onSubmit={save} className="grid grid-cols-1 xl:grid-cols-[22rem_1fr] gap-6 items-start">
-      <Card icon={<Camera size={18} />} title={t('Photo')} sub={t('Shown in the sidebar and the Directory.')}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-28 h-28 rounded-full bg-primary/10 text-primary overflow-hidden flex items-center justify-center text-3xl font-black">
-            {avatarUrl ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" /> : initials}
-          </div>
-          <input type="file" ref={fileRef} accept="image/*" onChange={handleImage} className="hidden" />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => fileRef.current?.click()} className={btnSoft}>
-              <Camera size={15} /> {avatarUrl ? t('Change photo') : t('Upload photo')}
-            </button>
-            {avatarUrl && (
-              <button type="button" onClick={() => setAvatarUrl('')} className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
-                <Trash2 size={15} />
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">{t('JPG or PNG, up to 2 MB.')}</p>
-        </div>
-      </Card>
+    <form onSubmit={save}>
       <Card icon={<User size={18} />} title={t('Your details')} sub={t('How your name appears in the system.')}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label={`${t('First name')} *`}>
