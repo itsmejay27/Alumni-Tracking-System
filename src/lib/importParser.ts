@@ -8,7 +8,6 @@ import type { Course } from './alumni';
 export type Cell = string | number | boolean | Date | null | undefined;
 
 export interface ParsedRow {
-  studentId: string;
   email: string | null;
   course: Course | null;
   givenName: string;
@@ -45,6 +44,7 @@ export interface ParseResult {
 
 // Header text (lower-cased, partial match) for each field. More specific keys come first.
 const COLUMNS: { key: string; match: string[] }[] = [
+  // Recognized only so a Student ID column isn't mistaken for another field; it is not stored
   { key: 'studentId', match: ['student id', 'student no', 'student number', 'id number', 'id no'] },
   { key: 'fatherName', match: ["father's name", 'father name', 'name of father'] },
   { key: 'motherName', match: ["mother's name", 'mother name', 'name of mother'] },
@@ -220,7 +220,6 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
     const email = get(r, 'email').toLowerCase();
 
     rows.push({
-      studentId: get(r, 'studentId').toUpperCase(),
       email: /@/.test(email) ? email : null,
       course,
       givenName: givenName.toUpperCase(),

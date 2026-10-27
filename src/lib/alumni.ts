@@ -20,7 +20,6 @@ export interface EmploymentEntry {
 
 export interface AlumniRecord {
   id: string;
-  studentId: string;
   lastName: string;
   givenName: string;
   middleName: string;
@@ -113,7 +112,6 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
   const givenName = d.givenName || '';
   const lastName = d.lastName || '';
   return {
-    studentId: '',
     middleName: '',
     sex: 'Male',
     dateOfBirth: '',

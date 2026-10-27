@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Lock, X, Mail, KeyRound, ArrowLeft, IdCard } from 'lucide-react';
+import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -24,7 +24,7 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const COPY: Record<Step, { title: string; sub: string; button: string }> = {
   signin: { title: 'Welcome back', sub: 'Sign in to update your tracer record.', button: 'Sign In' },
-  signup: { title: 'Create your account', sub: 'For OMSU graduates. You need your Student ID.', button: 'Create Account' },
+  signup: { title: 'Create your account', sub: 'For OMSU graduates. Your name, birthday and sex must match the University graduate records.', button: 'Create Account' },
   verify: { title: 'Verify your email', sub: '', button: 'Verify Email' },
   reset: { title: 'Forgot password', sub: "Enter your email and we'll send you a verification code.", button: 'Send Code' },
   resetCode: { title: 'Enter your code', sub: '', button: 'Continue' },
@@ -38,7 +38,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [givenName, setGivenName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [sex, setSex] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -77,21 +78,26 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     }
   };
 
-  /** Sign-up is only for graduates already in the records: Student ID + last name must match. */
-  const studentIdOk = async () => {
-    const { data, error } = await supabase.rpc('check_student_id', { p_student_id: studentId.trim(), p_last_name: lastName.trim() });
+  /** Sign-up is only for graduates already in the records: full name + birthday + sex must match. */
+  const alumniRecordOk = async () => {
+    const { data, error } = await supabase.rpc('check_alumni', {
+      p_given: givenName.trim(),
+      p_last: lastName.trim(),
+      p_birth: birthDate,
+      p_sex: sex,
+    });
     if (error) {
       setError(error.message);
       return false;
     }
     if (data === 'not_found') {
       setError(
-        "We couldn't find a graduate with this Student ID and last name. Check both (use the last name on your school records), or contact your program chair or the Alumni Affairs Office."
+        "We couldn't find a graduate with this name, birthday and sex. Type your first and last name exactly as in your school records, check your birthday, or contact your program chair or the Alumni Affairs Office."
       );
       return false;
     }
     if (data === 'taken') {
-      setError('An account already exists for this Student ID. Sign in instead, or use "Forgot password?".');
+      setError('An account already exists for this graduate. Sign in instead, or use "Forgot password?".');
       return false;
     }
     return true;
@@ -126,7 +132,9 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         setError('Passwords do not match.');
       } else if (!agreed) {
         setError('Please agree to the Terms of Use and Privacy Policy.');
-      } else if (!(await studentIdOk())) {
+      } else if (!birthDate || !sex) {
+        setError('Please enter your birthday and sex.');
+      } else if (!(await alumniRecordOk())) {
         // message already set
       } else {
         const { data, error } = await supabase.auth.signUp({
@@ -134,10 +142,10 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { given_name: givenName.trim(), last_name: lastName.trim(), student_id: studentId.trim() },
+            data: { given_name: givenName.trim(), last_name: lastName.trim(), birth_date: birthDate, sex },
           },
         });
-        if (error) setError(/database error|student_id/i.test(error.message) ? 'Your Student ID and last name do not match our graduate records.' : error.message);
+        if (error) setError(/database error|alumni_record/i.test(error.message) ? 'Your name, birthday and sex do not match our graduate records.' : error.message);
         else if (data.user && data.user.identities?.length === 0) setError('An account with this email already exists. Try signing in.');
         else if (!data.session) {
           go('verify');
@@ -206,17 +214,6 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {step === 'signup' && (
-              <div>
-                <label className={labelClass}>Student ID</label>
-                <div className="relative">
-                  <IdCard size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input required value={studentId} onChange={(e) => setStudentId(e.target.value)} className={inputClass} placeholder="e.g. IT-2018-0001" />
-                </div>
-                <p className="text-xs text-slate-500 mt-1.5">Must match your record at OMSU, together with your last name.</p>
-              </div>
-            )}
-
-            {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>First Name</label>
@@ -232,6 +229,41 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                     <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} placeholder="Dela Cruz" />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {step === 'signup' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Birthday</label>
+                  <div className="relative">
+                    <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      required
+                      type="date"
+                      value={birthDate}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Sex</label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select required value={sex} onChange={(e) => setSex(e.target.value)} className={`${inputClass} appearance-none`}>
+                      <option value="" disabled>
+                        Select
+                      </option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                </div>
+                <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">
+                  Use the name, birthday and sex in your OMSU school records. We use them to find your graduate record.
+                </p>
               </div>
             )}
 

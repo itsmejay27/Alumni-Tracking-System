@@ -55,7 +55,6 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     const fullName = `${record.givenName} ${record.lastName}`.toLowerCase();
     const matchesSearch =
       fullName.includes(searchQuery.toLowerCase()) ||
-      record.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       record.email.toLowerCase().includes(searchQuery.toLowerCase());
 
     // 3. Batch Filter
@@ -90,13 +89,12 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 
   const generateCSV = (records: AlumniRecord[]) => {
     const headers = [
-      'Student ID', 'Last Name', 'Given Name', 'Email', 'Sex', 'Date of Birth', 
+      'Last Name', 'Given Name', 'Email', 'Sex', 'Date of Birth', 
       'Civil Status', 'Mobile No.', 'Facebook Name', 'Course', 'Batch', 
       'Status', 'Employment Status', 'Job Title', 'Organization', 'Company Type', 
       'Length of Service', 'Suggestions'
     ];
     const rows = records.map(r => [
-      r.studentId,
       r.lastName,
       r.givenName,
       r.email,
@@ -256,8 +254,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                 <div key={record.id} className="bg-card rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex justify-between items-start gap-2">
                     <div>
-                      <span className="font-mono text-xs text-primary font-bold">{record.studentId}</span>
-                      <h4 className="font-bold text-foreground text-base mt-0.5">{record.givenName} {record.lastName}</h4>
+                      <h4 className="font-bold text-foreground text-base">{record.givenName} {record.lastName}</h4>
                       <p className="text-xs text-muted-foreground break-all">{record.email}</p>
                     </div>
                     <span
@@ -304,7 +301,6 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                 <table className="w-full">
                   <thead className="bg-muted/50 border-b border-border/70">
                     <tr>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">Student ID</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Name</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Program</th>
                       <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">Graduated</th>
@@ -316,7 +312,6 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <tbody className="divide-y divide-border/60">
                     {paged.pageItems.map((record) => (
                       <tr key={record.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-4 font-mono text-sm text-primary font-bold whitespace-nowrap">{record.studentId || '—'}</td>
                         <td className="px-6 py-4">
                           <div className="font-semibold text-foreground">{record.givenName} {record.lastName}</div>
                           <div className="text-xs text-muted-foreground">{record.email}</div>
@@ -436,17 +431,13 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
         <RecordDetailModal
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
-          onUpdated={(r) => {
-            setSelectedRecord(r);
-            reload();
-          }}
         />
       )}
     </div>
   );
 }
 
-function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecord; onClose: () => void; onUpdated: (r: AlumniRecord) => void }) {
+function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
@@ -468,7 +459,7 @@ function RecordDetailModal({ record, onClose, onUpdated }: { record: AlumniRecor
             </div>
             <div>
               <h3 className="text-xl sm:text-2xl font-black text-foreground leading-tight">{record.givenName} {record.lastName}</h3>
-              <StudentIdEditor record={record} onUpdated={onUpdated} />
+              <p className="text-sm text-muted-foreground mt-0.5">{record.course} · {record.batch}</p>
             </div>
           </div>
           <span
@@ -718,65 +709,3 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
   );
 }
 
-/** Lets Alumni Affairs / program chairs add or fix a graduate's Student ID (needed for sign-up). */
-function StudentIdEditor({ record, onUpdated }: { record: AlumniRecord; onUpdated: (r: AlumniRecord) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(record.studentId || '');
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    const id = value.trim().toUpperCase();
-    setSaving(true);
-    const { data: clash } = await supabase
-      .from('alumni_records')
-      .select('id')
-      .neq('id', record.id)
-      .filter('data->>studentId', 'eq', id)
-      .limit(1);
-    if (id && clash?.length) {
-      setSaving(false);
-      toast.error('Another graduate already has this Student ID');
-      return;
-    }
-    const { data: row, error } = await supabase.from('alumni_records').select('data').eq('id', record.id).single();
-    const { error: upErr } = error
-      ? { error }
-      : await supabase.from('alumni_records').update({ data: { ...(row!.data as object), studentId: id } }).eq('id', record.id);
-    setSaving(false);
-    if (upErr) {
-      toast.error(`Could not save: ${upErr.message}`);
-      return;
-    }
-    toast.success('Student ID saved');
-    setEditing(false);
-    onUpdated({ ...record, studentId: id });
-  };
-
-  if (!editing) {
-    return (
-      <p className="text-sm font-mono text-primary font-bold mt-0.5 flex items-center gap-2">
-        Student ID: {record.studentId || <span className="font-sans font-medium text-amber-700">none yet</span>}
-        <button onClick={() => setEditing(true)} className="font-sans text-xs font-semibold text-primary hover:underline">
-          {record.studentId ? 'Edit' : 'Add'}
-        </button>
-      </p>
-    );
-  }
-  return (
-    <div className="flex items-center gap-2 mt-1">
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="e.g. IT-2025-0001"
-        className="h-8 w-44 px-2 rounded-lg border border-border bg-input-background text-sm font-mono"
-      />
-      <button onClick={save} disabled={saving} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-60">
-        {saving ? 'Saving' : 'Save'}
-      </button>
-      <button onClick={() => setEditing(false)} className="h-8 px-2 text-xs text-muted-foreground">
-        Cancel
-      </button>
-    </div>
-  );
-}

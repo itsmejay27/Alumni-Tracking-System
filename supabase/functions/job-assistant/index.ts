@@ -1,6 +1,7 @@
 // AI Job Assistant (Google Gemini). Signed-in users send a job link, pasted text, a screenshot
 // or a PDF; Gemini explains it in plain English or Filipino, breaks down the salary, compares the
 // requirements with the user's skills, and can draft a cover letter or interview practice.
+// It can also search the internet (Google Search) for open jobs that fit a graduate.
 //
 // Secrets: GEMINI_API_KEY (required), GEMINI_MODEL (optional, default "gemini-flash-latest").
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
@@ -204,7 +205,19 @@ const ANALYSIS_SCHEMA = {
 
 type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 
+type Source = { title: string; uri: string };
+
 async function callGemini(system: string, parts: Part[], schema?: unknown): Promise<string> {
+  return (await callGeminiFull(system, parts, { schema })).text;
+}
+
+/** Calls Gemini. With search: true it may look things up on Google and returns the pages it used. */
+async function callGeminiFull(
+  system: string,
+  parts: Part[],
+  opts: { schema?: unknown; search?: boolean } = {}
+): Promise<{ text: string; sources: Source[] }> {
+  const { schema, search } = opts;
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) throw new Error('The AI assistant is not set up yet (missing GEMINI_API_KEY).');
   const preferred = Deno.env.get('GEMINI_MODEL');
@@ -224,9 +237,10 @@ async function callGemini(system: string, parts: Part[], schema?: unknown): Prom
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
             contents: [{ role: 'user', parts }],
+            ...(search ? { tools: [{ google_search: {} }] } : {}),
             generationConfig: schema
               ? { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.3 }
-              : { temperature: 0.6 },
+              : { temperature: search ? 0.2 : 0.6 },
           }),
         });
       } catch {
@@ -253,7 +267,10 @@ async function callGemini(system: string, parts: Part[], schema?: unknown): Prom
       const cand = body?.candidates?.[0];
       const text = (cand?.content?.parts || []).map((p: any) => p.text || '').join('');
       if (!text) throw new Error(cand?.finishReason === 'SAFETY' ? 'The AI could not process this content.' : 'The AI returned no answer. Please try again.');
-      return text;
+      const sources: Source[] = (cand?.groundingMetadata?.groundingChunks || [])
+        .map((c: any) => ({ title: String(c?.web?.title || ''), uri: String(c?.web?.uri || '') }))
+        .filter((s: Source) => /^https?:\/\//.test(s.uri));
+      return { text, sources };
     }
   }
   if (busy) throw new Error('The AI service is very busy right now. Please try again in a minute.');
@@ -305,6 +322,78 @@ Deno.serve(async (req) => {
       const text = await callGemini(system, [{ text: `Job analysis:\n${job}\n\nApplicant profile:\n${profile || 'Not provided'}` }]);
       await admin.from('ai_usage').insert({ user_id: caller.user.id, action: kind });
       return json({ text });
+    }
+
+    if (body.action === 'search') {
+      const clip = (v: unknown, n: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+      const program = clip(body.program, 120);
+      const skills = clip(body.skills, 600);
+      const location = clip(body.location, 120) || 'Philippines';
+      const jobType = ['full-time', 'part-time', 'contract', 'internship'].includes(body.jobType) ? body.jobType : 'any';
+      const keywords = clip(body.keywords, 200);
+      const remote = body.remote === true;
+      const today = new Date().toISOString().slice(0, 10);
+      const system = `You find CURRENT job openings for a graduate of Occidental Mindoro State University (OMSU), Philippines, using Google Search. Today is ${today}.
+Rules:
+- Search the web now. Only list real, open job postings you actually found in the search results, ideally posted in the last 30 days. Never invent a job, company, salary or link.
+- Prefer Philippine job sites (JobStreet, Indeed Philippines, LinkedIn, Kalibrr, OnlineJobs.ph, PhilJobNet, Bossjob), government vacancies (CSC, DepEd, LGUs) and company career pages.
+- Match the graduate's program and skills. Include entry-level roles a fresh graduate can apply for.
+- "url" must be the exact link to the posting or listing page from the search results. If you have no exact link, use "".
+- Write "whyMatch" and "description" in ${language}. Keep job titles and company names as written in the posting.
+- Reply with ONLY a JSON object, no markdown, in this shape:
+{"jobs":[{"title":"","company":"","location":"","type":"full-time|part-time|contract|internship","salary":"Not stated or the stated pay","postedDate":"as stated, or empty","url":"","site":"website name","whyMatch":"1 sentence","description":"2-3 sentences","requirements":["..."],"contactEmail":"or empty","relatedProgram":"BSIT|BEED|BSBA-FM|BSBA-OM|BSOA|None"}],"tips":["2-3 short search tips for this graduate"]}
+- Up to 8 jobs, best matches first. If you find none, return an empty jobs list and helpful tips.`;
+      const ask = [
+        `Program: ${program || 'Not given'}`,
+        `Skills: ${skills || 'Not given'}`,
+        `Preferred location: ${location}${remote ? ' (remote / work-from-home also welcome)' : ''}`,
+        `Job type: ${jobType}`,
+        keywords ? `Also looking for: ${keywords}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const { text, sources } = await callGeminiFull(system, [{ text: ask }], { search: true });
+      // Pull the JSON object out even if the model wrapped it in text or code fences
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(text.slice(start, end + 1));
+      } catch {
+        throw new Error('The AI search did not return results. Please try again.');
+      }
+      const hostOf = (u: string) => {
+        try {
+          return new URL(u).hostname.replace(/^www\./, '');
+        } catch {
+          return '';
+        }
+      };
+      const sourceHosts = new Set(sources.map((s) => s.title.toLowerCase().replace(/^www\./, '')));
+      const jobs = (Array.isArray(parsed.jobs) ? parsed.jobs : []).slice(0, 8).map((j: any) => {
+        const url = /^https?:\/\//.test(String(j?.url || '')) ? String(j.url) : '';
+        const host = hostOf(url);
+        return {
+          title: clip(j?.title, 150),
+          company: clip(j?.company, 150),
+          location: clip(j?.location, 150),
+          type: ['full-time', 'part-time', 'contract', 'internship'].includes(j?.type) ? j.type : 'full-time',
+          salary: clip(j?.salary, 120),
+          postedDate: clip(j?.postedDate, 60),
+          url,
+          site: clip(j?.site, 80) || host,
+          // True when the link's website is one of the pages Google Search actually returned
+          linkSeen: !!host && [...sourceHosts].some((h) => h && (host === h || host.endsWith(`.${h}`) || h.endsWith(`.${host}`))),
+          whyMatch: clip(j?.whyMatch, 300),
+          description: clip(j?.description, 900),
+          requirements: (Array.isArray(j?.requirements) ? j.requirements : []).slice(0, 8).map((r: unknown) => clip(r, 200)),
+          contactEmail: /@/.test(String(j?.contactEmail || '')) ? clip(j.contactEmail, 120) : '',
+          relatedProgram: clip(j?.relatedProgram, 20),
+        };
+      }).filter((j: any) => j.title && j.company);
+      const tips = (Array.isArray(parsed.tips) ? parsed.tips : []).slice(0, 4).map((t: unknown) => clip(t, 300));
+      await admin.from('ai_usage').insert({ user_id: caller.user.id, action: 'search' });
+      return json({ jobs, tips, sources: sources.slice(0, 12), remaining: DAILY_LIMIT - (count ?? 0) - 1 });
     }
 
     // action: analyze

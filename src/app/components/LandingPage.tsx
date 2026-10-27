@@ -79,11 +79,11 @@ const reasons = [
 const faqs = [
   {
     q: 'Who can create an account?',
-    a: 'OMSU graduates whose Student ID is in the University records. Use the Student ID printed on your school ID or transcript, together with your last name.',
+    a: 'OMSU graduates who are in the University graduate records. When you sign up, enter your first name, last name, birthday and sex exactly as they appear in your school records.',
   },
   {
-    q: 'I don\'t know my Student ID. What should I do?',
-    a: 'Check your old school ID, Certificate of Registration or Transcript of Records. You can also ask your program chair or the Alumni Affairs Office.',
+    q: 'It says my record was not found. What should I do?',
+    a: 'Check the spelling of your name against your diploma or Transcript of Records, and make sure your birthday is correct. If it still does not work, ask your program chair or the Alumni Affairs Office to check your record.',
   },
   {
     q: 'Can other alumni see my answers?',

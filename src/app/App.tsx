@@ -5,7 +5,7 @@ import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
 import { AccountsManager } from './components/AccountsManager';
-import { LinkStudentId } from './components/LinkStudentId';
+import { LinkAlumniRecord } from './components/LinkAlumniRecord';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
@@ -94,7 +94,7 @@ function AppInner() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
-  // Alumni accounts must be linked to a graduate record (Student ID) before using the system
+  // Alumni accounts must be linked to a graduate record (name + birthday + sex) before using the system
   const [needsLink, setNeedsLink] = useState<boolean | null>(null);
   const [authScreen, setAuthScreen] = useState<AuthMode | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -224,7 +224,7 @@ function AppInner() {
   if (session && currentUser && needsLink && !recoveringPassword) {
     return (
       <>
-        <LinkStudentId defaultLastName={currentUser.lastName} onLinked={() => setNeedsLink(false)} />
+        <LinkAlumniRecord defaultGivenName={currentUser.givenName} defaultLastName={currentUser.lastName} onLinked={() => setNeedsLink(false)} />
         <AppToaster />
       </>
     );

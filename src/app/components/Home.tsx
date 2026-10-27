@@ -86,7 +86,6 @@ export function Home({ onStartSurvey, userId, firstName }: HomeProps) {
           </div>
           {record ? (
             <dl className="space-y-3 text-sm">
-              <Row label={t('Student ID')} value={record.studentId || '—'} />
               <Row label={t('Program')} value={programName(record.course)} />
               <Row label={t('Year graduated')} value={record.yearGraduated ? String(record.yearGraduated) : '—'} />
               <Row

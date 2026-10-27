@@ -135,11 +135,9 @@ export function CsvImport({
   }));
   const existingKeys = new Set(existing.map((r) => key(r)));
   const existingEmails = new Set(existing.map((r) => (r.email || '').toLowerCase()).filter(Boolean));
-  const existingIds = new Set(existing.map((r) => (r.studentId || '').toUpperCase()).filter(Boolean));
-  const toImport = finalRows.filter(
-    (r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)) && !(r.studentId && existingIds.has(r.studentId))
-  );
-  const missingIds = toImport.filter((r) => !r.studentId).length;
+  const toImport = finalRows.filter((r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)));
+  // Alumni sign up with name + birthday + sex, so rows missing either can't sign up yet
+  const missingSignUp = toImport.filter((r) => !r.dateOfBirth || !r.sex).length;
   const duplicates = finalRows.length - toImport.length;
   const counts = {
     employed: toImport.filter((r) => r.status === 'Employed' || r.status === 'Self-Employed').length,
@@ -168,7 +166,6 @@ export function CsvImport({
         course: r.course,
         batch: `${r.yearGraduated - 1}-${r.yearGraduated}`,
         data: {
-          studentId: r.studentId,
           givenName: r.givenName,
           middleName: r.middleName,
           lastName: r.lastName,
@@ -291,9 +288,9 @@ export function CsvImport({
                 {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
               </p>
               {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system will be skipped.</p>}
-              {missingIds > 0 && (
+              {missingSignUp > 0 && (
                 <p className="text-amber-700">
-                  {missingIds} have no Student ID in the file. They can't sign up until a Student ID is added to their record (Alumni Records → Details).
+                  {missingSignUp} have no birthday or sex in the file. They can't create an account until both are added to their record.
                 </p>
               )}
               {info?.format === 'tracer-sheet' && <p className="text-muted-foreground">Read as the official Graduate Tracer sheet.</p>}

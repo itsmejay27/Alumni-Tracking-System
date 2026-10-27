@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail, CheckCircle2, XCircle, Hourglass } from 'lucide-react';
+import { JobSearch } from './JobSearch';
+import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail, CheckCircle2, XCircle, Hourglass, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -206,6 +207,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         <AssistantModal
           userId={userId}
           seed={assistant}
+          program={myProgram || ''}
           onClose={() => setAssistant(null)}
           onPost={(prefill) => {
             setAssistant(null);
@@ -573,7 +575,23 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
   );
 }
 
-function AssistantModal({ userId, seed, onClose, onPost }: { userId: string; seed: string; onClose: () => void; onPost: (prefill: Partial<JobFormData>) => void }) {
+function AssistantModal({
+  userId,
+  seed,
+  program,
+  onClose,
+  onPost,
+}: {
+  userId: string;
+  seed: string;
+  program: string;
+  onClose: () => void;
+  onPost: (prefill: Partial<JobFormData>) => void;
+}) {
+  const t = useT();
+  // 'explain' = explain a job posting, 'search' = find jobs online
+  const [tab, setTab] = useState<'explain' | 'search'>('explain');
+  const [explainText, setExplainText] = useState(seed);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -589,7 +607,43 @@ function AssistantModal({ userId, seed, onClose, onPost }: { userId: string; see
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="AI Job Assistant">
       <div className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-200" onClick={onClose} />
       <div className="relative w-full max-w-6xl max-h-[96vh] overflow-y-auto rounded-2xl bg-background shadow-2xl p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-200">
-        <JobAssistant userId={userId} initialText={seed || undefined} onClose={onClose} onPost={onPost} />
+        <div className="flex items-center gap-2 mb-4 pr-10">
+          {(
+            [
+              ['explain', t('Explain a job'), <Sparkles key="s" size={15} />],
+              ['search', t('Find jobs online'), <Globe key="g" size={15} />],
+            ] as const
+          ).map(([value, label, icon]) => (
+            <button
+              key={value}
+              onClick={() => setTab(value)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                tab === value ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === 'explain' ? (
+          <JobAssistant key={explainText} userId={userId} initialText={explainText || undefined} onClose={onClose} onPost={onPost} />
+        ) : (
+          <>
+            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 sm:right-5 sm:top-5 p-2 rounded-lg text-muted-foreground hover:bg-muted">
+              <X size={18} />
+            </button>
+            <JobSearch
+              userId={userId}
+              defaultProgram={program}
+              onPost={onPost}
+              onExplain={(text) => {
+                setExplainText(text);
+                setTab('explain');
+              }}
+            />
+          </>
+        )}
       </div>
     </div>,
     document.body

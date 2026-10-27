@@ -15,7 +15,7 @@ const TERMS: { h: string; p: string[] }[] = [
   {
     h: '2. Who can use it',
     p: [
-      'Accounts are for OMSU graduates whose Student ID is in the University records, and for OMSU staff given access by Alumni Affairs. You must give true and complete information when you sign up and when you update your record.',
+      'Accounts are for OMSU graduates who are in the University graduate records (matched by name, birthday and sex), and for OMSU staff given access by Alumni Affairs. You must give true and complete information when you sign up and when you update your record.',
     ],
   },
   {
@@ -54,7 +54,7 @@ const PRIVACY: { h: string; p: string[] }[] = [
   {
     h: '2. What we collect',
     p: [
-      'Identity and contact details (name, Student ID, email, mobile number, address, sex, birth date, civil status), academic details (program, year graduated), and employment details (status, employer, position, employer type, job level, employment history), plus your feedback on your program.',
+      'Identity and contact details (name, email, mobile number, address, sex, birth date, civil status), academic details (program, year graduated), and employment details (status, employer, position, employer type, job level, employment history), plus your feedback on your program.',
     ],
   },
   {

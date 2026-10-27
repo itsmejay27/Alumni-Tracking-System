@@ -280,7 +280,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       ...base,
       ...patch,
       id: record?.id,
-      studentId: record?.studentId || '',
       email: currentUser.email,
       lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
     } as Parameters<typeof saveMyRecord>[1];
@@ -368,7 +367,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <h2 className="text-2xl sm:text-3xl font-extrabold truncate">{displayName || 'Your name'}</h2>
             <p className="text-white/80 text-sm">
               {programName(course)} · {t('Class of')} {yearGraduated}
-              {record?.studentId && ` · ID ${record.studentId}`}
             </p>
             <div className="flex flex-wrap gap-2 justify-center md:justify-start pt-2">
               <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{t(status)}</span>

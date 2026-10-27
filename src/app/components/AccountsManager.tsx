@@ -15,7 +15,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Alumni Affairs' },
   { value: 'alumni', label: 'Alumni Member' },
 ];
-// Alumni sign up themselves with their Student ID, so only staff roles can be created here
+// Alumni sign up themselves (checked against the graduate records), so only staff roles can be created here
 const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni');
 const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
 
@@ -172,7 +172,13 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
       toast.error(await invokeError(error));
       return;
     }
-    if (data.emailSent) toast.success(`New invitation sent to ${acc.email}`);
+    const until = data.expiresAt ? new Date(data.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    if (data.emailSent)
+      toast.success(
+        data.samePassword
+          ? `Invitation sent again to ${acc.email} with the same temporary password (it stays the same until ${until}).`
+          : `Invitation sent to ${acc.email} with a new temporary password${until ? ` (resending before ${until} keeps the same one)` : ''}.`
+      );
     else setResult({ email: acc.email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
   };
 
@@ -315,7 +321,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                Staff accounts don't need a Student ID. Alumni create their own accounts with their Student ID.
+                Staff accounts are created here. Alumni create their own accounts with their name, birthday and sex, which must match the graduate records.
               </p>
             </div>
             <div className="space-y-1.5 md:col-span-2">

@@ -32,6 +32,50 @@ function tempPassword() {
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
+// A temporary password stays the same for this long, so pressing "Resend" again (for example
+// when the internet is slow) sends the same password instead of a new one
+const TEMP_PASSWORD_HOURS = 1;
+
+// The temporary password is stored encrypted, with a key only this server knows
+async function secretKey() {
+  const raw = new TextEncoder().encode(`${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}:invite-secret`);
+  const hash = await crypto.subtle.digest('SHA-256', raw);
+  return crypto.subtle.importKey('raw', hash, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+async function encrypt(text: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await secretKey(), new TextEncoder().encode(text)));
+  return `${b64(iv)}.${b64(data)}`;
+}
+async function decrypt(stored: string) {
+  const [iv, data] = stored.split('.');
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, await secretKey(), unb64(data));
+  return new TextDecoder().decode(plain);
+}
+
+/** Saves the temporary password for later resends. Ignored if the table isn't set up yet. */
+async function rememberPassword(admin: any, userId: string, password: string) {
+  await admin
+    .from('staff_invite_secrets')
+    .upsert({ user_id: userId, secret: await encrypt(password), created_at: new Date().toISOString() })
+    .then(() => {}, () => {});
+}
+
+/** The temporary password from the last hour, if there is one. */
+async function recentPassword(admin: any, userId: string): Promise<{ password: string; expiresAt: string } | null> {
+  const { data, error } = await admin.from('staff_invite_secrets').select('secret, created_at').eq('user_id', userId).maybeSingle();
+  if (error || !data) return null;
+  const expires = new Date(data.created_at).getTime() + TEMP_PASSWORD_HOURS * 3600 * 1000;
+  if (expires <= Date.now()) return null;
+  try {
+    return { password: await decrypt(data.secret), expiresAt: new Date(expires).toISOString() };
+  } catch {
+    return null;
+  }
+}
+
 function invitationEmail(o: { name: string; roleLabel: string; email: string; password: string; siteUrl: string }) {
   const name = escapeHtml(o.name.toUpperCase());
   const site = escapeHtml(o.siteUrl);
@@ -55,6 +99,7 @@ function invitationEmail(o: { name: string; roleLabel: string; email: string; pa
   <p style="margin-top:0">Hello ${name},</p>
   <p>You have been given an account on the <b>OMSU Alumni Graduate Track</b> of Occidental Mindoro State University as <b>${escapeHtml(o.roleLabel)}</b>.</p>
   <p>You may now log in using the details below. For your security, you will be asked to change this temporary password the first time you sign in.</p>
+  <p style="font-size:13px;color:#555">Got this email more than once? Within the same hour the temporary password is the same in every copy, so any of them works.</p>
   <table style="border-collapse:collapse;margin:12px 0;background:#f6f8fc;border-radius:8px;font-size:14px;color:#222">
     <tr><td style="padding:8px 12px"><b>Login URL:</b></td><td style="padding:8px 12px"><a href="${site}" style="color:#002060">${site}</a></td></tr>
     <tr><td style="padding:8px 12px"><b>Email:</b></td><td style="padding:8px 12px">${escapeHtml(o.email)}</td></tr>
@@ -178,7 +223,7 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, removed });
   }
-  // Resend a pending invitation with a fresh temporary password
+  // Resend a pending invitation; the temporary password stays the same for 1 hour
   if (body.action === 'resend') {
     const userId = String(body.userId || '');
     const { data: target } = await admin
@@ -187,14 +232,25 @@ Deno.serve(async (req) => {
       .eq('id', userId)
       .single();
     if (!target) return json({ error: 'Account not found' }, 404);
-    if (!target.must_change_password) return json({ error: 'This person has already signed in and set their own password' }, 400);
-    const password = tempPassword();
-    const { error } = await admin.auth.admin.updateUserById(userId, { password });
-    if (error) return json({ error: error.message }, 400);
+    if (!target.must_change_password) {
+      await admin.from('staff_invite_secrets').delete().eq('user_id', userId).then(() => {}, () => {});
+      return json({ error: 'This person has already signed in and set their own password' }, 400);
+    }
+    // Same password if the last one is less than an hour old; otherwise a new one
+    const recent = await recentPassword(admin, userId);
+    let password = recent?.password;
+    let expiresAt = recent?.expiresAt;
+    if (!password) {
+      password = tempPassword();
+      const { error } = await admin.auth.admin.updateUserById(userId, { password });
+      if (error) return json({ error: error.message }, 400);
+      await rememberPassword(admin, userId, password);
+      expiresAt = new Date(Date.now() + TEMP_PASSWORD_HOURS * 3600 * 1000).toISOString();
+    }
     const siteUrl = String(Deno.env.get('SITE_URL') || body.siteUrl || '').trim();
     const name = `${target.given_name} ${target.last_name}`.trim();
     const result = await sendInvitation({ name, roleLabel: target.title || ROLES[target.role] || '', email: target.email, password, siteUrl });
-    return json({ ok: true, ...result, tempPassword: password });
+    return json({ ok: true, ...result, tempPassword: password, samePassword: !!recent, expiresAt });
   }
 
   const email = String(body.email || '').trim().toLowerCase();
@@ -207,18 +263,18 @@ Deno.serve(async (req) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Enter a valid email address' }, 400);
   if (!givenName || !lastName) return json({ error: 'First and last name are required' }, 400);
   if (!ROLES[role]) return json({ error: 'Unknown role' }, 400);
-  if (role === 'alumni') return json({ error: 'Alumni create their own accounts with their Student ID' }, 400);
+  if (role === 'alumni') return json({ error: 'Alumni create their own accounts' }, 400);
 
   const password = tempPassword();
   // Supabase saves app_metadata only after the user row is inserted, so the sign-up trigger
-  // can't see the staff flag yet. This short-lived entry tells it to skip the Student ID check.
+  // can't see the staff flag yet. This short-lived entry tells it to skip the graduate record check.
   await admin.from('staff_invites').upsert({ email, created_at: new Date().toISOString() });
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: { given_name: givenName, last_name: lastName },
-    // Marks staff accounts so the sign-up Student ID check does not apply to them
+    // Marks staff accounts so the sign-up graduate record check does not apply to them
     app_metadata: { staff: true },
   });
   await admin.from('staff_invites').delete().eq('email', email);
@@ -236,6 +292,7 @@ Deno.serve(async (req) => {
     return json({ error: `Could not set up profile: ${profileError.message}` }, 500);
   }
 
+  await rememberPassword(admin, created.user.id, password);
   const { emailSent, emailError } = await sendInvitation({ name: `${givenName} ${lastName}`, roleLabel: title, email, password, siteUrl });
 
   // The temporary password is returned once so the admin can share it if the email fails
