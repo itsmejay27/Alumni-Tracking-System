@@ -53,7 +53,7 @@ const TEMPLATE_HEADERS = [
   'Last Name', 'Given Name', 'Middle Name', 'Present Address', 'Permanent Address', 'Sex', 'Date of Birth',
   'Civil Status', 'Mobile No.', 'Email Address', 'Facebook', 'Twitter', 'Program', 'Year Graduated', 'Campus',
   'Employment Status', 'Complete Name of Organization', 'Company Address', 'Company Contact No.', 'Job Title',
-  'Job Description', 'Length of Service', 'Type of Company', 'Job Level', 'Nature of Employment', 'Suggestions',
+  'Job Description', 'Length of Service', 'Type of Company', 'Nature of Employment', 'Suggestions',
 ];
 
 const THIS_YEAR = new Date().getFullYear();
@@ -203,7 +203,6 @@ export function CsvImport({
             company: r.company,
             employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Private',
             employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
-            jobLevel: r.jobLevel || 'Rank and File',
             employerAddress: r.employerAddress || undefined,
             employerContact: r.employerContact || undefined,
             lengthOfService: r.lengthOfService || undefined,
@@ -238,7 +237,6 @@ export function CsvImport({
           currentPosition: job?.position,
           currentCompany: job?.company,
           employerType: job?.employerType,
-          jobLevel: job?.jobLevel,
           employerAddress: job?.employerAddress,
           employerContact: job?.employerContact,
           lengthOfService: job?.lengthOfService,

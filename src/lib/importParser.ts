@@ -79,6 +79,7 @@ const COLUMNS: { key: string; match: string[]; not?: string[] }[] = [
   { key: 'jobDescription', match: ['job description', 'description of work', 'duties'] },
   { key: 'employerType', match: ['employer type', 'type of employer', 'sector', 'company type', 'type of company', 'kind of company'] },
   { key: 'employmentType', match: ['nature of employment', 'employment type'] },
+  // Recognized only so a Job Level column isn't mistaken for another field; it is not stored
   { key: 'jobLevel', match: ['job level'] },
   { key: 'status', match: ['employment status', 'are you employed', 'currently employed', 'status'] },
   { key: 'position', match: ['position', 'job title', 'designation'] },

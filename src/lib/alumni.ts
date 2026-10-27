@@ -10,7 +10,7 @@ export interface EmploymentEntry {
   company: string;
   employerType: string;
   employmentStatus: string; // Permanent, Probationary, Contractual, Job Order, Self-Employed
-  jobLevel: string; // Rank and File, Supervisory, Managerial / Executive, Job Order
+  jobLevel?: string; // no longer collected; kept so older records still load
   employerAddress?: string;
   employerContact?: string;
   jobDescription?: string;

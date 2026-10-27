@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
-import { PROGRAMS, JOB_LEVELS, JOB_LEVEL_HELP } from '@/lib/programs';
+import { PROGRAMS } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
 
 interface AnalyticsProps {
@@ -80,13 +80,6 @@ export function Analytics({ userRole }: AnalyticsProps) {
     });
   }, [records, years.join(','), visiblePrograms.map((p) => p.code).join(','), metric]);
   const programsWithData = visiblePrograms.filter((p) => chartData.some((d) => d[p.code] != null));
-
-  // Job level x employer type (industry vs government)
-  const levelTable = JOB_LEVELS.map((level) => ({
-    level,
-    gov: jobs.filter((j) => j.jobLevel === level && isGovernment(j.employerType)).length,
-    priv: jobs.filter((j) => j.jobLevel === level && !isGovernment(j.employerType)).length,
-  }));
 
   // Program comparison (government vs private)
   const programTable = visiblePrograms.map((p) => {
@@ -267,7 +260,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Program comparison table */}
         <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
           <h3 className="font-semibold">Employment by program</h3>
@@ -309,33 +302,6 @@ export function Analytics({ userRole }: AnalyticsProps) {
           </div>
         </div>
 
-        {/* Job level by sector */}
-        <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-          <h3 className="font-semibold">Job level by sector</h3>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-4">Employed alumni, industry (private) vs government</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Job level</th>
-                <th className="py-2 px-2 font-medium text-right">Industry / Private</th>
-                <th className="py-2 pl-2 font-medium text-right">Government</th>
-              </tr>
-            </thead>
-            <tbody>
-              {levelTable.map((l) => (
-                <tr key={l.level} className="border-t border-border/60">
-                  <td className="py-2.5 pr-3">
-                    <p className="font-medium">{l.level}</p>
-                    {JOB_LEVEL_HELP[l.level] && <p className="text-xs text-muted-foreground">{JOB_LEVEL_HELP[l.level]}</p>}
-                  </td>
-                  <td className="py-2.5 px-2 text-right tabular-nums">{l.priv}</td>
-                  <td className="py-2.5 pl-2 text-right tabular-nums">{l.gov}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-[11px] text-muted-foreground mt-3">Older imported records without a job level are counted as Rank and File.</p>
-        </div>
       </div>
 
 

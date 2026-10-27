@@ -2,27 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import {
-  User,
-  Briefcase,
-  GraduationCap,
   Save,
   Trash2,
   Plus,
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
   ShieldCheck,
   CheckCircle2,
   X,
   ChevronDown,
   Camera,
-  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { CurrentUser } from '../App';
 import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
-import { PROGRAMS, EMPLOYMENT_STATUSES, JOB_LEVELS, EMPLOYER_TYPES, JOB_LEVEL_HELP, programName } from '@/lib/programs';
+import { PROGRAMS, EMPLOYMENT_STATUSES, EMPLOYER_TYPES, programName } from '@/lib/programs';
 import { LoadingState } from './DataState';
 import { PhoneInput, isValidMobile } from './PhoneInput';
 
@@ -51,7 +46,6 @@ const newEntry = (): EmploymentEntry => ({
   company: '',
   employerType: 'Private',
   employmentStatus: 'Permanent',
-  jobLevel: 'Rank and File',
   employerAddress: '',
   jobDescription: '',
   startDate: '',
@@ -168,7 +162,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const pages = Math.max(1, Math.ceil(previousJobs.length / PAGE_SIZE));
   const shownPrevious = previousJobs.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-  const [employmentOpen, setEmploymentOpen] = useState(false);
   const [showPrevious, setShowPrevious] = useState(false);
   const [jobModal, setJobModal] = useState<{ entry: EmploymentEntry; isNew: boolean } | null>(null);
 
@@ -184,11 +177,11 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       setHistory((h) => h.map((e) => (e.id === entry.id ? entry : e)));
     }
     setJobModal(null);
-    setEmploymentOpen(true);
   };
 
   // ---- Saving, one section at a time ----
   type SectionId = 'personal' | 'education' | 'employment' | 'feedback';
+  const [tab, setTab] = useState<SectionId>('personal');
   const [savingSection, setSavingSection] = useState<SectionId | null>(null);
 
   const personalSlice = () => ({
@@ -232,7 +225,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       employerContact: employed ? latest!.employerContact : undefined,
       lengthOfService: employed ? latest!.lengthOfService : undefined,
       jobDescription: employed ? latest!.jobDescription : undefined,
-      jobLevel: employed ? latest!.jobLevel : undefined,
     };
   };
   const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic });
@@ -343,9 +335,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     }
   };
 
-  const saveBar = (section: SectionId, label: string) => (
-    <SaveRow dirty={dirty[section]} busy={savingSection === section} onSave={() => saveSection(section)} label={label} />
-  );
 
   if (loading) return <LoadingState label={t('Loading your profile...')} />;
 
@@ -361,6 +350,18 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   ];
   const completion = Math.round((checks.filter(Boolean).length / checks.length) * 100);
   const initials = `${givenName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'OM';
+  const tabs: { id: SectionId; label: string; saveLabel: string; done: boolean; optional?: boolean }[] = [
+    {
+      id: 'personal',
+      label: 'Personal information',
+      saveLabel: 'Save personal information',
+      done: !!givenName.trim() && !!lastName.trim() && isValidMobile(mobileNo) && (ageFrom(dateOfBirth) ?? 0) >= 15 && !!presentAddress.trim() && !!permanentAddress.trim(),
+    },
+    { id: 'education', label: 'Education', saveLabel: 'Save education', done: !!course && !!yearGraduated },
+    { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: status === 'Unemployed' || currentJobs.length > 0 },
+    { id: 'feedback', label: 'Feedback', saveLabel: 'Save', done: !!suggestions.trim(), optional: true },
+  ];
+  const tabIndex = tabs.findIndex((x) => x.id === tab);
   const displayName = `${givenName} ${middleName ? middleName[0] + '. ' : ''}${lastName}`.trim();
 
   return (
@@ -427,162 +428,184 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         </div>
       )}
 
-      <div className="space-y-6">
-        {/* PERSONAL */}
-        <Section icon={<User size={18} />} title="Personal information">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} /></Field>
-            <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} /></Field>
-            <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} /></Field>
-          </div>
+      {/* One container: tabs for each part of the tracer form */}
+      <div className="bg-card rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex overflow-x-auto border-b border-border [scrollbar-width:none]" role="tablist">
+          {tabs.map((tb, i) => (
+            <button
+              key={tb.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === tb.id}
+              onClick={() => setTab(tb.id)}
+              className={`relative flex-1 min-w-[9.5rem] flex items-center gap-3 px-4 sm:px-5 py-4 text-left transition-colors ${
+                tab === tb.id ? 'bg-muted/50' : 'hover:bg-muted/30'
+              }`}
+            >
+              <span
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                  tab === tb.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {tb.done && !dirty[tb.id] ? <CheckCircle2 size={16} /> : i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold truncate">{t(tb.label)}</span>
+                <span className="block text-[11px] text-muted-foreground truncate">
+                  {dirty[tb.id] ? t('Not saved') : tb.done ? t('Complete') : tb.optional ? t('Optional') : t('Needs your answer')}
+                </span>
+              </span>
+              {!tb.done && !tb.optional && <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />}
+              {tab === tb.id && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />}
+            </button>
+          ))}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Email"><input readOnly value={currentUser?.email || ''} className={`${input} bg-muted text-muted-foreground`} /></Field>
-            <Field label="Mobile number *"><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
-            <Field label="Facebook name"><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
-          </div>
+        <div className="p-5 sm:p-7 space-y-6">
+          {/* PERSONAL */}
+          {tab === 'personal' && (
+            <>
+              <Group title="Name">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} /></Field>
+                  <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} /></Field>
+                  <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} /></Field>
+                </div>
+              </Group>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Twitter / X"><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder="@username" /></Field>
-            <Field label="Other social network"><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
-            <Field label="Other social network ID"><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
-          </div>
+              <Group title="Personal details">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Field label="Sex *">
+                    <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
+                      <option value="Female">{t('Female')}</option>
+                      <option value="Male">{t('Male')}</option>
+                    </select>
+                  </Field>
+                  <Field label="Date of birth *">
+                    <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
+                  </Field>
+                  <Field label="Civil status *">
+                    <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
+                      <option value="Single">{t('Single')}</option>
+                      <option value="Married">{t('Married')}</option>
+                      <option value="Separated">{t('Separated')}</option>
+                      <option value="Widowed">{t('Widowed')}</option>
+                    </select>
+                  </Field>
+                </div>
+              </Group>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Sex *">
-              <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
-                <option value="Female">{t('Female')}</option>
-                <option value="Male">{t('Male')}</option>
-              </select>
-            </Field>
-            <Field label="Date of birth *">
-              <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
-            </Field>
-            <Field label="Civil status *">
-              <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
-                <option value="Single">{t('Single')}</option>
-                <option value="Married">{t('Married')}</option>
-                <option value="Separated">{t('Separated')}</option>
-                <option value="Widowed">{t('Widowed')}</option>
-              </select>
-            </Field>
-          </div>
+              <Group title="Contact">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Email"><input readOnly value={currentUser?.email || ''} className={`${input} bg-muted text-muted-foreground`} /></Field>
+                  <Field label="Mobile number *"><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
+                </div>
+              </Group>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Present address *"><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
-            <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
-          </div>
+              <Group title="Address">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Present address *"><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
+                  <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
+                </div>
+              </Group>
 
-          <h4 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground pt-2 border-t border-border/60">
-            <Users size={15} /> {t('Parents')}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
-            <Field label="Father's contact number"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-            <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
-            <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
-          </div>
+              <Group title="Social media">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Facebook name"><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
+                  <Field label="Twitter / X"><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder="@username" /></Field>
+                  <Field label="Other social network"><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
+                  <Field label="Other social network ID"><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
+                </div>
+              </Group>
 
-          {saveBar('personal', 'Save personal information')}
-        </Section>
+              <Group title="Parents">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
+                  <Field label="Father's contact number"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
+                  <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
+                  <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
+                </div>
+              </Group>
+            </>
+          )}
 
-        {/* EDUCATION */}
-        <Section icon={<GraduationCap size={18} />} title="Education">
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
-            <Field label="Program *">
-              <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
-                {PROGRAMS.map((p) => (
-                  <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Year graduated *">
-              <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
-                {GRAD_YEARS.map((y) => (
-                  <option key={y} value={y}>{y - 1}-{y}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
-          </div>
-          {saveBar('education', 'Save education')}
-        </Section>
-
-        {/* EMPLOYMENT (collapsed to a one-line summary until opened) */}
-        <section className="bg-card rounded-2xl shadow-sm">
-          <button
-            type="button"
-            onClick={() => setEmploymentOpen((v) => !v)}
-            aria-expanded={employmentOpen}
-            className="w-full flex items-center justify-between gap-3 p-5 sm:p-6 text-left"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <Briefcase size={18} />
+          {/* EDUCATION */}
+          {tab === 'education' && (
+            <Group title="Degree finished from OMSU">
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
+                <Field label="Program *">
+                  <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
+                    {PROGRAMS.map((p) => (
+                      <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Year graduated *">
+                  <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
+                    {GRAD_YEARS.map((y) => (
+                      <option key={y} value={y}>{y - 1}-{y}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
               </div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-base">{t('Employment')}</h3>
-                <p className="text-sm text-muted-foreground truncate">
-                  {t(status)}
-                  {currentJobs[0] && ` · ${currentJobs[0].position || t('Position')} ${t('at')} ${currentJobs[0].company || t('Company')}`}
-                  {previousJobs.length > 0 && ` · ${previousJobs.length} previous job${previousJobs.length === 1 ? '' : 's'}`}
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-primary shrink-0">
-              {!employmentOpen && dirty.employment && <span className="text-xs text-amber-600 font-medium mr-1">{t('Not saved')}</span>}
-              {employmentOpen ? t('Hide') : t('Show')}
-              <ChevronDown size={16} className={`transition-transform ${employmentOpen ? 'rotate-180' : ''}`} />
-            </span>
-          </button>
+            </Group>
+          )}
 
-          {employmentOpen && (
-            <div className="px-5 sm:px-6 pb-6 space-y-5 border-t border-border/60 pt-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium mr-1">{t('Current status')}:</span>
-                  {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
-                    <button
-                      type="button"
-                      key={st}
-                      onClick={() => setStatus(st)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        status === st ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'
-                      }`}
-                    >
-                      {t(st)}
+          {/* EMPLOYMENT */}
+          {tab === 'employment' && (
+            <>
+              <Group title="Current status">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
+                      <button
+                        type="button"
+                        key={st}
+                        onClick={() => setStatus(st)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          status === st ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/70'
+                        }`}
+                      >
+                        {t(st)}
+                      </button>
+                    ))}
+                  </div>
+                  {status !== 'Unemployed' && (
+                    <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted">
+                      <Plus size={16} /> {t('Add job')}
                     </button>
-                  ))}
+                  )}
                 </div>
-                {status !== 'Unemployed' && (
-                  <button type="button" onClick={openNewJob} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
-                    <Plus size={16} /> {t('Add job')}
+              </Group>
+
+              <Group title="Current job">
+                {status === 'Unemployed' ? (
+                  <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+                    {t("You're marked as unemployed, so no job details are needed.")}
+                    {currentJobs.length > 0 && ` ${t('When you save, your current job will move to your previous jobs.')}`}{' '}
+                    {t('If you find work, choose Employed or Self-Employed and add the job.')}
+                  </p>
+                ) : currentJobs.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={openNewJob}
+                    className="w-full rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground hover:bg-muted/40"
+                  >
+                    <Plus size={18} className="mx-auto mb-1" />
+                    {t('No current job yet. Click here to add it.')}
                   </button>
+                ) : (
+                  <div className="space-y-2">
+                    {currentJobs.map((j) => (
+                      <JobRow key={j.id} job={j} onOpen={() => setJobModal({ entry: j, isNew: false })} />
+                    ))}
+                  </div>
                 )}
-              </div>
+              </Group>
 
-              {/* Current job(s) */}
-              {status === 'Unemployed' ? (
-                <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-                  {t("You're marked as unemployed, so no job details are needed.")}
-                  {currentJobs.length > 0 && ` ${t('When you save, your current job will move to your previous jobs.')}`}{' '}
-                  {t('If you find work, choose Employed or Self-Employed and add the job.')}
-                </p>
-              ) : currentJobs.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                  No current job recorded. Click "Add job" to add it.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {currentJobs.map((j) => (
-                    <JobRow key={j.id} job={j} onOpen={() => setJobModal({ entry: j, isNew: false })} />
-                  ))}
-                </div>
-              )}
-
-              {/* Previous jobs, hidden until asked for */}
               {previousJobs.length > 0 && (
-                <div>
+                <Group title="Previous jobs">
                   <button type="button" onClick={() => setShowPrevious((v) => !v)} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     <ChevronDown size={16} className={`transition-transform ${showPrevious ? 'rotate-180' : ''}`} />
                     {showPrevious ? t('Hide previous jobs') : t('Show previous jobs')} ({previousJobs.length})
@@ -607,60 +630,89 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                       )}
                     </div>
                   )}
-                </div>
+                </Group>
               )}
               <p className="text-xs text-muted-foreground">{t('Saved jobs are kept as your employment history.')}</p>
-              {saveBar('employment', 'Save employment')}
-            </div>
+            </>
           )}
-        </section>
 
-        {jobModal && (
-          <JobModal
-            entry={jobModal.entry}
-            isNew={jobModal.isNew}
-            locked={savedIds.has(jobModal.entry.id)}
-            onClose={() => setJobModal(null)}
-            onSave={(e) => saveJob(e, jobModal.isNew)}
-            onRemove={
-              !jobModal.isNew && !savedIds.has(jobModal.entry.id)
-                ? () => {
-                    setHistory((h) => h.filter((x) => x.id !== jobModal.entry.id));
-                    setJobModal(null);
-                  }
+          {/* FEEDBACK */}
+          {tab === 'feedback' && (
+            <>
+              <Group title="Suggestions">
+                <Field label="Suggestions & feedback">
+                  <textarea
+                    rows={4}
+                    value={suggestions}
+                    onChange={(e) => setSuggestions(e.target.value)}
+                    className={`${input} resize-none`}
+                    placeholder={t('How can OMSU improve its programs or this tracer study?')}
+                  />
+                </Field>
+              </Group>
+              <Group title="Privacy">
+                <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-border p-4">
+                  <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
+                  <span className="text-sm">
+                    <span className="font-medium flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> {t('Let other OMSU alumni find me')}</span>
+                    <span className="text-muted-foreground text-xs">{t('Only your name, program, batch and current position are shown. Addresses, birth date and civil status are never shown.')}</span>
+                  </span>
+                </label>
+              </Group>
+            </>
+          )}
+
+          {/* Save this part, then go to the next one */}
+          <SaveRow
+            // Until the graduate saves once, Save stays on so they can confirm details already on file
+            dirty={dirty[tab] || !record?.respondedAt}
+            busy={savingSection === tab}
+            onSave={() => saveSection(tab)}
+            label={tabs.find((x) => x.id === tab)!.saveLabel}
+            next={
+              tabIndex < tabs.length - 1
+                ? { label: tabs[tabIndex + 1].label, onClick: () => setTab(tabs[tabIndex + 1].id) }
                 : undefined
             }
           />
-        )}
-
-        {/* PRIVACY + FEEDBACK */}
-        <Section icon={<HelpCircle size={18} />} title="Suggestions & privacy">
-          <Field label="Suggestions & feedback">
-            <textarea
-              rows={3}
-              value={suggestions}
-              onChange={(e) => setSuggestions(e.target.value)}
-              className={`${input} resize-none`}
-              placeholder={t('How can OMSU improve its programs or this tracer study?')}
-            />
-          </Field>
-          <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-muted/50 p-4">
-            <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
-            <span className="text-sm">
-              <span className="font-medium block flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> {t('Let other OMSU alumni find me')}</span>
-              <span className="text-muted-foreground text-xs">{t('Only your name, program, batch and current position are shown. Addresses, birth date and civil status are never shown.')}</span>
-            </span>
-          </label>
-          {saveBar('feedback', 'Save')}
-        </Section>
-
+        </div>
       </div>
+
+      {jobModal && (
+        <JobModal
+          entry={jobModal.entry}
+          isNew={jobModal.isNew}
+          locked={savedIds.has(jobModal.entry.id)}
+          onClose={() => setJobModal(null)}
+          onSave={(e) => saveJob(e, jobModal.isNew)}
+          onRemove={
+            !jobModal.isNew && !savedIds.has(jobModal.entry.id)
+              ? () => {
+                  setHistory((h) => h.filter((x) => x.id !== jobModal.entry.id));
+                  setJobModal(null);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
 
 /** Save button at the bottom of a section; shows whether that section has unsaved changes. */
-function SaveRow({ dirty, busy, onSave, label }: { dirty: boolean; busy: boolean; onSave: () => void; label: string }) {
+function SaveRow({
+  dirty,
+  busy,
+  onSave,
+  label,
+  next,
+}: {
+  dirty: boolean;
+  busy: boolean;
+  onSave: () => void;
+  label: string;
+  next?: { label: string; onClick: () => void };
+}) {
   const t = useT();
   return (
     <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-4 border-t border-border/60">
@@ -679,25 +731,30 @@ function SaveRow({ dirty, busy, onSave, label }: { dirty: boolean; busy: boolean
       >
         <Save size={16} /> {busy ? t('Saving...') : t(label)}
       </button>
+      {next && (
+        <button
+          type="button"
+          onClick={next.onClick}
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+        >
+          {t('Next')}: {t(next.label)} <ChevronRight size={16} />
+        </button>
+      )}
     </div>
   );
 }
 
-function Section({ icon, title, action, children }: { icon: React.ReactNode; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+/** A titled group of fields inside a tab */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
   const t = useT();
   return (
-    <section className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">{icon}</div>
-          <h3 className="font-semibold text-base">{t(title)}</h3>
-        </div>
-        {action}
-      </div>
+    <div className="space-y-3">
+      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t(title)}</h4>
       {children}
-    </section>
+    </div>
   );
 }
+
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   const t = useT();
@@ -720,7 +777,7 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
           {job.position || t('Position not set')} <span className="font-normal text-muted-foreground">{t('at')} {job.company || '—'}</span>
         </p>
         <p className="text-xs text-muted-foreground truncate">
-          {[job.employmentStatus, job.employerType, job.jobLevel].filter(Boolean).join(' · ')}
+          {[job.employmentStatus, job.employerType].filter(Boolean).join(' · ')}
           {job.startDate && job.endDate && ` · ${job.startDate} – ${job.endDate}`}
           {job.startDate && !job.endDate && ` · since ${job.startDate}`}
           {!job.startDate && job.endDate && ` · until ${job.endDate}`}
@@ -780,12 +837,6 @@ function JobModal({
             <select disabled={locked} value={draft.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })} className={input}>
               {EMPLOYMENT_STATUSES.map((x) => <option key={x}>{x}</option>)}
             </select>
-          </Field>
-          <Field label="Job level *">
-            <select disabled={locked} value={draft.jobLevel} onChange={(e) => set({ jobLevel: e.target.value })} className={input}>
-              {JOB_LEVELS.map((x) => <option key={x}>{x}</option>)}
-            </select>
-            {JOB_LEVEL_HELP[draft.jobLevel] && <p className="text-xs text-muted-foreground mt-1">{JOB_LEVEL_HELP[draft.jobLevel]}</p>}
           </Field>
           <Field label="Employer type *">
             <select disabled={locked} value={draft.employerType} onChange={(e) => set({ employerType: e.target.value })} className={input}>
