@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
 import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
@@ -26,6 +25,10 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const [filterBatch, setFilterBatch] = useState<string>('all');
   const [filterCourse, setFilterCourse] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterResponse, setFilterResponse] = useState<string>('all');
+  const [filterSex, setFilterSex] = useState<string>('all');
+  const [filterSector, setFilterSector] = useState<string>('all');
+  const [filterCampus, setFilterCampus] = useState<string>('all');
   const [selectedRecord, setSelectedRecord] = useState<AlumniRecord | null>(null);
   const [viewTab, setViewTab] = useState<'records' | 'suggestions'>('records');
   const { records, loading, error, reload } = useAlumniRecords();
@@ -66,13 +69,35 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     // 5. Status Filter
     const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
 
-    return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
+    // 6. Response: updated their own record / signed up only / no account yet
+    const response = record.respondedAt ? 'updated' : record.accountLinked ? 'signed-up' : 'no-account';
+    const matchesResponse = filterResponse === 'all' || response === filterResponse;
+
+    // 7. Sex, type of company, campus
+    const matchesSex = filterSex === 'all' || record.sex === filterSex;
+    const sector = record.employerType || '';
+    const matchesSector = filterSector === 'all' || (filterSector === 'none' ? !sector : sector === filterSector);
+    const matchesCampus = filterCampus === 'all' || (record.campus || '').trim().toUpperCase() === filterCampus;
+
+    return matchesSearch && matchesBatch && matchesCourse && matchesStatus && matchesResponse && matchesSex && matchesSector && matchesCampus;
   });
 
   const paged = usePaged(filteredRecords, 15);
   const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
 
   const batches = Array.from(new Set(records.map(r => r.batch))).sort().reverse();
+  const campuses = Array.from(new Set(records.map((r) => (r.campus || '').trim().toUpperCase()).filter(Boolean))).sort();
+  const activeFilters = [filterBatch, courseScope ? 'all' : filterCourse, filterStatus, filterResponse, filterSex, filterSector, filterCampus].filter((v) => v !== 'all').length + (searchQuery ? 1 : 0);
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterBatch('all');
+    setFilterCourse('all');
+    setFilterStatus('all');
+    setFilterResponse('all');
+    setFilterSex('all');
+    setFilterSector('all');
+    setFilterCampus('all');
+  };
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
 
   const handleDownload = () => {
@@ -199,7 +224,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   type="text"
-                  placeholder="Search name, ID..."
+                  placeholder="Search name or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
@@ -255,6 +280,57 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <option value="Not Tracked">Not tracked</option>
                 </select>
               </div>
+
+              {/* Response Filter */}
+              <div>
+                <select value={filterResponse} onChange={(e) => setFilterResponse(e.target.value)} className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold">
+                  <option value="all">All responses</option>
+                  <option value="updated">Updated their record</option>
+                  <option value="signed-up">Signed up, not updated yet</option>
+                  <option value="no-account">No account yet</option>
+                </select>
+              </div>
+
+              {/* Sex Filter */}
+              <div>
+                <select value={filterSex} onChange={(e) => setFilterSex(e.target.value)} className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold">
+                  <option value="all">Male and female</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+
+              {/* Type of company */}
+              <div>
+                <select value={filterSector} onChange={(e) => setFilterSector(e.target.value)} className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold">
+                  <option value="all">All types of company</option>
+                  <option value="Private">Private</option>
+                  <option value="Semi-Private">Semi-Private</option>
+                  <option value="Government">Government</option>
+                  <option value="NGO/INGO">NGO/INGO</option>
+                  <option value="none">Not stated</option>
+                </select>
+              </div>
+
+              {/* Campus */}
+              <div>
+                <select value={filterCampus} onChange={(e) => setFilterCampus(e.target.value)} className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold">
+                  <option value="all">All campuses</option>
+                  {campuses.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-4 text-sm">
+              <p className="text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{filteredRecords.length}</span> of {courseScope ? records.filter((r) => r.course === courseScope).length : records.length} graduates
+              </p>
+              {activeFilters > 0 && (
+                <button onClick={clearFilters} className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline">
+                  <X size={14} /> Clear filters ({activeFilters})
+                </button>
+              )}
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, X, FileSpreadsheet, Download, AlertTriangle } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Download, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { AlumniRecord, Course } from '@/lib/alumni';
@@ -60,6 +60,19 @@ const THIS_YEAR = new Date().getFullYear();
 const key = (r: { lastName: string; givenName: string; course: string | null; yearGraduated: number }) =>
   `${r.lastName}|${r.givenName}|${r.course}|${r.yearGraduated}`.toUpperCase();
 
+/** One uploaded file and the choices made for it. */
+interface FileEntry {
+  id: string;
+  name: string;
+  rows: ParsedRow[];
+  problem: string;
+  format: string;
+  skipped: number;
+  year: number;
+  hasYearColumn: boolean;
+  program: Course;
+}
+
 export function CsvImport({
   scope,
   existing,
@@ -71,76 +84,107 @@ export function CsvImport({
   onDone: () => void;
   onClose: () => void;
 }) {
-  const [parsed, setParsed] = useState<ParsedRow[]>([]);
-  const [fileName, setFileName] = useState('');
-  const [problem, setProblem] = useState('');
-  const [info, setInfo] = useState<{ format: string; skipped: number } | null>(null);
-  const [defaultProgram, setDefaultProgram] = useState<Course>(scope || 'BSIT');
-  const [year, setYear] = useState<number>(THIS_YEAR);
-  const [hasYearColumn, setHasYearColumn] = useState(false);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [reading, setReading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setFileName(file.name);
-    setParsed([]);
-    setProblem('');
-    setInfo(null);
+  const update = (id: string, patch: Partial<FileEntry>) => setFiles((list) => list.map((f) => (f.id === id ? { ...f, ...patch } : f)));
 
+  /** Reads one file into rows, or explains why it can't be imported. */
+  const readFile = async (file: File): Promise<FileEntry> => {
+    const guessYear = yearFromFileName(file.name) || THIS_YEAR;
+    const entry: FileEntry = {
+      id: crypto.randomUUID(),
+      name: file.name,
+      rows: [],
+      problem: '',
+      format: '',
+      skipped: 0,
+      year: guessYear,
+      hasYearColumn: false,
+      program: scope || 'BSIT',
+    };
     let table: Cell[][];
     try {
       table = await readTable(file);
     } catch (err: any) {
-      setProblem(err.message || 'Could not read this file.');
-      return;
+      return { ...entry, problem: err.message || 'Could not read this file.' };
     }
-
-    const guessYear = yearFromFileName(file.name) || THIS_YEAR;
     const result = parseTracerTable(table, { defaultYear: guessYear, fileName: file.name });
     if (!result.rows.length) {
-      setProblem('No graduates were found in this file. Make sure it has a "Name of Graduate" column or First/Last Name columns.');
-      return;
+      return { ...entry, problem: 'No graduates were found in this file. Make sure it has a "Name of Graduate" column or First/Last Name columns.' };
     }
-
     // Program chairs can only import their own program's graduates. The file must say which
     // program it is for (a program column, or the program in the file name, e.g. BSIT_2025.xlsx).
     if (scope) {
       const others = result.programsFound.filter((p) => p !== scope);
       if (others.length) {
         const n = result.rows.filter((r) => r.course && r.course !== scope).length;
-        setProblem(
-          `This file contains ${n} graduate${n === 1 ? '' : 's'} from ${others.join(', ')}. You can only import ${scope} records. Upload a file that has ${scope} graduates only.`
-        );
-        return;
+        return {
+          ...entry,
+          problem: `This file contains ${n} graduate${n === 1 ? '' : 's'} from ${others.join(', ')}. You can only import ${scope} records.`,
+        };
       }
       if (result.unknownProgram > 0) {
-        setProblem(
-          `This file doesn't say which program its graduates are from, so it can't be checked as ${scope}. Add a "Program" column, or put ${scope} in the file name (for example ${scope}_${THIS_YEAR}.xlsx), then upload it again.`
-        );
-        return;
+        return {
+          ...entry,
+          problem: `This file doesn't say which program its graduates are from. Add a "Program" column, or put ${scope} in the file name (for example ${scope}_${THIS_YEAR}.xlsx).`,
+        };
       }
     }
-
-    setHasYearColumn(result.rows.some((r) => r.yearGraduated !== guessYear));
-    setYear(guessYear);
-    setParsed(result.rows);
-    setInfo({ format: result.format, skipped: result.skipped });
+    const fileProgram = result.programsFound.length === 1 ? result.programsFound[0] : null;
+    return {
+      ...entry,
+      rows: result.rows,
+      format: result.format,
+      skipped: result.skipped,
+      hasYearColumn: result.rows.some((r) => r.yearGraduated !== guessYear),
+      program: scope || fileProgram || 'BSIT',
+    };
   };
 
-  // Apply the chosen year/program, and leave out graduates already in the system
-  const finalRows = parsed.map((r) => ({
-    ...r,
-    course: (scope || r.course || defaultProgram) as Course,
-    yearGraduated: hasYearColumn ? r.yearGraduated : year,
-  }));
+  const addFiles = async (list: FileList | File[] | null) => {
+    const picked = Array.from(list || []).filter((f) => /\.(xlsx|xls|csv)$/i.test(f.name));
+    if (!picked.length) return;
+    setReading(true);
+    const entries: FileEntry[] = [];
+    for (const f of picked) entries.push(await readFile(f));
+    setFiles((cur) => [...cur, ...entries]);
+    setReading(false);
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    addFiles(list);
+  };
+
+  // Apply each file's year/program, and leave out graduates already in the system or repeated
+  // in another file
   const existingKeys = new Set(existing.map((r) => key(r)));
   const existingEmails = new Set(existing.map((r) => (r.email || '').toLowerCase()).filter(Boolean));
-  const toImport = finalRows.filter((r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)));
+  const seenKeys = new Set<string>();
+  const seenEmails = new Set<string>();
+  const perFile = files.map((f) => {
+    const finalRows = f.rows.map((r) => ({
+      ...r,
+      course: (scope || r.course || f.program) as Course,
+      yearGraduated: f.hasYearColumn ? r.yearGraduated : f.year,
+    }));
+    const ready = finalRows.filter((r) => {
+      const k = key(r);
+      const dup = existingKeys.has(k) || seenKeys.has(k) || (!!r.email && (existingEmails.has(r.email) || seenEmails.has(r.email)));
+      seenKeys.add(k);
+      if (r.email) seenEmails.add(r.email);
+      return !dup;
+    });
+    return { file: f, ready, duplicates: finalRows.length - ready.length };
+  });
+  const toImport = perFile.flatMap((p) => p.ready.map((r) => ({ ...r, fileName: p.file.name })));
   // Rows without a birthday or sex: sign-up matches them by name and fills the missing details in
   const missingSignUp = toImport.filter((r) => !r.dateOfBirth || !r.sex).length;
-  const duplicates = finalRows.length - toImport.length;
+  const duplicates = perFile.reduce((n, p) => n + p.duplicates, 0);
   const counts = {
     employed: toImport.filter((r) => r.status === 'Employed' || r.status === 'Self-Employed').length,
     unemployed: toImport.filter((r) => r.status === 'Unemployed').length,
@@ -203,7 +247,7 @@ export function CsvImport({
           isIP: r.isIP,
           suggestions: r.suggestions,
           lastUpdated: now,
-          importedFrom: fileName,
+          importedFrom: r.fileName,
         },
       };
     });
@@ -238,12 +282,12 @@ export function CsvImport({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-lg">Import graduates</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload the official Graduate Tracer Excel sheet (.xlsx), or a Google Forms / spreadsheet export (.csv).
+              Upload one or more official Graduate Tracer Excel sheets (.xlsx), or Google Forms / spreadsheet exports (.csv).
               {scope && ` Only ${scope} graduates are accepted.`}
             </p>
           </div>
@@ -252,62 +296,113 @@ export function CsvImport({
           </button>
         </div>
 
-        <label className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-6 cursor-pointer hover:bg-muted/40">
-          <input type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={handleFile} className="hidden" />
-          {fileName ? <FileSpreadsheet className="text-primary" size={28} /> : <Upload className="text-muted-foreground" size={28} />}
-          <span className="text-sm font-medium">{fileName || 'Choose an Excel (.xlsx) or CSV file'}</span>
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            addFiles(e.dataTransfer.files);
+          }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-6 cursor-pointer hover:bg-muted/40 ${
+            dragging ? 'border-primary bg-muted/40' : 'border-border'
+          }`}
+        >
+          <input
+            type="file"
+            multiple
+            accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleFile}
+            className="hidden"
+          />
+          {reading ? <Loader2 className="text-primary animate-spin" size={28} /> : <Upload className="text-muted-foreground" size={28} />}
+          <span className="text-sm font-medium text-center">
+            {reading ? 'Reading files...' : files.length ? 'Add more files' : 'Choose or drop Excel (.xlsx) or CSV files'}
+          </span>
+          <span className="text-xs text-muted-foreground">You can pick several files at once.</span>
         </label>
 
-        {problem && (
-          <div className="flex gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-800">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <p>{problem}</p>
-          </div>
-        )}
-
-        {parsed.length > 0 && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-sm font-medium">Year graduated</span>
-                {hasYearColumn ? (
-                  <p className="mt-1.5 text-sm text-muted-foreground">Taken from the file</p>
-                ) : (
-                  <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="mt-1.5 w-full filter-select">
-                    {Array.from({ length: THIS_YEAR - 1999 }, (_, i) => THIS_YEAR - i).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+        {files.length > 0 && (
+          <div className="space-y-3">
+            {perFile.map(({ file: f, ready, duplicates: dup }) => (
+              <div key={f.id} className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <FileSpreadsheet className={f.problem ? 'text-red-600 shrink-0' : 'text-primary shrink-0'} size={20} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate">{f.name}</p>
+                    {f.problem ? (
+                      <p className="text-xs text-red-700 mt-0.5">{f.problem}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {ready.length} to import{dup > 0 ? ` · ${dup} already in the system` : ''}
+                        {f.format === 'tracer-sheet' ? ' · official Graduate Tracer sheet' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setFiles((list) => list.filter((x) => x.id !== f.id))}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                {!f.problem && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-xs font-medium">Year graduated</span>
+                      {f.hasYearColumn ? (
+                        <p className="mt-1 text-sm text-muted-foreground">Taken from the file</p>
+                      ) : (
+                        <select value={f.year} onChange={(e) => update(f.id, { year: Number(e.target.value) })} className="mt-1 w-full filter-select">
+                          {Array.from({ length: THIS_YEAR - 1999 }, (_, i) => THIS_YEAR - i).map((y) => (
+                            <option key={y} value={y}>
+                              {y - 1}-{y}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium">Program</span>
+                      {scope || f.rows.every((r) => r.course) ? (
+                        <p className="mt-1 text-sm text-muted-foreground">{scope || [...new Set(f.rows.map((r) => r.course))].join(', ')}</p>
+                      ) : (
+                        <select value={f.program} onChange={(e) => update(f.id, { program: e.target.value as Course })} className="mt-1 w-full filter-select">
+                          {PROGRAMS.map((p) => (
+                            <option key={p.code} value={p.code}>
+                              {p.code}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </label>
+                  </div>
                 )}
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium">Program</span>
-                {scope || parsed.every((r) => r.course) ? (
-                  <p className="mt-1.5 text-sm text-muted-foreground">
-                    {scope || [...new Set(parsed.map((r) => r.course))].join(', ')}
-                  </p>
-                ) : (
-                  <select value={defaultProgram} onChange={(e) => setDefaultProgram(e.target.value as Course)} className="mt-1.5 w-full filter-select">
-                    {PROGRAMS.map((p) => <option key={p.code} value={p.code}>{p.code}</option>)}
-                  </select>
-                )}
-              </label>
-            </div>
+              </div>
+            ))}
 
-            <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1">
-              <p className="font-semibold">{toImport.length} graduates ready to import</p>
-              <p className="text-muted-foreground">
-                {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
-              </p>
-              {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system will be skipped.</p>}
-              {missingSignUp > 0 && (
-                <p className="text-muted-foreground">
-                  {missingSignUp} have no birthday or sex in the file. They can still create an account with their first and last name, and the birthday and sex they enter are then saved to their record.
+            {toImport.length > 0 && (
+              <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1">
+                <p className="font-semibold">
+                  {toImport.length} graduates ready to import from {perFile.filter((p) => p.ready.length).length} file
+                  {perFile.filter((p) => p.ready.length).length === 1 ? '' : 's'}
                 </p>
-              )}
-              {info?.format === 'tracer-sheet' && <p className="text-muted-foreground">Read as the official Graduate Tracer sheet.</p>}
-            </div>
-          </>
+                <p className="text-muted-foreground">
+                  {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
+                </p>
+                {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system or repeated in another file will be skipped.</p>}
+                {missingSignUp > 0 && (
+                  <p className="text-muted-foreground">
+                    {missingSignUp} have no birthday or sex in the file. They can still create an account with their first and last name, and the birthday and sex they enter are then saved to their record.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <button onClick={downloadTemplate} className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
