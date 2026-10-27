@@ -44,7 +44,7 @@ function invitationEmail(o: { name: string; roleLabel: string; email: string; pa
       <table role="presentation" cellpadding="0" cellspacing="0"><tr>
         <td style="vertical-align:middle;padding-right:14px"><img src="${logo}" width="56" height="56" alt="OMSU" style="display:block;border:0;width:56px;height:56px" /></td>
         <td style="vertical-align:middle;color:#ffffff">
-          <div style="font-size:17px;font-weight:bold;line-height:1.3">OMSU Alumni Graduate Tracer</div>
+          <div style="font-size:17px;font-weight:bold;line-height:1.3">OMSU Alumni Graduate Track</div>
           <div style="font-size:12px;color:#f5c400;line-height:1.4">Occidental Mindoro State University</div>
         </td>
       </tr></table>
@@ -53,7 +53,7 @@ function invitationEmail(o: { name: string; roleLabel: string; email: string; pa
   <tr>
     <td style="padding:24px;font-size:14px;color:#222;line-height:1.6">
   <p style="margin-top:0">Hello ${name},</p>
-  <p>You have been given an account on the <b>OMSU Alumni Graduate Tracer</b> of Occidental Mindoro State University as <b>${escapeHtml(o.roleLabel)}</b>.</p>
+  <p>You have been given an account on the <b>OMSU Alumni Graduate Track</b> of Occidental Mindoro State University as <b>${escapeHtml(o.roleLabel)}</b>.</p>
   <p>You may now log in using the details below. For your security, you will be asked to change this temporary password the first time you sign in.</p>
   <table style="border-collapse:collapse;margin:12px 0;background:#f6f8fc;border-radius:8px;font-size:14px;color:#222">
     <tr><td style="padding:8px 12px"><b>Login URL:</b></td><td style="padding:8px 12px"><a href="${site}" style="color:#002060">${site}</a></td></tr>
@@ -69,7 +69,7 @@ function invitationEmail(o: { name: string; roleLabel: string; email: string; pa
 </div>`;
   const text = `Hello ${o.name.toUpperCase()},
 
-You have been given an account on the OMSU Alumni Graduate Tracer as ${o.roleLabel}.
+You have been given an account on the OMSU Alumni Graduate Track as ${o.roleLabel}.
 
 Login URL: ${o.siteUrl}
 Email: ${o.email}
@@ -87,7 +87,7 @@ async function sendInvitation(o: { name: string; roleLabel: string; email: strin
   let emailSent = false;
   let emailError: string | null = null;
   const message = invitationEmail(o);
-  const subject = 'Your OMSU Alumni Tracer account';
+  const subject = 'Your OMSU Alumni Track account';
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const smtpUser = Deno.env.get('SMTP_USER');
   const smtpPass = Deno.env.get('SMTP_PASS');
@@ -97,7 +97,7 @@ async function sendInvitation(o: { name: string; roleLabel: string; email: strin
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>',
+          from: Deno.env.get('RESEND_FROM') || 'OMSU Alumni Track <onboarding@resend.dev>',
           to: [o.email],
           subject,
           html: message.html,
@@ -117,7 +117,7 @@ async function sendInvitation(o: { name: string; roleLabel: string; email: strin
         auth: { user: smtpUser, pass: smtpPass },
       });
       await transport.sendMail({
-        from: `"OMSU Alumni Tracer" <${Deno.env.get('SMTP_FROM') || smtpUser}>`,
+        from: `"OMSU Alumni Track" <${Deno.env.get('SMTP_FROM') || smtpUser}>`,
         to: o.email,
         subject,
         html: message.html,

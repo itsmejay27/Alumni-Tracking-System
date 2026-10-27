@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
-  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>';
+  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Track <onboarding@resend.dev>';
   const site = Deno.env.get('SITE_URL') || '';
   const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:640px">
@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
   <h2 style="color:#002060;margin:6px 0 14px">${escapeHtml(ann.title)}</h2>
   <div style="white-space:pre-wrap">${escapeHtml(ann.content)}</div>
   <p style="margin-top:18px;color:#6b7280">Posted by ${escapeHtml(ann.author || 'OMSU Alumni Affairs')}</p>
-  <p><a href="${escapeHtml(site)}" style="display:inline-block;padding:10px 18px;background:#002060;color:#fff;border-radius:6px;text-decoration:none">Open the OMSU Alumni Tracer</a></p>
-  <p style="font-size:12px;color:#9ca3af">You received this because you have an OMSU Alumni Tracer account. To stop these emails, turn them off in Settings → Notifications.</p>
+  <p><a href="${escapeHtml(site)}" style="display:inline-block;padding:10px 18px;background:#002060;color:#fff;border-radius:6px;text-decoration:none">Open the OMSU Alumni Track</a></p>
+  <p style="font-size:12px;color:#9ca3af">You received this because you have an OMSU Alumni Track account. To stop these emails, turn them off in Settings → Notifications.</p>
 </div>`;
 
   let sent = 0;

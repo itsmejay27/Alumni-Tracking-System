@@ -102,7 +102,7 @@ async function readJobPage(rawUrl: string): Promise<string> {
       redirect: 'manual',
       signal: AbortSignal.timeout(15_000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; OMSU-Alumni-Tracer/1.0; +https://omsualumnitrack.site)',
+        'User-Agent': 'Mozilla/5.0 (compatible; OMSU-Alumni-Track/1.0; +https://omsualumnitrack.site)',
         Accept: 'text/html,application/xhtml+xml',
       },
     });

@@ -9,7 +9,7 @@ const TERMS: { h: string; p: string[] }[] = [
   {
     h: '1. About this service',
     p: [
-      'The OMSU Alumni Tracer ("the System") is run by the Alumni Affairs Office of Occidental Mindoro State University (OMSU). It is used to conduct the Graduate Tracer Study, share announcements and job openings, and produce employment statistics for planning and accreditation.',
+      'The OMSU Alumni Track ("the System") is run by the Alumni Affairs Office of Occidental Mindoro State University (OMSU). It is used to conduct the Graduate Tracer Study, share announcements and job openings, and produce employment statistics for planning and accreditation.',
     ],
   },
   {

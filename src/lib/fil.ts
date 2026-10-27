@@ -17,7 +17,7 @@ export const FIL: Record<string, string> = {
   'Alumni Records': 'Mga Rekord ng Alumni',
   Accounts: 'Mga Account',
   'Sign Out': 'Mag-sign Out',
-  'Graduate Tracer': 'Graduate Tracer',
+  'Graduate Track': 'Graduate Track',
 
   // Home
   Welcome: 'Maligayang pagdating',
@@ -325,7 +325,7 @@ export const FIL: Record<string, string> = {
   'Could not sign out other devices': 'Hindi ma-sign out ang ibang device',
   'Other devices have been signed out': 'Na-sign out na ang ibang device',
   'Email notifications': 'Mga abiso sa email',
-  'Choose which emails the OMSU Alumni Tracer sends you.': 'Piliin kung anong email ang ipapadala sa iyo ng OMSU Alumni Tracer.',
+  'Choose which emails the OMSU Alumni Track sends you.': 'Piliin kung anong email ang ipapadala sa iyo ng OMSU Alumni Track.',
   'New job openings': 'Mga bagong trabaho',
   'When a job for your program (or for all programs) is posted on the Job Board.': 'Kapag may na-post na trabaho para sa iyong programa (o para sa lahat) sa Job Board.',
   'Job posts emailed to alumni.': 'Mga trabahong ini-email sa alumni.',

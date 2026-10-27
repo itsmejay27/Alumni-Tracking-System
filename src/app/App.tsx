@@ -271,7 +271,7 @@ function AppInner() {
   // Convert role to clean label
   const getRoleLabel = () => roleLabel(userRole);
   const getSubLabel = () => roleLabel(userRole);
-  const appName = isAdmin ? 'OMSU Tracer' : 'OMSU Alumni';
+  const appName = isAdmin ? 'OMSU Track' : 'OMSU Alumni';
 
   // Nav menu item details
   const adminMenuItems = [
@@ -313,7 +313,7 @@ function AppInner() {
           {!sidebarCollapsed && (
             <div className="min-w-0">
               <h1 className="font-extrabold text-sm tracking-tight truncate">{appName}</h1>
-              <p className="text-[11px] text-white/60">{t('Graduate Tracer')}</p>
+              <p className="text-[11px] text-white/60">{t('Graduate Track')}</p>
             </div>
           )}
         </div>
@@ -393,7 +393,7 @@ function AppInner() {
             </div>
             <div>
               <h1 className="font-extrabold text-sm leading-none">{appName}</h1>
-              <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Tracer')}</p>
+              <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Track')}</p>
             </div>
           </div>
           <button 

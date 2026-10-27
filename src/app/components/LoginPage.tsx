@@ -142,12 +142,12 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         else if (!data.session) {
           go('verify');
           setCooldown(60);
-        } else toast.success('Welcome to the OMSU Alumni Tracer!');
+        } else toast.success('Welcome to the OMSU Alumni Track!');
       }
     } else if (step === 'verify') {
       const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'email' });
       if (error) setError('That code is wrong or has expired. Check the latest email or send a new code.');
-      else toast.success('Email verified. Welcome to the OMSU Alumni Tracer!');
+      else toast.success('Email verified. Welcome to the OMSU Alumni Track!');
     } else if (step === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) setError(error.message);
@@ -177,7 +177,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         <div className="flex items-center justify-between px-6 pt-5">
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="OMSU Logo" className="w-9 h-9 object-contain" />
-            <span className="text-sm font-bold text-[#002060]">OMSU Alumni Tracer</span>
+            <span className="text-sm font-bold text-[#002060]">OMSU Alumni Track</span>
           </div>
           <button onClick={onClose} aria-label="Close" className="p-2 rounded-full text-slate-500 hover:bg-slate-100">
             <X size={18} />

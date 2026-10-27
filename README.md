@@ -1,4 +1,4 @@
-# OMSU Alumni Tracer
+# OMSU Alumni Track
 
 Alumni graduate tracer system for **Occidental Mindoro State University (OMSU)**.
 React + Vite frontend, Supabase for login and data, deployed on Vercel.
@@ -39,7 +39,7 @@ Supabase → Edge Functions → Secrets. Use **either** Resend **or** Gmail.
 | Name | Value |
 | --- | --- |
 | `RESEND_API_KEY` | API key from resend.com → API Keys |
-| `RESEND_FROM` | sender, e.g. `OMSU Alumni Tracer <noreply@omsualumnitrack.site>` (needs a domain verified in Resend) |
+| `RESEND_FROM` | sender, e.g. `OMSU Alumni Track <noreply@omsualumnitrack.site>` (needs a domain verified in Resend) |
 | `SITE_URL` | the live site address |
 
 Without a verified domain, Resend only lets you send from `onboarding@resend.dev` to the
@@ -63,9 +63,9 @@ These emails are sent by Supabase Auth, so set it up once:
 1. **Use Resend to send Supabase's emails** (the built-in sender only delivers to your own team):
    Supabase → Authentication → Emails → **SMTP Settings** → enable custom SMTP:
    host `smtp.resend.com`, port `465`, username `resend`, password = your Resend API key,
-   sender email `noreply@omsualumnitrack.site`, sender name `OMSU Alumni Tracer`.
+   sender email `noreply@omsualumnitrack.site`, sender name `OMSU Alumni Track`.
 2. **Templates:** Authentication → Emails → Templates. Paste
-   `supabase/email-templates/confirm-signup.html` into **Confirm signup** (subject: *Your OMSU Alumni Tracer verification code*)
+   `supabase/email-templates/confirm-signup.html` into **Confirm signup** (subject: *Your OMSU Alumni Track verification code*)
    and `supabase/email-templates/reset-password.html` into **Reset password** (subject: *Your OMSU password reset code*).
 3. **Code length:** Authentication → Sign In / Providers → Email → *Email OTP Length* = `6`, and keep *Confirm email* on.
 

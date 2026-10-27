@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
   if (!isStaff && job.created_by === caller.user.id) await admin.from('ai_usage').insert({ user_id: caller.user.id, action: 'job-email' });
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
-  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>';
+  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Track <onboarding@resend.dev>';
   const site = Deno.env.get('SITE_URL') || 'https://omsualumnitrack.site';
   const logo = Deno.env.get('LOGO_URL') || 'https://omsualumnitrack.site/icon-192.png';
   const requirements: string[] = Array.isArray(job.requirements) ? job.requirements.slice(0, 6) : [];
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
       <td style="padding-right:12px"><img src="${escapeHtml(logo)}" width="44" height="44" alt="OMSU" style="display:block;border:0" /></td>
       <td style="color:#fff"><div style="font-size:16px;font-weight:bold">New job on the OMSU Job Board</div>
-      <div style="font-size:12px;color:#f5c400">${department ? `For the ${escapeHtml(department)} department` : 'For everyone at OMSU Alumni Tracer'}</div></td>
+      <div style="font-size:12px;color:#f5c400">${department ? `For the ${escapeHtml(department)} department` : 'For everyone at OMSU Alumni Track'}</div></td>
     </tr></table>
   </td></tr>
   <tr><td style="padding:24px;font-size:14px;color:#222;line-height:1.6">

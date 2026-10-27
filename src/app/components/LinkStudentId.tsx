@@ -34,7 +34,7 @@ export function LinkStudentId({ defaultLastName, onLinked }: { defaultLastName: 
       <form onSubmit={submit} className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 space-y-5">
         <div className="flex items-center gap-3">
           <img src={logo} alt="OMSU Logo" className="w-10 h-10 object-contain" />
-          <span className="font-bold text-[#002060]">OMSU Alumni Tracer</span>
+          <span className="font-bold text-[#002060]">OMSU Alumni Track</span>
         </div>
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">Confirm you're an OMSU graduate</h1>

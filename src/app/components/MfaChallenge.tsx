@@ -39,13 +39,13 @@ export function MfaChallenge({ onVerified }: { onVerified: () => void }) {
       <form onSubmit={verify} className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-7 space-y-5">
         <div className="flex items-center gap-3">
           <img src={logo} alt="" className="w-10 h-10 object-contain" />
-          <p className="font-bold text-[#002060]">OMSU Alumni Tracer</p>
+          <p className="font-bold text-[#002060]">OMSU Alumni Track</p>
         </div>
         <div className="space-y-1.5">
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="text-[#002060]" size={22} /> Two-step verification
           </h1>
-          <p className="text-sm text-slate-600">Open your authenticator app and enter the 6-digit code for OMSU Alumni Tracer.</p>
+          <p className="text-sm text-slate-600">Open your authenticator app and enter the 6-digit code for OMSU Alumni Track.</p>
         </div>
         <input
           autoFocus

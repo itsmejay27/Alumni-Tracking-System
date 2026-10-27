@@ -677,7 +677,7 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
-      <Card icon={<Bell size={18} />} title={t('Email notifications')} sub={t('Choose which emails the OMSU Alumni Tracer sends you.')}>
+      <Card icon={<Bell size={18} />} title={t('Email notifications')} sub={t('Choose which emails the OMSU Alumni Track sends you.')}>
         <div className="divide-y divide-border/70 -my-2">
           {rows.map((r) => (
             <div key={r.key} className="py-4 flex items-start gap-4">
@@ -829,8 +829,8 @@ function PrivacyPanel({ currentUser, isAlumni, onOpenProfile }: { currentUser: C
   const t = useT();
   const contact = useContactInfo();
   const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null);
-  const deletionMail = `mailto:${contact.email}?subject=${encodeURIComponent('Request to delete my OMSU Alumni Tracer account')}&body=${encodeURIComponent(
-    `Hello Alumni Affairs,\n\nI would like my OMSU Alumni Tracer account and personal data deleted.\n\nName: ${`${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim()}\nAccount email: ${currentUser?.email || ''}\n\nThank you.`,
+  const deletionMail = `mailto:${contact.email}?subject=${encodeURIComponent('Request to delete my OMSU Alumni Track account')}&body=${encodeURIComponent(
+    `Hello Alumni Affairs,\n\nI would like my OMSU Alumni Track account and personal data deleted.\n\nName: ${`${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim()}\nAccount email: ${currentUser?.email || ''}\n\nThank you.`,
   )}`;
 
   return (

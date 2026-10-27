@@ -158,7 +158,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           <a href="#top" onClick={link('top')} className="flex items-center gap-3 min-w-0">
             <img src={logo} alt="OMSU Logo" className="w-10 h-10 object-contain shrink-0" />
             <div className="min-w-0">
-              <p className="font-extrabold text-sm text-[#002060] leading-tight truncate">OMSU Alumni Tracer</p>
+              <p className="font-extrabold text-sm text-[#002060] leading-tight truncate">OMSU Alumni Track</p>
               <p className="text-[11px] text-slate-500 truncate">Occidental Mindoro State University</p>
             </div>
           </a>
@@ -197,10 +197,9 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
 
       {/* Hero */}
       <section id="top" className="relative overflow-hidden bg-[#002060] text-white">
-        <div
-          className="absolute inset-0 opacity-[0.07] pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
-        />
+        {/* Campus photo, darkened with navy so the text stays readable */}
+        <img src="/campus.jpg" alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#002060]/95 via-[#002060]/85 to-[#002060]/55 pointer-events-none" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid md:grid-cols-[1.25fr_1fr] gap-12 items-center">
           <div className="space-y-6">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
@@ -442,7 +441,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
         </div>
         <div className="border-t border-white/10">
           <p className="max-w-7xl mx-auto px-4 sm:px-6 py-3 text-xs text-white/50">
-            © {new Date().getFullYear()} Occidental Mindoro State University · Alumni Graduate Tracer
+            © {new Date().getFullYear()} Occidental Mindoro State University · Alumni Graduate Track
           </p>
         </div>
       </footer>

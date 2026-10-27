@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (!resendKey) return json({ error: 'Email sending is not set up yet' }, 500);
-  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Tracer <onboarding@resend.dev>';
+  const from = Deno.env.get('RESEND_FROM') || 'OMSU Alumni Track <onboarding@resend.dev>';
   const site = Deno.env.get('SITE_URL') || '';
   const sender = `${profile?.given_name || ''} ${profile?.last_name || ''}`.trim() || 'Your Program Chair';
   const senderTitle = profile?.title || `${course} Program Chair`;
