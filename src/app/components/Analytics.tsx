@@ -523,7 +523,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
               ))}
             </tbody>
           </table>
-          <Pagination {...paged} label="graduates" />
+          <Pagination {...paged} label="graduates" inline />
         </div>
       )}
     </div>

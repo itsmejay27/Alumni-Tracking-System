@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '@/lib/preferences';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export function Pagination({
   total,
   label = 'items',
   alwaysShowControls = true,
+  inline = false,
 }: {
   page: number;
   pages: number;
@@ -38,13 +40,20 @@ export function Pagination({
   label?: string;
   /** Show the page buttons even when everything fits on one page (on by default, so every list looks the same) */
   alwaysShowControls?: boolean;
+  /** Keep the bar where it is in the page instead of the bottom edge of the screen */
+  inline?: boolean;
 }) {
   const t = useT();
+  // The page's bar goes in the footer strip at the bottom of the screen (see App)
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!inline) setSlot(document.getElementById('page-footer'));
+  }, [inline]);
   if (total === 0) return null;
   // Show up to 5 page numbers around the current page
   const start = Math.max(1, Math.min(page - 2, pages - 4));
   const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => start + i);
-  return (
+  const bar = (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-3 text-sm">
       <p className="text-muted-foreground">
         {t('Showing {from}–{to} of {total}', { from, to, total })} {label}
@@ -83,4 +92,6 @@ export function Pagination({
       )}
     </div>
   );
+  if (inline) return bar;
+  return slot ? createPortal(bar, slot) : null;
 }

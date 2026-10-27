@@ -483,9 +483,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
           ))}
           {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No accounts found.</p>}
         </div>
-        <div className="px-4 border-t border-border">
-          <Pagination {...paged} label="accounts" />
-        </div>
+        <Pagination {...paged} label="accounts" />
       </div>
     </div>
   );

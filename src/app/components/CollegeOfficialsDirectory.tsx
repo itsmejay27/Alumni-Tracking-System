@@ -86,9 +86,7 @@ export function CollegeOfficialsDirectory() {
             );
           })}
         </div>
-        <div className="bg-card rounded-2xl shadow-sm">
-          <Pagination {...paged} label={t('people')} />
-        </div>
+        <Pagination {...paged} label={t('people')} />
         </div>
       )}
     </div>

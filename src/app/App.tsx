@@ -538,7 +538,8 @@ function AppInner() {
         )}
 
         {/* 3. UNIFIED CONTENT VIEWPORT */}
-        <main className="relative flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8 min-w-0">
+        <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
+          <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
           {isAdmin ? (
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
@@ -562,6 +563,9 @@ function AppInner() {
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>
           )}
+          </div>
+          {/* Page buttons of the open list are shown here, always at the bottom edge of the screen */}
+          <div id="page-footer" className="sticky bottom-0 z-20 bg-background border-t border-border px-6 md:px-8 empty:hidden" />
         </main>
       </div>
 
