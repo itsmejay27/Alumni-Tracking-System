@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { RequiredLabel } from './RequiredMark';
 import {
   ShieldCheck,
   KeyRound,
@@ -209,7 +210,7 @@ function Card({ icon, title, sub, children, className = '' }: { icon: React.Reac
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-foreground mb-1.5">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1.5"><RequiredLabel text={label} /></span>
       {children}
     </label>
   );

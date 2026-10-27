@@ -136,7 +136,7 @@ export function CsvImport({
   const existingKeys = new Set(existing.map((r) => key(r)));
   const existingEmails = new Set(existing.map((r) => (r.email || '').toLowerCase()).filter(Boolean));
   const toImport = finalRows.filter((r) => !existingKeys.has(key(r)) && !(r.email && existingEmails.has(r.email)));
-  // Alumni sign up with name + birthday + sex, so rows missing either can't sign up yet
+  // Rows without a birthday or sex: sign-up matches them by name and fills the missing details in
   const missingSignUp = toImport.filter((r) => !r.dateOfBirth || !r.sex).length;
   const duplicates = finalRows.length - toImport.length;
   const counts = {
@@ -289,8 +289,8 @@ export function CsvImport({
               </p>
               {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system will be skipped.</p>}
               {missingSignUp > 0 && (
-                <p className="text-amber-700">
-                  {missingSignUp} have no birthday or sex in the file. They can't create an account until both are added to their record.
+                <p className="text-muted-foreground">
+                  {missingSignUp} have no birthday or sex in the file. They can still create an account with their first and last name, and the birthday and sex they enter are then saved to their record.
                 </p>
               )}
               {info?.format === 'tracer-sheet' && <p className="text-muted-foreground">Read as the official Graduate Tracer sheet.</p>}

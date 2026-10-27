@@ -47,6 +47,10 @@ export interface AlumniRecord {
   employmentStartDate?: string;
 
   lastUpdated: string;
+  /** When the graduate last saved their own record in the system (ISO). Set only by the alumnus. */
+  respondedAt?: string;
+  /** Read-only: the record is linked to an alumni account. Not saved in the record data. */
+  accountLinked?: boolean;
   suggestions?: string;
   isPublic?: boolean;
 
@@ -131,6 +135,7 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
     email: row.email || d.email || '',
     course: row.course,
     batch: row.batch,
+    accountLinked: !!row.user_id,
   } as AlumniRecord;
 }
 
@@ -174,7 +179,7 @@ export async function fetchMyRecord(userId: string): Promise<AlumniRecord | null
 }
 
 export async function saveMyRecord(userId: string, record: Omit<AlumniRecord, 'id' | 'name'> & { id?: string }) {
-  const { id, ...data } = record;
+  const { id, accountLinked: _linked, ...data } = record;
   const payload = {
     user_id: userId,
     email: record.email.toLowerCase(),

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Req } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
@@ -794,7 +795,7 @@ function JobPostingForm({
         <div>
           <h3 className="font-semibold text-lg">{t('Post a Job Opportunity')}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : t('Fields marked * are required.')}
+            {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : <>{t('Fields marked')} <Req /> {t('are required.')}</>}
           </p>
           {needsApproval && (
             <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-700 px-2.5 py-1.5">
@@ -809,7 +810,7 @@ function JobPostingForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm mb-1.5">{t('Job Title')} *</label>
+            <label className="block text-sm mb-1.5">{t('Job Title')} <Req /></label>
             <input
               type="text"
               required
@@ -821,7 +822,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Company')} *</label>
+            <label className="block text-sm mb-1.5">{t('Company')} <Req /></label>
             <input
               type="text"
               required
@@ -833,7 +834,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Location')} *</label>
+            <label className="block text-sm mb-1.5">{t('Location')} <Req /></label>
             <input
               type="text"
               required
@@ -845,7 +846,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Job Type')} *</label>
+            <label className="block text-sm mb-1.5">{t('Job Type')} <Req /></label>
             <select
               required
               value={formData.type}
@@ -885,7 +886,7 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Contact Email')} *</label>
+            <label className="block text-sm mb-1.5">{t('Contact Email')} <Req /></label>
             <input
               type="email"
               required
@@ -898,7 +899,7 @@ function JobPostingForm({
         </div>
 
         <div>
-          <label className="block text-sm mb-1.5">{t('Job Description')} *</label>
+          <label className="block text-sm mb-1.5">{t('Job Description')} <Req /></label>
           <textarea
             required
             value={formData.description}
@@ -910,7 +911,7 @@ function JobPostingForm({
         </div>
 
         <div>
-          <label className="block text-sm mb-1.5">{t('Requirements')} *</label>
+          <label className="block text-sm mb-1.5">{t('Requirements')} <Req /></label>
           <textarea
             required
             value={formData.requirements}

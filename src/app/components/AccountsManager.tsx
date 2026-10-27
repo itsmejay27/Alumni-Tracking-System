@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Req } from './RequiredMark';
 import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
@@ -276,15 +277,15 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">First Name *</label>
+              <label className="text-sm font-semibold">First Name <Req /></label>
               <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputClass} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Last Name *</label>
+              <label className="text-sm font-semibold">Last Name <Req /></label>
               <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Email Address *</label>
+              <label className="text-sm font-semibold">Email Address <Req /></label>
               <input
                 required
                 type="email"
@@ -295,7 +296,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Role / Department *</label>
+              <label className="text-sm font-semibold">Role / Department <Req /></label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
                 {STAFF_ROLE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>

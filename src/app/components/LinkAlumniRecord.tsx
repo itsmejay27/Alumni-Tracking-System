@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Req } from './RequiredMark';
 import { User, LogOut, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
@@ -60,28 +61,28 @@ export function LinkAlumniRecord({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
-            <span className={label}>First name</span>
+            <span className={label}>First name <Req /></span>
             <div className="relative">
               <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} />
             </div>
           </label>
           <label className="block">
-            <span className={label}>Last name</span>
+            <span className={label}>Last name <Req /></span>
             <div className="relative">
               <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
             </div>
           </label>
           <label className="block">
-            <span className={label}>Birthday</span>
+            <span className={label}>Birthday <Req /></span>
             <div className="relative">
               <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input required type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setBirthDate(e.target.value)} className={input} />
             </div>
           </label>
           <label className="block">
-            <span className={label}>Sex</span>
+            <span className={label}>Sex <Req /></span>
             <div className="relative">
               <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <select required value={sex} onChange={(e) => setSex(e.target.value)} className={`${input} appearance-none`}>

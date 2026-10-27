@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Req } from './RequiredMark';
 import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
@@ -216,14 +217,14 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>First Name</label>
+                  <label className={labelClass}>First Name <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputClass} placeholder="Juan" />
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Last Name</label>
+                  <label className={labelClass}>Last Name <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} placeholder="Dela Cruz" />
@@ -235,7 +236,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Birthday</label>
+                  <label className={labelClass}>Birthday <Req /></label>
                   <div className="relative">
                     <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -249,7 +250,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Sex</label>
+                  <label className={labelClass}>Sex <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select required value={sex} onChange={(e) => setSex(e.target.value)} className={`${inputClass} appearance-none`}>
@@ -269,7 +270,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
             {!codeStep && (
               <div>
-                <label className={labelClass}>Email Address</label>
+                <label className={labelClass}>Email Address <Req /></label>
                 <div className="relative">
                   <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -288,7 +289,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {(step === 'signin' || step === 'signup') && (
               <div>
                 <div className="flex items-center justify-between">
-                  <label className={labelClass}>Password</label>
+                  <label className={labelClass}>Password <Req /></label>
                   {step === 'signin' && (
                     <button type="button" onClick={() => go('reset')} className="text-xs font-semibold text-[#002060] hover:underline mb-1.5">
                       Forgot password?
@@ -314,7 +315,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
             {step === 'signup' && (
               <div>
-                <label className={labelClass}>Confirm Password</label>
+                <label className={labelClass}>Confirm Password <Req /></label>
                 <div className="relative">
                   <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -351,7 +352,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
             {codeStep && (
               <div>
-                <label className={labelClass}>Verification code</label>
+                <label className={labelClass}>Verification code <Req /></label>
                 <div className="relative">
                   <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input

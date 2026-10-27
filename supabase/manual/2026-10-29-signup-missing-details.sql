@@ -1,0 +1,4 @@
+-- Applied on 2026-10-27. Sign-up for graduate records imported without a birthday or sex:
+-- the name must match (and whatever is on file must agree, and only one such record may match);
+-- the birthday and sex entered at sign-up are then saved to the record.
+-- (See the find_alumni_record, fill_missing_details, link_alumni and handle_new_user definitions in schema.sql.)

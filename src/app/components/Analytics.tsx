@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Send, Table2, LineChart as LineIcon } from 'lucide-react';
+import { Send, Table2, LineChart as LineIcon, CheckCircle2, UserCheck, UserX, Clock } from 'lucide-react';
+import { Pagination, usePaged } from './Pagination';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
@@ -51,6 +52,9 @@ export function Analytics({ userRole }: AnalyticsProps) {
   const rate = tracked ? Math.round((employed / tracked) * 100) : 0;
   const jobs = filtered.map(currentJob).filter(Boolean) as NonNullable<ReturnType<typeof currentJob>>[];
   const gov = jobs.filter((j) => isGovernment(j.employerType)).length;
+  // Response = the graduate signed in and saved their own record
+  const responded = filtered.filter((r) => !!r.respondedAt).length;
+  const responseRate = total ? Math.round((responded / total) * 100) : 0;
   const priv = jobs.length - gov;
 
   // Line chart: one line per program, x = year graduated
@@ -134,13 +138,15 @@ export function Analytics({ userRole }: AnalyticsProps) {
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Stat label="Graduates on file" value={total} note={`${tracked} responded`} />
+        <Stat label="Graduates on file" value={total} note={`${tracked} with employment status`} />
         <Stat label="Employed" value={employed} note={`${rate}% of those who responded`} />
         <Stat label="Unemployed" value={unemployed} />
-        <Stat label="Not tracked" value={notTracked} note="no response yet" />
+        <Stat label="Not tracked" value={notTracked} note="no employment status yet" />
         <Stat label="Government / Private" value={`${gov} / ${priv}`} note="of employed alumni" />
-        <Stat label="Response rate" value={`${total ? Math.round((tracked / total) * 100) : 0}%`} note={`${notTracked} still to be tracked`} />
+        <Stat label="Response rate" value={`${responseRate}%`} note={`${responded} of ${total} updated their own record`} />
       </div>
+
+      <ResponsesPanel records={filtered} />
 
       {/* Line chart */}
       <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
@@ -362,6 +368,114 @@ function ChartTooltip({ active, payload, label, metric }: any) {
             </span>
           </p>
         ))}
+    </div>
+  );
+}
+
+/** Which graduates have updated their own record in the system, and which haven't yet. */
+function ResponsesPanel({ records }: { records: AlumniRecord[] }) {
+  const [view, setView] = useState<'responded' | 'waiting'>('responded');
+  const done = records.filter((r) => !!r.respondedAt).sort((a, b) => (b.respondedAt || '').localeCompare(a.respondedAt || ''));
+  const waiting = records
+    .filter((r) => !r.respondedAt)
+    .sort((a, b) => Number(!!b.accountLinked) - Number(!!a.accountLinked) || a.lastName.localeCompare(b.lastName));
+  const signedUpOnly = waiting.filter((r) => r.accountLinked).length;
+  const noAccount = waiting.length - signedUpOnly;
+  const pct = records.length ? Math.round((done.length / records.length) * 100) : 0;
+  const list = view === 'responded' ? done : waiting;
+  const paged = usePaged(list, 8);
+  const when = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Alumni responses</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            A graduate counts as responded once they sign in and save their own record. The goal is 100%: every graduate on file has updated.
+          </p>
+        </div>
+        <p className="text-sm font-semibold tabular-nums shrink-0">
+          {done.length} / {records.length} responded · {pct}%
+        </p>
+      </div>
+      <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-xl bg-emerald-500/10 px-4 py-3">
+          <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5"><CheckCircle2 size={14} /> Updated their record</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">{done.length}</p>
+        </div>
+        <div className="rounded-xl bg-amber-500/10 px-4 py-3">
+          <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, not updated yet</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">{signedUpOnly}</p>
+        </div>
+        <div className="rounded-xl bg-muted px-4 py-3">
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserX size={14} /> No account yet</p>
+          <p className="text-xl font-bold tabular-nums mt-0.5">{noAccount}</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {(
+          [
+            ['responded', `Responded (${done.length})`],
+            ['waiting', `Not yet (${waiting.length})`],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setView(value)}
+            className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
+              view === value ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/70'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {list.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          {view === 'responded' ? 'No graduate has updated their record yet.' : 'Everyone on file has responded.'}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Graduate</th>
+                <th className="py-2 px-2 font-medium">Program</th>
+                <th className="py-2 px-2 font-medium">Class of</th>
+                <th className="py-2 px-2 font-medium">Status</th>
+                <th className="py-2 pl-2 font-medium text-right">{view === 'responded' ? 'Responded on' : 'Account'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.pageItems.map((r) => (
+                <tr key={r.id} className="border-t border-border/60">
+                  <td className="py-2.5 pr-3 font-medium">{`${r.givenName} ${r.lastName}`.trim() || '—'}</td>
+                  <td className="py-2.5 px-2">{r.course}</td>
+                  <td className="py-2.5 px-2 tabular-nums">{r.yearGraduated || '—'}</td>
+                  <td className="py-2.5 px-2">{r.status}</td>
+                  <td className="py-2.5 pl-2 text-right whitespace-nowrap">
+                    {view === 'responded' ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-700"><Clock size={13} /> {when(r.respondedAt)}</span>
+                    ) : r.accountLinked ? (
+                      <span className="text-amber-700 font-medium">Signed up</span>
+                    ) : (
+                      <span className="text-muted-foreground">No account</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination {...paged} label="graduates" />
+        </div>
+      )}
     </div>
   );
 }

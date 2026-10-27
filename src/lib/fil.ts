@@ -438,4 +438,6 @@ export const FIL: Record<string, string> = {
   "Search for this job": "Hanapin ang trabahong ito",
   "Share on Job Board": "Ibahagi sa Job Board",
   "Search tips": "Mga tip sa paghahanap",
+  "Fields marked": "Ang mga field na may",
+  "are required.": "ay kailangan.",
 };

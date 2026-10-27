@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Req } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
 import { toast } from 'sonner';
@@ -216,7 +217,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Title *</label>
+              <label className="text-sm font-semibold">Title <Req /></label>
               <input
                 type="text"
                 required
@@ -228,7 +229,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Category *</label>
+              <label className="text-sm font-semibold">Category <Req /></label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
@@ -274,7 +275,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Announcement Content *</label>
+            <label className="text-sm font-semibold">Announcement Content <Req /></label>
             <textarea
               required
               rows={4}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import {
   User,
@@ -282,6 +283,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       id: record?.id,
       email: currentUser.email,
       lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      // Counts as a response in Analytics
+      respondedAt: new Date().toISOString(),
     } as Parameters<typeof saveMyRecord>[1];
 
     setSavingSection(section);
@@ -661,7 +664,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   const t = useT();
   return (
     <div>
-      <span className={labelCls}>{label.endsWith(' *') ? `${t(label.slice(0, -2))} *` : t(label)}</span>
+      <span className={labelCls}>
+        <RequiredLabel text={label.endsWith(' *') ? `${t(label.slice(0, -2))} *` : label.includes(' *') ? label : t(label)} />
+      </span>
       {children}
     </div>
   );
