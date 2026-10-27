@@ -393,26 +393,26 @@ function ResponsesPanel({ records }: { records: AlumniRecord[] }) {
         <div>
           <h3 className="font-semibold">Alumni responses</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            A graduate counts as responded once they sign in and save their own record. The goal is 100%: every graduate on file has updated.
+            A graduate counts once they sign in and <b>save</b> their own record (signing in alone does not count). The goal is 100%: every graduate on file has updated.
           </p>
         </div>
         <p className="text-sm font-semibold tabular-nums shrink-0">
-          {done.length} / {records.length} responded · {pct}%
+          {done.length} / {records.length} updated · {pct}%
         </p>
       </div>
       <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl bg-emerald-500/10 px-4 py-3">
-          <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5"><CheckCircle2 size={14} /> Updated their record</p>
+        <div className="rounded-xl border border-border px-4 py-3">
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><CheckCircle2 size={14} /> Updated their record</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{done.length}</p>
         </div>
-        <div className="rounded-xl bg-amber-500/10 px-4 py-3">
-          <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, not updated yet</p>
+        <div className="rounded-xl border border-border px-4 py-3">
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, not updated yet</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{signedUpOnly}</p>
         </div>
-        <div className="rounded-xl bg-muted px-4 py-3">
+        <div className="rounded-xl border border-border px-4 py-3">
           <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserX size={14} /> No account yet</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{noAccount}</p>
         </div>
@@ -462,9 +462,9 @@ function ResponsesPanel({ records }: { records: AlumniRecord[] }) {
                   <td className="py-2.5 px-2">{r.status}</td>
                   <td className="py-2.5 pl-2 text-right whitespace-nowrap">
                     {view === 'responded' ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-700"><Clock size={13} /> {when(r.respondedAt)}</span>
+                      <span className="inline-flex items-center gap-1"><Clock size={13} className="text-muted-foreground" /> {when(r.respondedAt)}</span>
                     ) : r.accountLinked ? (
-                      <span className="text-amber-700 font-medium">Signed up</span>
+                      <span className="font-medium">Signed up</span>
                     ) : (
                       <span className="text-muted-foreground">No account</span>
                     )}
