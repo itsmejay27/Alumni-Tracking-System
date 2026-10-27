@@ -383,8 +383,35 @@ function ChartTooltip({ active, payload, label, metric }: any) {
 }
 
 /** Which graduates have updated their own record in the system, and which haven't yet. */
-function ResponsesPanel({ records }: { records: AlumniRecord[] }) {
+function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
   const [view, setView] = useState<'responded' | 'waiting'>('responded');
+  // Filters for this panel (the page's program/batch filters apply first)
+  const [q, setQ] = useState('');
+  const [fProgram, setFProgram] = useState('all');
+  const [fYear, setFYear] = useState('all');
+  const [fStatus, setFStatus] = useState('all');
+  const [fAccount, setFAccount] = useState('all');
+  const programs = Array.from(new Set(all.map((r) => r.course))).sort();
+  const years = Array.from(new Set(all.map((r) => r.yearGraduated).filter(Boolean))).sort((a, b) => b - a);
+  const accountOf = (r: AlumniRecord) => (r.respondedAt ? 'updated' : r.accountLinked ? 'signed-up' : 'no-account');
+  const records = all.filter((r) => {
+    const name = `${r.givenName} ${r.middleName || ''} ${r.lastName}`.toLowerCase();
+    return (
+      (!q.trim() || name.includes(q.trim().toLowerCase()) || (r.email || '').toLowerCase().includes(q.trim().toLowerCase())) &&
+      (fProgram === 'all' || r.course === fProgram) &&
+      (fYear === 'all' || String(r.yearGraduated) === fYear) &&
+      (fStatus === 'all' || r.status === fStatus) &&
+      (fAccount === 'all' || accountOf(r) === fAccount)
+    );
+  });
+  const active = [fProgram, fYear, fStatus, fAccount].filter((v) => v !== 'all').length + (q.trim() ? 1 : 0);
+  const clear = () => {
+    setQ('');
+    setFProgram('all');
+    setFYear('all');
+    setFStatus('all');
+    setFAccount('all');
+  };
   const done = records.filter((r) => !!r.respondedAt).sort((a, b) => (b.respondedAt || '').localeCompare(a.respondedAt || ''));
   const waiting = records
     .filter((r) => !r.respondedAt)
@@ -410,6 +437,53 @@ function ResponsesPanel({ records }: { records: AlumniRecord[] }) {
           {done.length} / {records.length} updated · {pct}%
         </p>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name or email..."
+          className="filter-select w-full"
+          aria-label="Search graduates"
+        />
+        {programs.length > 1 ? (
+          <select value={fProgram} onChange={(e) => setFProgram(e.target.value)} className="filter-select w-full" aria-label="Program">
+            <option value="all">All programs</option>
+            {programs.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        ) : null}
+        <select value={fYear} onChange={(e) => setFYear(e.target.value)} className="filter-select w-full" aria-label="Class of">
+          <option value="all">All batches</option>
+          {years.map((y) => (
+            <option key={y} value={y}>Class of {y}</option>
+          ))}
+        </select>
+        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="filter-select w-full" aria-label="Status">
+          <option value="all">All statuses</option>
+          <option value="Employed">Employed</option>
+          <option value="Self-Employed">Self-Employed</option>
+          <option value="Unemployed">Unemployed</option>
+          <option value="Not Tracked">Not tracked</option>
+        </select>
+        <select value={fAccount} onChange={(e) => setFAccount(e.target.value)} className="filter-select w-full" aria-label="Account">
+          <option value="all">All accounts</option>
+          <option value="updated">Updated their record</option>
+          <option value="signed-up">Signed up, not updated yet</option>
+          <option value="no-account">No account yet</option>
+        </select>
+      </div>
+      {active > 0 && (
+        <div className="flex items-center justify-between text-sm -mt-2">
+          <p className="text-muted-foreground">
+            Showing {records.length} of {all.length} graduates
+          </p>
+          <button onClick={clear} className="font-semibold text-primary hover:underline">
+            Clear filters ({active})
+          </button>
+        </div>
+      )}
+
       <div className="h-2.5 rounded-full bg-muted overflow-hidden">
         <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
