@@ -34,6 +34,8 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
       toast.error(await passwordUpdateError(error));
       return;
     }
+    // A new password also lifts a sign-in lock from too many wrong passwords
+    await supabase.rpc('login_succeeded');
     toast.success('Password updated.');
     await onDone();
   };

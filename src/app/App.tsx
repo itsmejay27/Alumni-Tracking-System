@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { LoginPage, AuthMode } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
@@ -22,6 +22,7 @@ import { roleLabel } from '@/lib/programs';
 import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
 import { MfaChallenge } from './components/MfaChallenge';
 import { supabase } from '@/lib/supabase';
+import { fetchMyRecord, missingProfileFields } from '@/lib/alumni';
 import { 
   Users, 
   Briefcase, 
@@ -96,6 +97,18 @@ function AppInner() {
   const [recoveringPassword, setRecoveringPassword] = useState(false);
   // Alumni accounts must be linked to a graduate record (name + birthday + sex) before using the system
   const [needsLink, setNeedsLink] = useState<boolean | null>(null);
+  // New alumni must complete their profile before using the rest of the system
+  const [profileGate, setProfileGate] = useState<{ missing: string[]; needsSave: boolean } | null>(null);
+  const refreshGate = useCallback(async (uid: string) => {
+    try {
+      const rec = await fetchMyRecord(uid);
+      const missing = missingProfileFields(rec);
+      const needsSave = !rec?.respondedAt;
+      setProfileGate(missing.length || needsSave ? { missing, needsSave } : null);
+    } catch {
+      setProfileGate(null);
+    }
+  }, []);
   const [authScreen, setAuthScreen] = useState<AuthMode | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -203,6 +216,27 @@ function AppInner() {
   };
 
   useApplyPreferences(!!session && !!currentUser && !needsMfa);
+
+  // Check whether a signed-in graduate still has to complete their profile
+  useEffect(() => {
+    if (currentUser?.role === 'alumni' && needsLink === false) refreshGate(currentUser.id);
+    else setProfileGate(null);
+  }, [currentUser?.id, currentUser?.role, needsLink, refreshGate]);
+
+  // While the profile is incomplete, only My Alumni Profile and Settings are open
+  const GATE_OPEN = ['profile', 'settings'];
+  useEffect(() => {
+    if (profileGate && !GATE_OPEN.includes(activeTab)) setActiveTab('profile');
+  }, [profileGate, activeTab]);
+  const goTab = (id: string) => {
+    if (profileGate && !GATE_OPEN.includes(id)) {
+      toast.info(t('Please complete your profile first. The rest unlocks after you save it.'));
+      setActiveTab('profile');
+      return false;
+    }
+    setActiveTab(id);
+    return true;
+  };
 
   if (session && needsMfa) {
     return (
@@ -331,8 +365,10 @@ function AppInner() {
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => goTab(item.id)}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors relative ${
+                profileGate && !GATE_OPEN.includes(item.id) ? 'opacity-40' : ''
+              } ${
                 activeTab === item.id 
                   ? 'bg-white/12 text-white' 
                   : 'text-white/70 hover:text-white hover:bg-white/5'
@@ -430,10 +466,12 @@ function AppInner() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setActiveTab(item.id);
+                        goTab(item.id);
                         setMobileMenuOpen(false);
                       }}
                       className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors ${
+                        profileGate && !GATE_OPEN.includes(item.id) ? 'opacity-40' : ''
+                      } ${
                         activeTab === item.id 
                           ? 'bg-white/12 text-white' 
                           : 'text-white/70 hover:text-white hover:bg-white/5'
@@ -494,7 +532,9 @@ function AppInner() {
           ) : (
             <>
               {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} userId={currentUser.id} firstName={currentUser.givenName} />}
-              {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+              {activeTab === 'profile' && (
+                <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} gate={profileGate} onSaved={() => refreshGate(currentUser.id)} />
+              )}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}

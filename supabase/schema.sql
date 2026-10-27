@@ -693,3 +693,54 @@ revoke execute on function public.mark_alumni_response() from public, anon, auth
 create or replace trigger alumni_records_mark_response
   before insert or update on public.alumni_records
   for each row execute function public.mark_alumni_response();
+
+-- Sign-in lockout: 3 wrong passwords lock that email for 30 minutes (applied 2026-10-27)
+create table if not exists public.login_lockouts (
+  email text primary key,
+  failed_count int not null default 0,
+  first_failed_at timestamptz,
+  locked_until timestamptz
+);
+alter table public.login_lockouts enable row level security;
+
+create or replace function public.login_lock_status(p_email text) returns timestamptz
+language sql stable security definer set search_path = '' as $$
+  select locked_until from public.login_lockouts
+   where email = lower(trim(p_email)) and locked_until > now()
+$$;
+revoke execute on function public.login_lock_status(text) from public;
+grant execute on function public.login_lock_status(text) to anon, authenticated;
+
+create or replace function public.login_failed(p_email text) returns json
+language plpgsql security definer set search_path = '' as $$
+declare e text := lower(trim(coalesce(p_email, ''))); r public.login_lockouts;
+begin
+  if e = '' or length(e) > 320 then return json_build_object('attemptsLeft', 3); end if;
+  insert into public.login_lockouts as l (email, failed_count, first_failed_at)
+  values (e, 1, now())
+  on conflict (email) do update set
+    failed_count = case
+      when l.locked_until > now() then l.failed_count
+      when l.locked_until is not null or l.first_failed_at < now() - interval '30 minutes' then 1
+      else l.failed_count + 1 end,
+    first_failed_at = case
+      when l.locked_until > now() then l.first_failed_at
+      when l.locked_until is not null or l.first_failed_at < now() - interval '30 minutes' then now()
+      else l.first_failed_at end,
+    locked_until = case when l.locked_until > now() then l.locked_until else null end
+  returning * into r;
+  if r.locked_until is null and r.failed_count >= 3 then
+    update public.login_lockouts set locked_until = now() + interval '30 minutes' where email = e returning * into r;
+  end if;
+  return json_build_object('attemptsLeft', greatest(0, 3 - r.failed_count), 'lockedUntil', r.locked_until);
+end $$;
+revoke execute on function public.login_failed(text) from public;
+grant execute on function public.login_failed(text) to anon, authenticated;
+
+create or replace function public.login_succeeded() returns void
+language sql security definer set search_path = '' as $$
+  delete from public.login_lockouts
+   where email = (select lower(email) from auth.users where id = (select auth.uid()))
+$$;
+revoke execute on function public.login_succeeded() from public, anon;
+grant execute on function public.login_succeeded() to authenticated;

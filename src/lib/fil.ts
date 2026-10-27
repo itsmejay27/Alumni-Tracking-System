@@ -451,4 +451,10 @@ export const FIL: Record<string, string> = {
   "Phone or landline": "Telepono o landline",
   "Length of service": "Haba ng serbisyo",
   "e.g. 1 year 3 months": "hal. 1 taon 3 buwan",
+  "Welcome! Please complete your profile to continue": "Maligayang pagdating! Kumpletuhin muna ang iyong profile para magpatuloy",
+  "Check the details we have on file, fill in what is missing, and press Save in each section. The rest of OMSU Alumni Track unlocks once your profile is complete.": "Suriin ang mga detalyeng nasa amin, punan ang kulang, at pindutin ang Save sa bawat bahagi. Mabubuksan ang iba pang bahagi ng OMSU Alumni Track kapag kumpleto na ang iyong profile.",
+  "Still missing": "Kulang pa",
+  "Please complete your profile first. The rest unlocks after you save it.": "Kumpletuhin muna ang iyong profile. Mabubuksan ang iba pagkatapos mong i-save.",
+  "First and last name": "Pangalan at apelyido",
+  "Your alumni profile": "Ang iyong alumni profile",
 };

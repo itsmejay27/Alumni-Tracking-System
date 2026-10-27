@@ -29,6 +29,10 @@ import { PhoneInput, isValidMobile } from './PhoneInput';
 interface AlumniProfileProps {
   currentUser: CurrentUser | null;
   onUpdateProfile: (updated: CurrentUser) => Promise<void> | void;
+  /** Called after a section is saved */
+  onSaved?: () => void;
+  /** New graduates must finish these before using the rest of the system */
+  gate?: { missing: string[]; needsSave: boolean } | null;
 }
 
 const THIS_YEAR = new Date().getFullYear();
@@ -55,7 +59,7 @@ const newEntry = (): EmploymentEntry => ({
   recordedAt: new Date().toISOString(),
 });
 
-export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfileProps) {
+export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: AlumniProfileProps) {
   const t = useT();
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<AlumniRecord | null>(null);
@@ -320,6 +324,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       });
       const label = { personal: 'Personal information', education: 'Education', employment: 'Employment', feedback: 'Privacy and feedback' }[section];
       toast.success(record?.id ? t('{section} saved', { section: t(label) }) : t('Your alumni profile has been saved'));
+      onSaved?.();
     } catch (err: any) {
       toast.error(`Could not save: ${err.message}`);
     }
@@ -407,6 +412,20 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         </div>
       </section>
 
+      {/* New graduates finish their profile before using the rest of the system */}
+      {gate && (gate.missing.length > 0 || gate.needsSave) && (
+        <div className="rounded-2xl border-2 border-primary bg-card p-5 space-y-2">
+          <p className="font-bold text-base">{t('Welcome! Please complete your profile to continue')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('Check the details we have on file, fill in what is missing, and press Save in each section. The rest of OMSU Alumni Track unlocks once your profile is complete.')}
+          </p>
+          {gate.missing.length > 0 && (
+            <p className="text-sm">
+              <span className="font-semibold">{t('Still missing')}:</span> {gate.missing.map((m) => t(m)).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* PERSONAL */}

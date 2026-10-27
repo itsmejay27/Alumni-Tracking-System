@@ -228,3 +228,28 @@ export function courseScopeForRole(role: string): Course | null {
     default: return null;
   }
 }
+
+/**
+ * What a graduate still has to fill in before using the rest of the system (empty = complete).
+ * Mirrors the required fields of My Alumni Profile.
+ */
+export function missingProfileFields(r: AlumniRecord | null): string[] {
+  if (!r) return ['Your alumni profile'];
+  const missing: string[] = [];
+  const blank = (v?: string | null) => !v || !String(v).trim();
+  if (blank(r.givenName) || blank(r.lastName)) missing.push('First and last name');
+  if (!/^09\d{9}$/.test(r.mobileNo || '')) missing.push('Mobile number');
+  if (r.sex !== 'Male' && r.sex !== 'Female') missing.push('Sex');
+  const age = ageFrom(r.dateOfBirth);
+  if (age == null || age < 15) missing.push('Date of birth');
+  if (blank(r.civilStatus)) missing.push('Civil status');
+  if (blank(r.presentAddress)) missing.push('Present address');
+  if (blank(r.permanentAddress)) missing.push('Permanent address');
+  if (!r.yearGraduated) missing.push('Year graduated');
+  if (!r.status || r.status === 'Not Tracked') missing.push('Employment status');
+  else if (r.status !== 'Unemployed') {
+    const hasJob = (r.employmentHistory || []).some((h) => !h.endDate) || !blank(r.currentPosition);
+    if (!hasJob) missing.push('Current job');
+  }
+  return missing;
+}

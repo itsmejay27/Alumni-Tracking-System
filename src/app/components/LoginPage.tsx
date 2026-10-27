@@ -115,6 +115,18 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     setBusy(true);
 
     if (step === 'signin') {
+      // 3 wrong passwords lock the email for 30 minutes
+      const lockedText = (until: string) =>
+        `Too many wrong passwords. This account is locked until ${new Date(until).toLocaleTimeString([], {
+          hour: 'numeric',
+          minute: '2-digit',
+        })}. You can wait, or use "Forgot password?" to reset it.`;
+      const { data: lockedUntil } = await supabase.rpc('login_lock_status', { p_email: cleanEmail });
+      if (lockedUntil) {
+        setError(lockedText(lockedUntil as string));
+        setBusy(false);
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
       if (error) {
         if (error.message === 'Email not confirmed') {
@@ -123,7 +135,17 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           go('verify');
           setNotice('Your email is not verified yet. We sent you a new code.');
           setCooldown(60);
-        } else setError('Incorrect email or password.');
+        } else if (/invalid login credentials/i.test(error.message)) {
+          const { data: tally } = await supabase.rpc('login_failed', { p_email: cleanEmail });
+          const t = (tally || {}) as { attemptsLeft?: number; lockedUntil?: string | null };
+          if (t.lockedUntil) setError(lockedText(t.lockedUntil));
+          else if (typeof t.attemptsLeft === 'number')
+            setError(`Incorrect email or password. ${t.attemptsLeft} attempt${t.attemptsLeft === 1 ? '' : 's'} left before the account is locked for 30 minutes.`);
+          else setError('Incorrect email or password.');
+        } else setError(error.message);
+      } else {
+        // Correct password: start counting from zero again
+        await supabase.rpc('login_succeeded');
       }
       // On success, App picks up the new session automatically.
     } else if (step === 'signup') {
