@@ -48,10 +48,12 @@ async function readTable(file: File): Promise<Cell[][]> {
   return parseCsv(await file.text());
 }
 
+// Same order as the paper Graduate Tracer Survey Form
 const TEMPLATE_HEADERS = [
-  'Last Name', 'First Name', 'Middle Name', 'Email', 'Program', 'Year Graduated', 'Sex', 'Date of Birth',
-  'Civil Status', 'Mobile Number', 'Present Address', 'Employment Status', 'Position', 'Company',
-  'Employer Type', 'Job Level', 'Nature of Employment', 'Indigenous Peoples (IP) Member', 'Suggestions',
+  'Last Name', 'Given Name', 'Middle Name', 'Present Address', 'Permanent Address', 'Sex', 'Date of Birth',
+  'Civil Status', 'Mobile No.', 'Email Address', 'Facebook', 'Twitter', 'Program', 'Year Graduated', 'Campus',
+  'Employment Status', 'Complete Name of Organization', 'Company Address', 'Company Contact No.', 'Job Title',
+  'Job Description', 'Length of Service', 'Type of Company', 'Job Level', 'Nature of Employment', 'Suggestions',
 ];
 
 const THIS_YEAR = new Date().getFullYear();
@@ -158,6 +160,10 @@ export function CsvImport({
             employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Private',
             employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
             jobLevel: r.jobLevel || 'Rank and File',
+            employerAddress: r.employerAddress || undefined,
+            employerContact: r.employerContact || undefined,
+            lengthOfService: r.lengthOfService || undefined,
+            jobDescription: r.jobDescription || undefined,
             recordedAt: new Date().toISOString(),
           }
         : null;
@@ -176,17 +182,23 @@ export function CsvImport({
           civilStatus: r.civilStatus,
           mobileNo: r.mobileNo,
           presentAddress: r.presentAddress,
-          permanentAddress: r.presentAddress,
+          permanentAddress: r.permanentAddress || r.presentAddress,
+          campus: r.campus,
+          twitter: r.twitter,
           fatherName: r.fatherName,
           fatherContact: r.fatherContact,
           motherName: r.motherName,
           motherContact: r.motherContact,
-          facebookName: '',
+          facebookName: r.facebookName,
           status: r.status,
           currentPosition: job?.position,
           currentCompany: job?.company,
           employerType: job?.employerType,
           jobLevel: job?.jobLevel,
+          employerAddress: job?.employerAddress,
+          employerContact: job?.employerContact,
+          lengthOfService: job?.lengthOfService,
+          jobDescription: job?.jobDescription,
           employmentHistory: job ? [job] : [],
           isIP: r.isIP,
           suggestions: r.suggestions,

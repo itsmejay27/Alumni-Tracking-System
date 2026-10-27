@@ -19,6 +19,14 @@ export interface ParsedRow {
   civilStatus: string;
   mobileNo: string;
   presentAddress: string;
+  permanentAddress: string;
+  facebookName: string;
+  twitter: string;
+  campus: string;
+  employerAddress: string;
+  employerContact: string;
+  lengthOfService: string;
+  jobDescription: string;
   status: 'Employed' | 'Self-Employed' | 'Unemployed' | 'Not Tracked';
   position: string;
   company: string;
@@ -43,24 +51,33 @@ export interface ParseResult {
 }
 
 // Header text (lower-cased, partial match) for each field. More specific keys come first.
-const COLUMNS: { key: string; match: string[] }[] = [
+const COLUMNS: { key: string; match: string[]; not?: string[] }[] = [
   // Recognized only so a Student ID column isn't mistaken for another field; it is not stored
   { key: 'studentId', match: ['student id', 'student no', 'student number', 'id number', 'id no'] },
   { key: 'fatherName', match: ["father's name", 'father name', 'name of father'] },
   { key: 'motherName', match: ["mother's name", 'mother name', 'name of mother'] },
-  { key: 'fullName', match: ['name of graduate', 'full name', 'complete name', 'name of alumni'] },
+  { key: 'fullName', match: ['name of graduate', 'full name', 'complete name', 'name of alumni'], not: ['organization', 'company', 'employer', 'agency', 'father', 'mother'] },
   { key: 'lastName', match: ['last name', 'surname', 'family name'] },
   { key: 'givenName', match: ['first name', 'given name'] },
   { key: 'middleName', match: ['middle name', 'middle initial'] },
   { key: 'email', match: ['email'] },
+  { key: 'facebookName', match: ['facebook', 'fb name', 'fb account'] },
+  { key: 'twitter', match: ['twitter'] },
+  { key: 'campus', match: ['campus'] },
   { key: 'program', match: ['program', 'course', 'degree'] },
   { key: 'yearGraduated', match: ['year graduated', 'batch', 'academic year', 'school year'] },
   { key: 'sex', match: ['sex', 'gender'] },
   { key: 'dateOfBirth', match: ['birth', 'bithdate'] },
   { key: 'civilStatus', match: ['civil status'] },
+  // Employer columns first, so "company address" or "office contact" aren't read as the graduate's own
+  { key: 'employerAddress', match: ['employer address', 'address of employer', 'company address', 'address of company', 'organization address', 'office address', 'business address'] },
+  { key: 'employerContact', match: ['employer contact', 'company contact', 'office contact', 'organization contact', 'employer tel', 'company tel', 'office tel'] },
   { key: 'mobileNo', match: ['mobile', 'contact number', 'phone'] },
-  { key: 'presentAddress', match: ['present address', 'permanent address', 'address'] },
-  { key: 'employerType', match: ['employer type', 'type of employer', 'sector', 'company type'] },
+  { key: 'permanentAddress', match: ['permanent address', 'home address'] },
+  { key: 'presentAddress', match: ['present address', 'address'] },
+  { key: 'lengthOfService', match: ['length of service', 'years of service', 'years in service'] },
+  { key: 'jobDescription', match: ['job description', 'description of work', 'duties'] },
+  { key: 'employerType', match: ['employer type', 'type of employer', 'sector', 'company type', 'type of company', 'kind of company'] },
   { key: 'employmentType', match: ['nature of employment', 'employment type'] },
   { key: 'jobLevel', match: ['job level'] },
   { key: 'status', match: ['employment status', 'are you employed', 'currently employed', 'status'] },
@@ -152,7 +169,9 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
   const map: Record<string, number> = {};
   const used = new Set<number>();
   for (const col of COLUMNS) {
-    const idx = lower.findIndex((t, i) => !used.has(i) && t && col.match.some((m) => t.includes(m)));
+    const idx = lower.findIndex(
+      (t, i) => !used.has(i) && t && col.match.some((m) => t.includes(m)) && !col.not?.some((n) => t.includes(n))
+    );
     if (idx >= 0) {
       map[col.key] = idx;
       used.add(idx);
@@ -231,6 +250,14 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       civilStatus: get(r, 'civilStatus') || 'Single',
       mobileNo: toPhone(get(r, 'mobileNo')),
       presentAddress: get(r, 'presentAddress'),
+      permanentAddress: get(r, 'permanentAddress'),
+      facebookName: get(r, 'facebookName'),
+      twitter: get(r, 'twitter'),
+      campus: get(r, 'campus'),
+      employerAddress: get(r, 'employerAddress'),
+      employerContact: get(r, 'employerContact'),
+      lengthOfService: get(r, 'lengthOfService'),
+      jobDescription: get(r, 'jobDescription'),
       status: toStatus(get(r, 'status')),
       position: get(r, 'position'),
       company: /^none$/i.test(get(r, 'company')) ? '' : get(r, 'company'),

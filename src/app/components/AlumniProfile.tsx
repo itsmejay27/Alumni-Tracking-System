@@ -70,6 +70,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
   const [civilStatus, setCivilStatus] = useState<CurrentUser['civilStatus']>(currentUser?.civilStatus || 'Single');
   const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
   const [facebookName, setFacebookName] = useState(currentUser?.facebookName || '');
+  const [twitter, setTwitter] = useState('');
+  const [otherSocialNetwork, setOtherSocialNetwork] = useState('');
+  const [otherSocialId, setOtherSocialId] = useState('');
   const [presentAddress, setPresentAddress] = useState(currentUser?.presentAddress || '');
   const [permanentAddress, setPermanentAddress] = useState(currentUser?.permanentAddress || '');
   const [isIP, setIsIP] = useState(false);
@@ -81,6 +84,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
   // Education
   const [course, setCourse] = useState<Course>('BSIT');
+  const [campus, setCampus] = useState('');
   const [yearGraduated, setYearGraduated] = useState<number>(THIS_YEAR);
 
   // Employment
@@ -107,6 +111,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
         if (rec.civilStatus) setCivilStatus(rec.civilStatus);
         setMobileNo((v) => v || rec.mobileNo);
         setFacebookName((v) => v || rec.facebookName);
+        setTwitter(rec.twitter || '');
+        setOtherSocialNetwork(rec.otherSocialNetwork || '');
+        setOtherSocialId(rec.otherSocialId || '');
+        setCampus(rec.campus || '');
         setPresentAddress((v) => v || rec.presentAddress);
         setPermanentAddress((v) => v || rec.permanentAddress);
         setIsIP(!!rec.isIP);
@@ -188,6 +196,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     civilStatus,
     mobileNo: mobileNo.trim(),
     facebookName: facebookName.trim(),
+    twitter: twitter.trim(),
+    otherSocialNetwork: otherSocialNetwork.trim(),
+    otherSocialId: otherSocialId.trim(),
     presentAddress: presentAddress.trim(),
     permanentAddress: permanentAddress.trim(),
     fatherName: fatherName.trim().toUpperCase(),
@@ -195,7 +206,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
     motherName: motherName.trim().toUpperCase(),
     motherContact: motherContact.trim(),
   });
-  const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}` });
+  const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}`, campus: campus.trim() });
   const employmentSlice = () => {
     // Marking yourself unemployed ends your current job(s); they stay in your history
     const month = new Date().toISOString().slice(0, 7);
@@ -214,6 +225,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
       currentCompany: employed ? latest!.company : undefined,
       employerType: employed ? (latest!.employerType as any) : undefined,
       employerAddress: employed ? latest!.employerAddress : undefined,
+      employerContact: employed ? latest!.employerContact : undefined,
+      lengthOfService: employed ? latest!.lengthOfService : undefined,
       jobDescription: employed ? latest!.jobDescription : undefined,
       jobLevel: employed ? latest!.jobLevel : undefined,
     };
@@ -411,6 +424,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Twitter / X"><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder="@username" /></Field>
+            <Field label="Other social network"><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
+            <Field label="Other social network ID"><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Sex *">
               <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
                 <option value="Female">{t('Female')}</option>
@@ -450,7 +469,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
 
         {/* EDUCATION */}
         <Section icon={<GraduationCap size={18} />} title="Education">
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
             <Field label="Program *">
               <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
                 {PROGRAMS.map((p) => (
@@ -461,10 +480,11 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
             <Field label="Year graduated *">
               <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
                 {GRAD_YEARS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>{y - 1}-{y}</option>
                 ))}
               </select>
             </Field>
+            <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
           </div>
           {saveBar('education', 'Save education')}
         </Section>
@@ -754,6 +774,17 @@ function JobModal({
             </select>
           </Field>
           <Field label="Employer address"><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
+          <Field label="Employer contact no.">
+            <input
+              disabled={locked}
+              inputMode="tel"
+              value={draft.employerContact || ''}
+              onChange={(e) => set({ employerContact: e.target.value.replace(/[^\d+()\-\s]/g, '').slice(0, 20) })}
+              className={input}
+              placeholder={t('Phone or landline')}
+            />
+          </Field>
+          <Field label="Length of service"><input disabled={locked} value={draft.lengthOfService || ''} onChange={(e) => set({ lengthOfService: e.target.value })} className={input} placeholder={t('e.g. 1 year 3 months')} /></Field>
           <div className="md:col-span-2">
             <Field label="Job description">
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />

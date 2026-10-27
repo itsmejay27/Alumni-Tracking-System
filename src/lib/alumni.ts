@@ -12,7 +12,9 @@ export interface EmploymentEntry {
   employmentStatus: string; // Permanent, Probationary, Contractual, Job Order, Self-Employed
   jobLevel: string; // Rank and File, Supervisory, Managerial / Executive, Job Order
   employerAddress?: string;
+  employerContact?: string;
   jobDescription?: string;
+  lengthOfService?: string; // as written, e.g. "1 year 3 months"
   startDate?: string; // YYYY-MM
   endDate?: string | null; // YYYY-MM, empty = current job
   recordedAt: string; // ISO date the entry was added
@@ -32,6 +34,11 @@ export interface AlumniRecord {
   civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
   mobileNo: string;
   facebookName: string;
+  twitter?: string;
+  otherSocialNetwork?: string;
+  otherSocialId?: string;
+  campus?: string;
+  employerContact?: string;
   presentAddress: string;
   permanentAddress: string;
   course: Course;

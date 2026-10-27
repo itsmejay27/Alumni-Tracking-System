@@ -89,31 +89,43 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
 
   const generateCSV = (records: AlumniRecord[]) => {
     const headers = [
-      'Last Name', 'Given Name', 'Email', 'Sex', 'Date of Birth', 
-      'Civil Status', 'Mobile No.', 'Facebook Name', 'Course', 'Batch', 
-      'Status', 'Employment Status', 'Job Title', 'Organization', 'Company Type', 
+      'Last Name', 'Given Name', 'Middle Name', 'Email', 'Sex', 'Date of Birth',
+      'Civil Status', 'Mobile No.', 'Present Address', 'Permanent Address', 'Facebook Name', 'Twitter', 'Other Social Network', 'Other Social ID',
+      'Course', 'Batch', 'Campus',
+      'Status', 'Employment Status', 'Job Title', 'Organization', 'Employer Address', 'Employer Contact', 'Company Type',
       'Length of Service', 'Suggestions'
     ];
     const rows = records.map(r => [
       r.lastName,
       r.givenName,
+      r.middleName,
       r.email,
       r.sex,
       r.dateOfBirth,
       r.civilStatus,
       r.mobileNo,
+      r.presentAddress,
+      r.permanentAddress,
       r.facebookName,
+      r.twitter || '',
+      r.otherSocialNetwork || '',
+      r.otherSocialId || '',
       r.course,
       r.batch,
+      r.campus || '',
       r.status,
       r.employmentStatus || '',
       r.currentPosition || '',
       r.currentCompany || '',
+      r.employerAddress || '',
+      r.employerContact || '',
       r.employerType || '',
       r.lengthOfService || '',
-      (r.suggestions || '').replace(/,/g, ';')
+      r.suggestions || ''
     ]);
-    return [headers, ...rows].map(row => row.join(',')).join('\n');
+    // Quote every cell so commas and line breaks in answers don't break the columns
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    return [headers, ...rows].map(row => row.map(cell).join(',')).join('\n');
   };
 
   if (loading) return <LoadingState />;
@@ -508,6 +520,20 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
                 <p className="text-xs text-muted-foreground font-semibold">Civil Status</p>
                 <p className="font-bold text-foreground mt-0.5">{record.civilStatus}</p>
               </div>
+              {(record.twitter || record.otherSocialNetwork || record.otherSocialId) && (
+                <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-semibold">Twitter / X</p>
+                    <p className="font-bold text-foreground mt-0.5 break-all">{record.twitter || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-semibold">Other social network</p>
+                    <p className="font-bold text-foreground mt-0.5 break-all">
+                      {[record.otherSocialNetwork, record.otherSocialId].filter(Boolean).join(': ') || '—'}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="col-span-full border-t border-border/40 pt-3 mt-1">
                 <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Present Address</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.presentAddress}</p>
@@ -540,7 +566,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
               <GraduationCap size={16} className="text-primary" /> College Background
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Finished Course / Degree</p>
                 <p className="font-bold text-foreground mt-0.5">{record.course}</p>
@@ -548,6 +574,10 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">Academic Year Graduated</p>
                 <p className="font-bold text-foreground mt-0.5">{record.batch}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold">Campus</p>
+                <p className="font-bold text-foreground mt-0.5">{record.campus || '—'}</p>
               </div>
             </div>
           </div>
@@ -700,8 +730,11 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
           </div>
           <p className="text-muted-foreground">{j.company}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            {[j.employerType, j.employmentStatus, j.jobLevel, j.startDate && `since ${j.startDate}`].filter(Boolean).join(' · ')}
+            {[j.employerType, j.employmentStatus, j.jobLevel, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${j.startDate}`].filter(Boolean).join(' · ')}
           </p>
+          {(j.employerAddress || j.employerContact) && (
+            <p className="text-xs text-muted-foreground mt-1">{[j.employerAddress, j.employerContact && `Tel. ${j.employerContact}`].filter(Boolean).join(' · ')}</p>
+          )}
           {j.jobDescription && <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{j.jobDescription}</p>}
         </li>
       ))}
