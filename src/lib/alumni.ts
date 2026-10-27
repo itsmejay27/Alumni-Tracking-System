@@ -154,15 +154,28 @@ export function useAlumniRecords() {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('alumni_records')
-      .select('id, user_id, email, course, batch, data')
-      .order('id');
-    if (error) {
-      setError(error.message);
+    // The database sends at most 1000 rows per request, so load the records page by page
+    const PAGE = 1000;
+    const all: AlumniRow[] = [];
+    let failed: string | null = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('alumni_records')
+        .select('id, user_id, email, course, batch, data')
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        failed = error.message;
+        break;
+      }
+      all.push(...((data as AlumniRow[]) || []));
+      if (!data || data.length < PAGE) break;
+    }
+    if (failed) {
+      setError(failed);
     } else {
       setError(null);
-      setRecords((data as AlumniRow[]).map(rowToRecord));
+      setRecords(all.map(rowToRecord));
     }
     setLoading(false);
   }, []);

@@ -327,7 +327,7 @@ function AppInner() {
         </button>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-3 py-4 space-y-1">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -480,7 +480,7 @@ function AppInner() {
         )}
 
         {/* 3. UNIFIED CONTENT VIEWPORT */}
-        <main className="flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8 min-w-0">
+        <main className="relative flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8 min-w-0">
           {isAdmin ? (
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
