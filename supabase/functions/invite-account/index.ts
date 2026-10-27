@@ -209,6 +209,18 @@ Deno.serve(async (req) => {
     if (error) return json({ error: error.message }, 400);
     return json({ ok: true });
   }
+  // Deactivate (block sign-in, keep everything) or activate an account again
+  if (body.action === 'deactivate' || body.action === 'activate') {
+    const userId = String(body.userId || '');
+    if (!userId) return json({ error: 'Missing account' }, 400);
+    if (userId === caller.user.id) return json({ error: "You can't deactivate your own account" }, 400);
+    const deactivate = body.action === 'deactivate';
+    // A ban stops new sign-ins and session refreshes; ~100 years means "until activated again"
+    const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: deactivate ? '876000h' : 'none' } as any);
+    if (error) return json({ error: error.message }, 400);
+    await admin.from('profiles').update({ deactivated_at: deactivate ? new Date().toISOString() : null }).eq('id', userId);
+    return json({ ok: true, active: !deactivate });
+  }
   // Turn off two-step verification for someone who lost their authenticator app
   if (body.action === 'reset-mfa') {
     const userId = String(body.userId || '');

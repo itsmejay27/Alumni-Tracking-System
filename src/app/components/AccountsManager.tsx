@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Req } from './RequiredMark';
-import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw } from 'lucide-react';
+import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw, Ban, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +29,7 @@ interface Account {
   title: string;
   must_change_password: boolean;
   created_at: string;
+  deactivated_at: string | null;
 }
 
 interface InviteResult {
@@ -64,7 +65,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, role, given_name, last_name, title, must_change_password, created_at')
+      .select('id, email, role, given_name, last_name, title, must_change_password, created_at, deactivated_at')
       .order('created_at', { ascending: false });
     if (error) setLoadError(error.message);
     else {
@@ -166,6 +167,35 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     else setResult({ email: acc.email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
   };
 
+  const [toggling, setToggling] = useState<string | null>(null);
+  // Deactivated accounts can't sign in; nothing is deleted, and they can be activated again
+  const handleToggleActive = async (acc: Account) => {
+    const name = `${acc.given_name} ${acc.last_name}`.trim() || acc.email;
+    const deactivate = !acc.deactivated_at;
+    const ok = await confirmDialog(
+      deactivate
+        ? {
+            title: `Deactivate ${name}'s account?`,
+            message: "They won't be able to sign in until you activate the account again. Their data is kept.",
+            confirmLabel: 'Deactivate',
+            danger: true,
+          }
+        : { title: `Activate ${name}'s account?`, message: 'They will be able to sign in again.', confirmLabel: 'Activate' }
+    );
+    if (!ok) return;
+    setToggling(acc.id);
+    const { error } = await supabase.functions.invoke('invite-account', {
+      body: { action: deactivate ? 'deactivate' : 'activate', userId: acc.id },
+    });
+    setToggling(null);
+    if (error) {
+      toast.error(await invokeError(error));
+      return;
+    }
+    setAccounts((list) => list.map((x) => (x.id === acc.id ? { ...x, deactivated_at: deactivate ? new Date().toISOString() : null } : x)));
+    toast.success(deactivate ? `${name}'s account is deactivated` : `${name}'s account is active again`);
+  };
+
   const handleRemove = async (acc: Account) => {
     const pending = acc.must_change_password;
     const name = `${acc.given_name} ${acc.last_name}`.trim() || acc.email;
@@ -199,7 +229,8 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     if (roleFilter === 'staff' && !a.role.startsWith('admin')) return false;
     if (roleFilter !== 'staff' && roleFilter !== 'all' && a.role !== roleFilter) return false;
     if (statusFilter === 'pending' && !a.must_change_password) return false;
-    if (statusFilter === 'active' && a.must_change_password) return false;
+    if (statusFilter === 'active' && (a.must_change_password || a.deactivated_at)) return false;
+    if (statusFilter === 'deactivated' && !a.deactivated_at) return false;
     const q = search.toLowerCase();
     return !q || a.email.includes(q) || `${a.given_name} ${a.last_name}`.toLowerCase().includes(q);
   });
@@ -362,6 +393,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="pending">Invitation pending</option>
+            <option value="deactivated">Deactivated</option>
           </select>
           {filtersOn && (
             <button
@@ -389,6 +421,9 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 {a.must_change_password && (
                   <span className="inline-block mt-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Invitation pending</span>
                 )}
+                {a.deactivated_at && (
+                  <span className="inline-block mt-1 text-[11px] font-medium text-red-700 bg-red-50 rounded-full px-2 py-0.5">Deactivated</span>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
                 <select
@@ -405,6 +440,20 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 </select>
                 {/* Two fixed-width action slots so every row lines up */}
                 <div className="w-[7.5rem]">
+                  {!a.must_change_password && a.id !== currentUserId && (
+                    <button
+                      onClick={() => handleToggleActive(a)}
+                      disabled={toggling === a.id}
+                      title={a.deactivated_at ? 'Let this person sign in again' : 'Stop this person from signing in'}
+                      className={
+                        actionBtn +
+                        (a.deactivated_at ? ' text-emerald-700 border-emerald-200 hover:bg-emerald-50' : ' text-amber-700 border-amber-200 hover:bg-amber-50')
+                      }
+                    >
+                      {a.deactivated_at ? <CheckCircle2 size={14} /> : <Ban size={14} />}
+                      {toggling === a.id ? '...' : a.deactivated_at ? 'Activate' : 'Deactivate'}
+                    </button>
+                  )}
                   {a.must_change_password && (
                     <button
                       onClick={() => handleResend(a)}

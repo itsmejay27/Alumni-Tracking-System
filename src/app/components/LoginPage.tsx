@@ -142,6 +142,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           else if (typeof t.attemptsLeft === 'number')
             setError(`Incorrect email or password. ${t.attemptsLeft} attempt${t.attemptsLeft === 1 ? '' : 's'} left before the account is locked for 30 minutes.`);
           else setError('Incorrect email or password.');
+        } else if (/banned/i.test(error.message) || (error as any).code === 'user_banned') {
+          setError('This account has been deactivated. Please contact the OMSU Alumni Affairs Office.');
         } else setError(error.message);
       } else {
         // Correct password: start counting from zero again

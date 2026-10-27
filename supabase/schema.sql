@@ -763,3 +763,4 @@ create policy "employment proofs: owner and staff read" on storage.objects for s
   );
 create policy "employment proofs: owner deletes" on storage.objects for delete to authenticated
   using (bucket_id = 'employment-proofs' and (storage.foldername(name))[1] = (select auth.uid())::text);
+alter table public.profiles add column if not exists deactivated_at timestamptz; -- set when Alumni Affairs deactivates an account (sign-in is blocked with an auth ban)
