@@ -14,7 +14,7 @@ const statusClass = (s: string) =>
 import { CsvImport } from './CsvImport';
 import { Pagination, usePaged } from './Pagination';
 import { Upload } from 'lucide-react';
-import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X } from 'lucide-react';
+import { Search, Download, Filter, Mail, Briefcase, Calendar, Building2, Facebook, User, MapPin, GraduationCap, ClipboardList, HelpCircle, X, FileText } from 'lucide-react';
 
 interface AlumniRecordsProps {
   userRole: string;
@@ -735,9 +735,26 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
             <p className="text-xs text-muted-foreground mt-1">{[j.employerAddress, j.employerContact && `Tel. ${j.employerContact}`].filter(Boolean).join(' · ')}</p>
           )}
           {j.jobDescription && <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{j.jobDescription}</p>}
+          {j.proofPath && <ProofLink path={j.proofPath} name={j.proofName} />}
         </li>
       ))}
     </ol>
   );
 }
 
+/** Opens a graduate's proof of employment from private storage (link is valid for 5 minutes). */
+function ProofLink({ path, name }: { path: string; name?: string }) {
+  const [opening, setOpening] = useState(false);
+  const open = async () => {
+    setOpening(true);
+    const { data, error } = await supabase.storage.from('employment-proofs').createSignedUrl(path, 300);
+    setOpening(false);
+    if (error || !data) alert('Could not open the file.');
+    else window.open(data.signedUrl, '_blank', 'noopener');
+  };
+  return (
+    <button onClick={open} disabled={opening} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60">
+      <FileText size={13} /> {opening ? 'Opening...' : `Proof of employment${name ? `: ${name}` : ''}`}
+    </button>
+  );
+}

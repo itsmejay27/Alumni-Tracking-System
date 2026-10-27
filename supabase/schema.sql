@@ -744,3 +744,22 @@ language sql security definer set search_path = '' as $$
 $$;
 revoke execute on function public.login_succeeded() from public, anon;
 grant execute on function public.login_succeeded() to authenticated;
+
+-- Proof of employment uploads (applied 2026-10-28)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('employment-proofs', 'employment-proofs', false, 5242880,
+        array['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+create policy "employment proofs: owner uploads" on storage.objects for insert to authenticated
+  with check (bucket_id = 'employment-proofs' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "employment proofs: owner and staff read" on storage.objects for select to authenticated
+  using (
+    bucket_id = 'employment-proofs' and (
+      (storage.foldername(name))[1] = (select auth.uid())::text
+      or (select public.app_role()) = 'admin'
+      or exists (select 1 from public.alumni_records r
+                  where r.user_id::text = (storage.foldername(name))[1] and r.course = (select public.admin_course()))
+    )
+  );
+create policy "employment proofs: owner deletes" on storage.objects for delete to authenticated
+  using (bucket_id = 'employment-proofs' and (storage.foldername(name))[1] = (select auth.uid())::text);

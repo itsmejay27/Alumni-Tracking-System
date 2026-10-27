@@ -12,8 +12,11 @@ import {
   X,
   ChevronDown,
   Camera,
+  FileText,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 import { CurrentUser } from '../App';
 import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
@@ -254,8 +257,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     if (section === 'personal') {
       if (!givenName.trim() || !lastName.trim()) return 'First and last name are required';
       if (!isValidMobile(mobileNo)) return 'Enter an 11-digit mobile number starting with 09';
+      if (!fatherName.trim() || !motherName.trim()) return "Enter your father's and mother's names";
       for (const [label, v] of [["Father's", fatherContact], ["Mother's", motherContact]] as const) {
-        if (v && !isValidMobile(v)) return `${label} contact number must be 11 digits starting with 09`;
+        if (!isValidMobile(v)) return `${label} contact number must be 11 digits starting with 09`;
       }
       const age = ageFrom(dateOfBirth);
       if (age == null || age < 15) return 'Please enter your correct date of birth';
@@ -264,17 +268,83 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     if (section === 'employment') {
       if (status !== 'Unemployed' && !history.some((h) => !h.endDate)) return 'Add your current job, or choose Unemployed';
       if (history.some((h) => !h.position.trim() || !h.company.trim())) return 'Each job needs a position and a company';
+      if (status !== 'Unemployed' && history.some((h) => !h.endDate && !h.proofPath))
+        return 'Attach a proof of employment (contract, company ID or business permit) to your current job';
     }
     return null;
   };
 
-  const saveSection = async (section: SectionId) => {
+  // ---- Unsaved answers survive a page refresh (kept on this device until saved) ----
+  const draftKey = currentUser ? `omsu-profile-draft:${currentUser.id}` : '';
+  const draftState = {
+    givenName, middleName, lastName, sex, dateOfBirth, civilStatus, mobileNo, facebookName, twitter,
+    otherSocialNetwork, otherSocialId, presentAddress, permanentAddress, fatherName, fatherContact,
+    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic,
+  };
+  const [draftReady, setDraftReady] = useState(false);
+  // Restore once, right after the saved record has loaded
+  useEffect(() => {
+    if (loading || draftReady || !draftKey) return;
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (d && typeof d === 'object') {
+        const v = d.values || {};
+        if ('givenName' in v) setGivenName(v.givenName);
+        if ('middleName' in v) setMiddleName(v.middleName);
+        if ('lastName' in v) setLastName(v.lastName);
+        if (v.sex) setSex(v.sex);
+        if ('dateOfBirth' in v) setDateOfBirth(v.dateOfBirth);
+        if (v.civilStatus) setCivilStatus(v.civilStatus);
+        if ('mobileNo' in v) setMobileNo(v.mobileNo);
+        if ('facebookName' in v) setFacebookName(v.facebookName);
+        if ('twitter' in v) setTwitter(v.twitter);
+        if ('otherSocialNetwork' in v) setOtherSocialNetwork(v.otherSocialNetwork);
+        if ('otherSocialId' in v) setOtherSocialId(v.otherSocialId);
+        if ('presentAddress' in v) setPresentAddress(v.presentAddress);
+        if ('permanentAddress' in v) setPermanentAddress(v.permanentAddress);
+        if ('fatherName' in v) setFatherName(v.fatherName);
+        if ('fatherContact' in v) setFatherContact(v.fatherContact);
+        if ('motherName' in v) setMotherName(v.motherName);
+        if ('motherContact' in v) setMotherContact(v.motherContact);
+        if (v.course) setCourse(v.course);
+        if ('campus' in v) setCampus(v.campus);
+        if (v.yearGraduated) setYearGraduated(v.yearGraduated);
+        if (v.status) setStatus(v.status);
+        if (Array.isArray(v.history)) setHistory(v.history);
+        if ('suggestions' in v) setSuggestions(v.suggestions);
+        if ('isPublic' in v) setIsPublic(v.isPublic);
+        if (d.tab) setTab(d.tab);
+      }
+    } catch {
+      /* no draft, or storage blocked */
+    }
+    setDraftReady(true);
+  }, [loading, draftReady, draftKey]);
+  // Keep the draft up to date while typing
+  useEffect(() => {
+    if (!draftReady || !draftKey) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ values: draftState, tab }));
+    } catch {
+      /* storage full or blocked */
+    }
+  }, [draftReady, draftKey, tab, JSON.stringify(draftState)]);
+  const clearDraft = () => {
+    try {
+      if (draftKey) localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  /** Saves the whole profile at once (one save = one entry in the record history). */
+  const saveAll = async () => {
     if (!currentUser) return;
-    // A brand-new record must be complete before its first save
-    const sections: SectionId[] = record?.id ? [section] : ['personal', 'education', 'employment', 'feedback'];
+    const sections: SectionId[] = ['personal', 'education', 'employment', 'feedback'];
     for (const sct of sections) {
       const problem = validate(sct);
       if (problem) {
+        setTab(sct);
         toast.error(t(problem));
         return;
       }
@@ -296,7 +366,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       respondedAt: new Date().toISOString(),
     } as Parameters<typeof saveMyRecord>[1];
 
-    setSavingSection(section);
+    setSavingSection('feedback');
     try {
       const id = await saveMyRecord(currentUser.id, next);
       if (sections.includes('personal')) {
@@ -314,8 +384,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         for (const sct of sections) nextBl[sct] = sct === 'employment' ? JSON.stringify([status, next.employmentHistory || []]) : snapshot(sct);
         return nextBl;
       });
-      const label = { personal: 'Personal information', education: 'Education', employment: 'Employment', feedback: 'Privacy and feedback' }[section];
-      toast.success(record?.id ? t('{section} saved', { section: t(label) }) : t('Your alumni profile has been saved'));
+      toast.success(t('Your alumni profile has been saved'));
+      clearDraft();
       onSaved?.();
     } catch (err: any) {
       toast.error(`Could not save: ${err.message}`);
@@ -350,18 +420,33 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   ];
   const completion = Math.round((checks.filter(Boolean).length / checks.length) * 100);
   const initials = `${givenName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'OM';
+  const validateSafe = (sct: SectionId) => validate(sct) === null;
   const tabs: { id: SectionId; label: string; saveLabel: string; done: boolean; optional?: boolean }[] = [
     {
       id: 'personal',
       label: 'Personal information',
       saveLabel: 'Save personal information',
-      done: !!givenName.trim() && !!lastName.trim() && isValidMobile(mobileNo) && (ageFrom(dateOfBirth) ?? 0) >= 15 && !!presentAddress.trim() && !!permanentAddress.trim(),
+      done: validateSafe('personal'),
     },
     { id: 'education', label: 'Education', saveLabel: 'Save education', done: !!course && !!yearGraduated },
-    { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: status === 'Unemployed' || currentJobs.length > 0 },
+    { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: validateSafe('employment') },
     { id: 'feedback', label: 'Feedback', saveLabel: 'Save', done: !!suggestions.trim(), optional: true },
   ];
   const tabIndex = tabs.findIndex((x) => x.id === tab);
+  const anyDirty = Object.values(dirty).some(Boolean);
+  /** Moving forward is only allowed when the steps before it have their required answers. */
+  const goToTab = (id: SectionId) => {
+    const target = tabs.findIndex((x) => x.id === id);
+    for (let i = 0; i < target; i++) {
+      const problem = validate(tabs[i].id);
+      if (problem) {
+        setTab(tabs[i].id);
+        toast.error(t(problem));
+        return;
+      }
+    }
+    setTab(id);
+  };
   const displayName = `${givenName} ${middleName ? middleName[0] + '. ' : ''}${lastName}`.trim();
 
   return (
@@ -437,7 +522,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               type="button"
               role="tab"
               aria-selected={tab === tb.id}
-              onClick={() => setTab(tb.id)}
+              onClick={() => goToTab(tb.id)}
               className={`relative flex-1 min-w-[9.5rem] flex items-center gap-3 px-4 sm:px-5 py-4 text-left transition-colors ${
                 tab === tb.id ? 'bg-muted/50' : 'hover:bg-muted/30'
               }`}
@@ -520,10 +605,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
               <Group title="Parents">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Father's name"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
-                  <Field label="Father's contact number"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-                  <Field label="Mother's name"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
-                  <Field label="Mother's contact number"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
+                  <Field label="Father's name *"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
+                  <Field label="Father's contact number *"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
+                  <Field label="Mother's name *"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
+                  <Field label="Mother's contact number *"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
                 </div>
               </Group>
             </>
@@ -662,24 +747,51 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
             </>
           )}
 
-          {/* Save this part, then go to the next one */}
-          <SaveRow
-            // Until the graduate saves once, Save stays on so they can confirm details already on file
-            dirty={dirty[tab] || !record?.respondedAt}
-            busy={savingSection === tab}
-            onSave={() => saveSection(tab)}
-            label={tabs.find((x) => x.id === tab)!.saveLabel}
-            next={
-              tabIndex < tabs.length - 1
-                ? { label: tabs[tabIndex + 1].label, onClick: () => setTab(tabs[tabIndex + 1].id) }
-                : undefined
-            }
-          />
+          {/* Back / Next between steps; one Save at the end so each save is one history entry */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 pt-5 border-t border-border/60">
+            <span className="text-xs sm:mr-auto">
+              {anyDirty ? (
+                <span className="font-medium text-amber-600">{t('Your answers are kept on this device until you save.')}</span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 size={14} /> {t('Saved')}
+                </span>
+              )}
+            </span>
+            {tabIndex > 0 && (
+              <button
+                type="button"
+                onClick={() => setTab(tabs[tabIndex - 1].id)}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+              >
+                <ChevronLeft size={16} /> {t('Back')}
+              </button>
+            )}
+            {tabIndex < tabs.length - 1 ? (
+              <button
+                type="button"
+                onClick={() => goToTab(tabs[tabIndex + 1].id)}
+                className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground"
+              >
+                {t('Next')}: {t(tabs[tabIndex + 1].label)} <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={saveAll}
+                disabled={!!savingSection || (!anyDirty && !!record?.respondedAt)}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save size={16} /> {savingSection ? t('Saving...') : t('Save profile')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {jobModal && (
         <JobModal
+          userId={currentUser?.id || ''}
           entry={jobModal.entry}
           isNew={jobModal.isNew}
           locked={savedIds.has(jobModal.entry.id)}
@@ -699,50 +811,6 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   );
 }
 
-/** Save button at the bottom of a section; shows whether that section has unsaved changes. */
-function SaveRow({
-  dirty,
-  busy,
-  onSave,
-  label,
-  next,
-}: {
-  dirty: boolean;
-  busy: boolean;
-  onSave: () => void;
-  label: string;
-  next?: { label: string; onClick: () => void };
-}) {
-  const t = useT();
-  return (
-    <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-3 pt-4 border-t border-border/60">
-      {dirty ? (
-        <span className="text-xs font-medium text-amber-600 sm:mr-auto">{t('You have unsaved changes')}</span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 sm:mr-auto">
-          <CheckCircle2 size={14} /> {t('Saved')}
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={busy || !dirty}
-        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Save size={16} /> {busy ? t('Saving...') : t(label)}
-      </button>
-      {next && (
-        <button
-          type="button"
-          onClick={next.onClick}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
-        >
-          {t('Next')}: {t(next.label)} <ChevronRight size={16} />
-        </button>
-      )}
-    </div>
-  );
-}
 
 /** A titled group of fields inside a tab */
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
@@ -792,6 +860,7 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
 
 /** Add or view one job. Saved jobs are history: only their end month can change. */
 function JobModal({
+  userId,
   entry,
   isNew,
   locked,
@@ -799,6 +868,7 @@ function JobModal({
   onSave,
   onRemove,
 }: {
+  userId: string;
   entry: EmploymentEntry;
   isNew: boolean;
   locked: boolean;
@@ -809,12 +879,48 @@ function JobModal({
   const t = useT();
   const [draft, setDraft] = useState<EmploymentEntry>(entry);
   const set = (patch: Partial<EmploymentEntry>) => setDraft((d) => ({ ...d, ...patch }));
+  const [uploading, setUploading] = useState(false);
   const submit = () => {
     if (!draft.position.trim() || !draft.company.trim()) {
       toast.error(t('Enter the position and the company'));
       return;
     }
+    if (!draft.endDate && !draft.proofPath) {
+      toast.error(t('Attach a proof of employment (contract, company ID or business permit)'));
+      return;
+    }
     onSave({ ...draft, position: draft.position.trim(), company: draft.company.trim() });
+  };
+
+  // Proof of employment goes to private storage; only the graduate and their staff can open it
+  const uploadProof = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^(application\/pdf|image\/(jpeg|png|webp))$/.test(file.type)) {
+      toast.error(t('Upload a PDF, JPG, PNG or WEBP file.'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('The file must be 5 MB or smaller.'));
+      return;
+    }
+    setUploading(true);
+    const ext = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const path = `${userId}/${draft.id}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('employment-proofs').upload(path, file, { contentType: file.type });
+    setUploading(false);
+    if (error) {
+      toast.error(`${t('Could not upload the file')}: ${error.message}`);
+      return;
+    }
+    set({ proofPath: path, proofName: file.name.slice(0, 120) });
+  };
+  const viewProof = async () => {
+    if (!draft.proofPath) return;
+    const { data, error } = await supabase.storage.from('employment-proofs').createSignedUrl(draft.proofPath, 300);
+    if (error || !data) toast.error(t('Could not open the file'));
+    else window.open(data.signedUrl, '_blank', 'noopener');
   };
 
   return (
@@ -824,7 +930,7 @@ function JobModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-lg">{isNew ? t('Add job') : locked ? t('Job details') : t('Edit job')}</h3>
-            {locked && <p className="text-xs text-muted-foreground mt-0.5">{t("Saved jobs are kept as history and can't be edited.")}</p>}
+            {locked && <p className="text-xs text-muted-foreground mt-0.5">{t("Saved jobs are kept as history and can't be edited, but you can still attach the proof of employment.")}</p>}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
             <X size={18} />
@@ -860,6 +966,27 @@ function JobModal({
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
             </Field>
           </div>
+          {/* Proof can be added even to a saved job, e.g. one imported from the tracer sheet */}
+          <div className="md:col-span-2">
+            <Field label={draft.endDate ? 'Proof of employment' : 'Proof of employment *'}>
+              <div className="rounded-xl border border-dashed border-border p-4 flex flex-wrap items-center gap-3">
+                <FileText size={20} className="text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  {draft.proofPath ? (
+                    <button type="button" onClick={viewProof} className="text-sm font-semibold text-primary hover:underline truncate max-w-full text-left">
+                      {draft.proofName || t('View file')}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t('Contract, company ID, appointment paper or business permit (PDF or photo, up to 5 MB)')}</p>
+                  )}
+                </div>
+                <label className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border cursor-pointer hover:bg-muted ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={uploadProof} className="hidden" />
+                  <Upload size={15} /> {uploading ? t('Uploading...') : draft.proofPath ? t('Replace') : t('Upload')}
+                </label>
+              </div>
+            </Field>
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2 pt-1">
           <div>
@@ -880,7 +1007,7 @@ function JobModal({
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">{t('Cancel')}</button>
-            <button type="button" onClick={submit} className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground">
+            <button type="button" onClick={submit} disabled={uploading} className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-50">
               {isNew ? t('Add job') : t('Done')}
             </button>
           </div>

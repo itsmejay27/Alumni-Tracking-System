@@ -180,7 +180,17 @@ function AppInner() {
         } else setNeedsLink(false);
         setCurrentUser(user);
         setAuthScreen(null);
-        setActiveTab(user.role.startsWith('admin') ? 'dashboard' : 'home');
+        // After a refresh, go back to the page that was open
+        const pages = user.role.startsWith('admin')
+          ? ['dashboard', 'records', 'announcements', 'jobs', 'contact', 'accounts', 'settings']
+          : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
+        let last = '';
+        try {
+          last = sessionStorage.getItem(`omsu-page:${user.id}`) || '';
+        } catch {
+          /* storage blocked */
+        }
+        setActiveTab(pages.includes(last) ? last : user.role.startsWith('admin') ? 'dashboard' : 'home');
       });
     return () => {
       cancelled = true;
@@ -216,6 +226,16 @@ function AppInner() {
   };
 
   useApplyPreferences(!!session && !!currentUser && !needsMfa);
+
+  // Remember the open page so a refresh comes back to it
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      sessionStorage.setItem(`omsu-page:${currentUser.id}`, activeTab);
+    } catch {
+      /* storage blocked */
+    }
+  }, [currentUser?.id, activeTab]);
 
   // Check whether a signed-in graduate still has to complete their profile
   useEffect(() => {

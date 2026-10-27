@@ -15,6 +15,9 @@ export interface EmploymentEntry {
   employerContact?: string;
   jobDescription?: string;
   lengthOfService?: string; // as written, e.g. "1 year 3 months"
+  /** Proof of employment in the private 'employment-proofs' storage (contract, company ID, permit) */
+  proofPath?: string;
+  proofName?: string;
   startDate?: string; // YYYY-MM
   endDate?: string | null; // YYYY-MM, empty = current job
   recordedAt: string; // ISO date the entry was added
@@ -245,11 +248,14 @@ export function missingProfileFields(r: AlumniRecord | null): string[] {
   if (blank(r.civilStatus)) missing.push('Civil status');
   if (blank(r.presentAddress)) missing.push('Present address');
   if (blank(r.permanentAddress)) missing.push('Permanent address');
+  if (blank(r.fatherName) || !/^09\d{9}$/.test(r.fatherContact || '')) missing.push("Father's name and contact number");
+  if (blank(r.motherName) || !/^09\d{9}$/.test(r.motherContact || '')) missing.push("Mother's name and contact number");
   if (!r.yearGraduated) missing.push('Year graduated');
   if (!r.status || r.status === 'Not Tracked') missing.push('Employment status');
   else if (r.status !== 'Unemployed') {
     const hasJob = (r.employmentHistory || []).some((h) => !h.endDate) || !blank(r.currentPosition);
     if (!hasJob) missing.push('Current job');
+    else if ((r.employmentHistory || []).some((h) => !h.endDate && !h.proofPath)) missing.push('Proof of employment');
   }
   return missing;
 }
