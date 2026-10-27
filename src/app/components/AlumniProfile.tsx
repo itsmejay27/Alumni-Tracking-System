@@ -436,7 +436,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile }: AlumniProfilePro
                 <option value="Male">{t('Male')}</option>
               </select>
             </Field>
-            <Field label={`${t('Date of birth')} *${(ageFrom(dateOfBirth) ?? 0) >= 15 ? ` · ${t('Age')} ${ageFrom(dateOfBirth)}` : ''}`}>
+            <Field label="Date of birth *">
               <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
             </Field>
             <Field label="Civil status *">

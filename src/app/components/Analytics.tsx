@@ -37,6 +37,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
   const [year, setYear] = useState<string>('all');
   const [metric, setMetric] = useState<Metric>('rate');
   const [showTable, setShowTable] = useState(false);
+  const [chartHover, setChartHover] = useState(false);
 
   const visiblePrograms = PROGRAMS.filter((p) => (scope ? p.code === scope : program === 'all' || p.code === program));
   const inProgram = records.filter((r) => visiblePrograms.some((p) => p.code === r.course));
@@ -218,7 +219,15 @@ export function Analytics({ userRole }: AnalyticsProps) {
             </table>
           </div>
         ) : (
-          <div className="h-[320px]">
+          // select-none: clicking the chart shouldn't highlight the program labels. The hover line and
+          // tooltip disappear as soon as the pointer leaves the chart (or shortly after a tap).
+          <div
+            className="h-[320px] select-none outline-none [&_*]:outline-none"
+            onMouseEnter={() => setChartHover(true)}
+            onMouseLeave={() => setChartHover(false)}
+            onTouchStart={() => setChartHover(true)}
+            onTouchEnd={() => window.setTimeout(() => setChartHover(false), 2500)}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 8, right: 72, left: -8, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -232,6 +241,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                   tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
                 />
                 <Tooltip
+                  active={chartHover ? undefined : false}
                   cursor={{ stroke: 'var(--muted-foreground)', strokeDasharray: '3 3' }}
                   content={<ChartTooltip metric={metric} />}
                 />
