@@ -676,3 +676,20 @@ language sql immutable set search_path = '' as $$
             then jsonb_build_object('sex', initcap(trim(p_sex))) else '{}'::jsonb end
 $$;
 -- link_alumni and handle_new_user now save data = public.fill_missing_details(data, birth, sex) || {email}
+
+-- Analytics response: the database marks respondedAt whenever a graduate saves their own record,
+-- and keeps an earlier mark if someone else (or an old open page) saves without it
+create or replace function public.mark_alumni_response() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.user_id is not null and auth.uid() = new.user_id then
+    new.data := coalesce(new.data, '{}'::jsonb) || jsonb_build_object('respondedAt', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
+  elsif tg_op = 'UPDATE' and not (coalesce(new.data, '{}'::jsonb) ? 'respondedAt') and (old.data ? 'respondedAt') then
+    new.data := coalesce(new.data, '{}'::jsonb) || jsonb_build_object('respondedAt', old.data->'respondedAt');
+  end if;
+  return new;
+end $$;
+revoke execute on function public.mark_alumni_response() from public, anon, authenticated;
+create or replace trigger alumni_records_mark_response
+  before insert or update on public.alumni_records
+  for each row execute function public.mark_alumni_response();
