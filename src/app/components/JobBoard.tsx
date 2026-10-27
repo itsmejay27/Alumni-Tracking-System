@@ -354,7 +354,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
-        <Pagination {...paged} label={t('jobs')} alwaysShowControls />
+        <Pagination {...paged} label={t('jobs')} />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />

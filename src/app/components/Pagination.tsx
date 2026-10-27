@@ -27,7 +27,7 @@ export function Pagination({
   to,
   total,
   label = 'items',
-  alwaysShowControls = false,
+  alwaysShowControls = true,
 }: {
   page: number;
   pages: number;
@@ -36,7 +36,7 @@ export function Pagination({
   to: number;
   total: number;
   label?: string;
-  /** Show the page buttons even when everything fits on one page */
+  /** Show the page buttons even when everything fits on one page (on by default, so every list looks the same) */
   alwaysShowControls?: boolean;
 }) {
   const t = useT();
