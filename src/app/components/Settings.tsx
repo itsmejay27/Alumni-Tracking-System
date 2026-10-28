@@ -357,9 +357,11 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
   const [enroll, setEnroll] = useState<{ id: string; qr: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showKey, setShowKey] = useState(false);
 
   const start = async () => {
     setBusy(true);
+    setShowKey(false);
     // Clear any half-finished setup first
     const { data: list } = await supabase.auth.mfa.listFactors();
     for (const f of list?.all || []) if (f.status !== 'verified') await supabase.auth.mfa.unenroll({ factorId: f.id });
@@ -369,13 +371,16 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
     setEnroll({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
   };
 
-  const finish = async () => {
-    if (!enroll) return;
-    if (code.length !== 6) return toast.error(t('Enter the 6-digit code from your authenticator app.'));
+  const finish = async (value = code) => {
+    if (!enroll || busy) return;
+    if (value.length !== 6) return toast.error(t('Enter the 6-digit code from your authenticator app.'));
     setBusy(true);
-    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enroll.id, code });
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enroll.id, code: value });
     setBusy(false);
-    if (error) return toast.error(t('That code is not correct. Try the newest code in your app.'));
+    if (error) {
+      setCode('');
+      return toast.error(t('That code is not correct. Try the newest code in your app.'));
+    }
     setEnroll(null);
     setCode('');
     toast.success(t('Two-step verification is on.'));
@@ -410,10 +415,10 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
   };
 
   return (
-    <Card icon={<Smartphone size={18} />} title={t('Two-step verification')} sub={t('After your password, enter a code from an authenticator app on your phone.')}>
+    <Card icon={<Smartphone size={18} />} title={t('Two-step verification')} sub={t('Extra protection: after your password, you also type a code from your phone.')}>
       {enabled ? (
         <div className="flex-1 flex flex-col gap-4">
-          <p className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 text-emerald-800 px-4 py-3 text-sm font-medium">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium">
             <CheckCircle2 size={18} /> {t('On. You will be asked for a code each time you sign in.')}
           </p>
           <div className="flex justify-end mt-auto">
@@ -423,42 +428,100 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
           </div>
         </div>
       ) : enroll ? (
-        <div className="space-y-4">
-          <ol className="text-sm space-y-1 list-decimal pl-5 text-muted-foreground">
-            <li>{t('Install Google Authenticator, Microsoft Authenticator or Authy on your phone.')}</li>
-            <li>{t('Scan this QR code with the app (or type the key).')}</li>
-            <li>{t('Enter the 6-digit code the app shows.')}</li>
-          </ol>
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <img src={enroll.qr} alt={t('QR code for your authenticator app')} className="w-40 h-40 rounded-xl bg-white p-2 ring-1 ring-border" />
-            <div className="flex-1 w-full space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">{t('Setup key')}</p>
-                <code className="block text-xs break-all rounded-lg bg-muted px-3 py-2 font-mono select-all">{enroll.secret}</code>
+        <div className="space-y-5">
+          {/* Step 1 */}
+          <div className="flex gap-3">
+            <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shrink-0">1</span>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">{t('Get a free authenticator app on your phone')}</p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
+                >
+                  Google Authenticator · Android
+                </a>
+                <a
+                  href="https://apps.apple.com/app/google-authenticator/id388497605"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
+                >
+                  Google Authenticator · iPhone
+                </a>
               </div>
+              <p className="text-xs text-muted-foreground">{t('Already have Microsoft Authenticator or Authy? You can use that instead.')}</p>
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div className="flex gap-3">
+            <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shrink-0">2</span>
+            <div className="space-y-2 min-w-0 flex-1">
+              <p className="text-sm font-semibold">{t('In the app, tap + then "Scan a QR code", and point your camera here')}</p>
+              <img src={enroll.qr} alt={t('QR code for your authenticator app')} className="w-40 h-40 rounded-xl bg-white p-2 ring-1 ring-border" />
+              {showKey ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">{t('In the app, choose "Enter a setup key" and type this key:')}</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 min-w-0 text-xs break-all rounded-lg bg-muted px-3 py-2 font-mono select-all">{enroll.secret}</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(enroll.secret);
+                        toast.success(t('Key copied'));
+                      }}
+                      className="px-3 py-2 rounded-lg border border-border text-xs font-semibold hover:bg-muted shrink-0"
+                    >
+                      {t('Copy')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowKey(true)} className="text-xs font-semibold text-primary hover:underline">
+                  {t("Can't scan? Type a key instead")}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="flex gap-3">
+            <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shrink-0">3</span>
+            <div className="space-y-2 flex-1">
+              <p className="text-sm font-semibold">{t('Type the 6-digit code the app shows for "OMSU Alumni Track"')}</p>
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setCode(v);
+                  // Checks the code by itself as soon as all 6 digits are in
+                  if (v.length === 6) finish(v);
+                }}
                 placeholder="000000"
-                className={`${input} text-center tracking-[0.4em] font-mono text-lg`}
+                className={`${input} max-w-[14rem] text-center tracking-[0.4em] font-mono text-lg`}
               />
+              <p className="text-xs text-muted-foreground">{t('The code changes every 30 seconds. Use the one showing now.')}</p>
             </div>
           </div>
+
           <div className="flex justify-end gap-2">
             <button type="button" onClick={cancel} className={btnSoft}>
               {t('Cancel')}
             </button>
-            <button type="button" onClick={finish} disabled={busy} className={btnPrimary}>
-              {busy && <Loader2 size={16} className="animate-spin" />} {t('Verify and turn on')}
+            <button type="button" onClick={() => finish()} disabled={busy || code.length !== 6} className={btnPrimary}>
+              {busy && <Loader2 size={16} className="animate-spin" />} {t('Turn on')}
             </button>
           </div>
         </div>
       ) : (
         <div className="flex-1 flex flex-col gap-4">
-          <p className="rounded-xl bg-amber-50 text-amber-900 px-4 py-3 text-sm">
-            {t('Off. Turning this on is strongly recommended for Alumni Affairs and program chair accounts.')}
+          <p className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
+            {t('Off. When it is on, signing in needs your password and a code from your phone, so a stolen password alone is not enough.')}
           </p>
           <div className="flex justify-end mt-auto">
             <button type="button" onClick={start} disabled={busy || enabled == null} className={btnPrimary}>
