@@ -1,90 +1,141 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useT } from '@/lib/preferences';
 import logo from '@/assets/logo.png';
-import { FileText, ShieldAlert, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { FileText, ShieldCheck, GraduationCap, CheckCircle2, ArrowRight, ClipboardCheck, AlertCircle } from 'lucide-react';
+import { AlumniRecord, currentJob, fetchMyRecord } from '@/lib/alumni';
+import { programName } from '@/lib/programs';
 
 interface HomeProps {
   onStartSurvey: () => void;
+  userId?: string;
+  firstName?: string;
 }
 
-export function Home({ onStartSurvey }: HomeProps) {
+const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+export function Home({ onStartSurvey, userId, firstName }: HomeProps) {
+  const t = useT();
+  const [record, setRecord] = useState<AlumniRecord | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchMyRecord(userId).then(setRecord).catch(() => {});
+  }, [userId]);
+
+  const job = record ? currentJob(record) : null;
+  const needsUpdate = !record || record.status === 'Not Tracked' || !record.lastUpdated;
+
   return (
-    <div className="max-w-3xl mx-auto py-4 space-y-8 animate-in fade-in duration-300">
-      
-      {/* Hero Welcome Card */}
-      <div className="bg-card border border-border rounded-xl p-8 text-center space-y-6 shadow-sm">
-        <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center mx-auto border border-border p-1 shadow-sm overflow-hidden">
-          <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-foreground">Occidental Mindoro State College</h2>
-          <p className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">Alumni Graduate Tracer Study</p>
-        </div>
-      </div>
-
-      {/* Main Statement */}
-      <div className="bg-card border border-border rounded-xl p-8 space-y-6 shadow-sm leading-relaxed text-foreground">
-        <div className="flex items-center gap-3 border-b border-border pb-4">
-          <FileText className="text-primary" size={22} />
-          <h3 className="text-lg font-bold text-foreground">Tracer Study Introduction</h3>
-        </div>
-        
-        <p className="text-base text-justify">
-          This institution is establishing a system of tracing its graduates and getting feedback regarding the type of work, further study, or other activity you are/were involved in since you completed your study at OMSC. The information provided will assist the institution in planning future educational needs and improving the course offerings.
-        </p>
-        
-        <p className="text-base text-justify">
-          Results of this tracer study will only be presented in summary form and individual responses will be kept <strong className="text-primary font-bold">“strictly confidential”</strong>. We would highly appreciate it if you could complete this questionnaire and return it to us, at your earliest convenience.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-border">
-          <div className="flex items-start gap-2.5 max-w-md">
-            <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={18} />
-            <p className="text-xs text-muted-foreground">
-              Your feedback directly impacts academic accreditation and course enhancements. Thank you for your continued support!
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
+      {/* Welcome banner */}
+      <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white">
+        <div
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
+        />
+        <div className="relative flex flex-col md:flex-row items-center gap-6 md:gap-10 p-6 sm:p-10">
+          <img src={logo} alt="OMSU seal" className="w-24 h-24 sm:w-32 sm:h-32 object-contain shrink-0 drop-shadow-xl" />
+          <div className="flex-1 text-center md:text-left space-y-2">
+            <p className="text-sm font-semibold text-[#f5c400]">Occidental Mindoro State University</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold">
+              {t('Welcome')}{firstName ? `, ${titleCase(firstName)}` : ''}!
+            </h2>
+            <p className="text-white/80 max-w-2xl">
+              {t('Thank you for taking part in the Alumni Graduate Tracer Study. Keep your profile and employment history up to date.')}
             </p>
           </div>
           <button
             onClick={onStartSurvey}
-            className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/95 transition-all text-sm text-center shrink-0"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#f5c400] text-[#002060] font-bold hover:brightness-95 shrink-0"
           >
-            Go to Profile Form
+            {needsUpdate ? t('Complete my profile') : t('Update my profile')} <ArrowRight size={18} />
           </button>
         </div>
+      </section>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Introduction */}
+        <section className="xl:col-span-2 bg-card rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <FileText size={20} />
+            </div>
+            <h3 className="text-lg font-bold">{t('Tracer Study Introduction')}</h3>
+          </div>
+          <p className="text-[15px] leading-relaxed text-foreground">
+            {t('This institution is establishing a system of tracing its graduates and getting feedback regarding the type of work, further study, or other activity you are/were involved in since you completed your study at OMSU. The information provided will assist the institution in planning future educational needs and improving the course offerings.')}
+          </p>
+          <p className="text-[15px] leading-relaxed text-foreground">
+            {t('Results of this tracer study will only be presented in summary form and individual responses will be kept strictly confidential. We would highly appreciate it if you could complete this questionnaire at your earliest convenience.')}
+          </p>
+          <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 p-4">
+            <ShieldCheck className="text-amber-600 shrink-0 mt-0.5" size={18} />
+            <p className="text-sm text-amber-900">
+              {t('Your feedback directly supports accreditation and improvements to your program. Thank you for your continued support!')}
+            </p>
+          </div>
+        </section>
+
+        {/* My record */}
+        <section className="bg-card rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <ClipboardCheck size={20} />
+            </div>
+            <h3 className="text-lg font-bold">{t('My tracer record')}</h3>
+          </div>
+          {record ? (
+            <dl className="space-y-3 text-sm">
+              <Row label={t('Program')} value={programName(record.course)} />
+              <Row label={t('Year graduated')} value={record.yearGraduated ? String(record.yearGraduated) : '—'} />
+              <Row
+                label={t('Status')}
+                value={record.status === 'Not Tracked' ? t('Not answered yet') : t(record.status)}
+              />
+              {job && <Row label={t('Current job')} value={[job.position, job.company].filter(Boolean).join(' at ') || '—'} />}
+              <Row label={t('Last updated')} value={record.lastUpdated || '—'} />
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('Loading your record...')}</p>
+          )}
+          {needsUpdate && (
+            <div className="flex items-start gap-2.5 rounded-xl bg-primary/5 p-4">
+              <AlertCircle className="text-primary shrink-0 mt-0.5" size={18} />
+              <p className="text-sm text-foreground">{t('Some of your details are missing. Please complete your profile.')}</p>
+            </div>
+          )}
+          <button
+            onClick={onStartSurvey}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+          >
+            {t('Open My Alumni Profile')} <ArrowRight size={16} />
+          </button>
+        </section>
       </div>
 
-      {/* Key Objectives Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-muted/30 border border-border rounded-xl p-5 space-y-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <GraduationCap size={16} />
+      {/* Why it matters */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[
+          { icon: <GraduationCap size={18} />, title: t('Curriculum Review'), text: t('Align courses with actual workplace expectations and industry trends.') },
+          { icon: <CheckCircle2 size={18} />, title: t('Institutional Quality'), text: t('Validate program outcomes for professional accreditation reviews.') },
+          { icon: <ShieldCheck size={18} />, title: t('Confidentiality'), text: t('Your individual response is protected under the university privacy policy.') },
+        ].map((c) => (
+          <div key={c.title} className="bg-card rounded-2xl p-6 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">{c.icon}</div>
+            <h4 className="font-bold text-foreground">{c.title}</h4>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{c.text}</p>
           </div>
-          <h4 className="font-bold text-sm text-foreground">Curriculum Review</h4>
-          <p className="text-xs text-muted-foreground leading-normal">
-            Align academic courses with actual workplace expectations and industry trends.
-          </p>
-        </div>
-
-        <div className="bg-muted/30 border border-border rounded-xl p-5 space-y-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <CheckCircle2 size={16} />
-          </div>
-          <h4 className="font-bold text-sm text-foreground">Institutional Quality</h4>
-          <p className="text-xs text-muted-foreground leading-normal">
-            Validate curriculum outcomes for professional accreditation reviews.
-          </p>
-        </div>
-
-        <div className="bg-muted/30 border border-border rounded-xl p-5 space-y-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <FileText size={16} />
-          </div>
-          <h4 className="font-bold text-sm text-foreground">Confidentiality</h4>
-          <p className="text-xs text-muted-foreground leading-normal">
-            Your individual response is safe under our strict institution privacy policy.
-          </p>
-        </div>
+        ))}
       </div>
+    </div>
+  );
+}
 
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-border/60 pb-2.5 last:border-0">
+      <dt className="text-muted-foreground shrink-0">{label}</dt>
+      <dd className="font-medium text-right">{value}</dd>
     </div>
   );
 }

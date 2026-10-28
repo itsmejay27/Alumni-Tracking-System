@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Req } from './RequiredMark';
+import { useT } from '@/lib/preferences';
+import { Megaphone, Calendar, Tag, Trash2, Plus, X, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
+import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
+import { Pagination, usePaged } from './Pagination';
+import { supabase } from '@/lib/supabase';
+import { courseScopeForRole } from '@/lib/alumni';
+import { roleLabel } from '@/lib/programs';
+import { LoadingState, ErrorState } from './DataState';
 
 interface Announcement {
   id: string;
@@ -9,78 +19,180 @@ interface Announcement {
   date: string;
   author: string;
   course?: string;
+  createdBy?: string;
 }
 
 interface AnnouncementsProps {
   userRole: string;
+  authorName: string;
 }
 
-export function Announcements({ userRole }: AnnouncementsProps) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(mockAnnouncements);
+export function Announcements({ userRole, authorName }: AnnouncementsProps) {
+  const t = useT();
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState<'Event' | 'Job Seminar' | 'General' | 'Homecoming'>('General');
   const [targetCourse, setTargetCourse] = useState('all');
+  const [emailAlumni, setEmailAlumni] = useState(true);
+  const [posting, setPosting] = useState(false);
 
   const isAdmin = userRole.startsWith('admin');
+  const adminCourse = courseScopeForRole(userRole);
+  // Program chairs choose: everyone, or their own department only
+  const [myId, setMyId] = useState<string | null>(null);
+  // Announcements this person hid for themselves (others still see them)
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
+  const hiddenKey = myId ? `omsu-hidden-announcements:${myId}` : null;
 
-  // Course Admin scope detection
-  const getCourseScope = () => {
-    if (userRole === 'admin') return 'Super Admin';
-    if (userRole === 'admin.beed') return 'BEED';
-    if (userRole === 'admin.bsit') return 'BSIT';
-    if (userRole === 'admin.bsba-fm') return 'BSBA-FM';
-    if (userRole === 'admin.bsba-om') return 'BSBA-OM';
-    if (userRole === 'admin.bsoa') return 'BSOA';
-    return '';
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMyId(data.user?.id ?? null));
+  }, []);
+  useEffect(() => {
+    if (!hiddenKey) return;
+    try {
+      setHidden(JSON.parse(localStorage.getItem(hiddenKey) || '[]'));
+    } catch {
+      setHidden([]);
+    }
+  }, [hiddenKey]);
+  const setHiddenList = (next: string[]) => {
+    setHidden(next);
+    try {
+      if (hiddenKey) localStorage.setItem(hiddenKey, JSON.stringify(next));
+    } catch {
+      /* private mode: hiding just lasts until reload */
+    }
   };
 
-  const handleAdd = (e: React.FormEvent) => {
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('id, title, content, category, course, author, created_at, created_by')
+      .order('created_at', { ascending: false });
+    if (error) {
+      setLoadError(error.message);
+    } else {
+      setLoadError(null);
+      setAnnouncements(
+        data.map((a) => ({
+          id: a.id,
+          title: a.title,
+          content: a.content,
+          category: a.category,
+          course: a.course || undefined,
+          author: a.author,
+          createdBy: a.created_by || undefined,
+          date: new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        }))
+      );
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !content) return;
 
-    const newAnnouncement: Announcement = {
-      id: String(announcements.length + 1),
-      title,
-      content,
-      category,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      author: getCourseScope() + ' Admin',
-      course: targetCourse === 'all' ? undefined : targetCourse,
-    };
+    const course =
+      // Program chairs post to their own program only
+      userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : adminCourse;
+    setPosting(true);
+    const { data: created, error } = await supabase
+      .from('announcements')
+      .insert({
+        title,
+        content,
+        category,
+        course,
+        author: `${authorName} · ${roleLabel(userRole)}`,
+      })
+      .select('id')
+      .single();
+    if (error) {
+      setPosting(false);
+      toast.error(
+        /row-level security/i.test(error.message) && !course
+          ? t('Posting to everyone is not enabled yet. Ask the admin to run the latest database update, or choose your department only.')
+          : `Could not post announcement: ${error.message}`
+      );
+      return;
+    }
 
-    setAnnouncements([newAnnouncement, ...announcements]);
+    if (emailAlumni) {
+      const { data: mail, error: mailError } = await supabase.functions.invoke('notify-announcement', {
+        body: { announcementId: created.id },
+      });
+      if (mailError) toast.warning('Announcement posted, but the email could not be sent.');
+      else toast.success(t('Announcement posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
+    } else {
+      toast.success('Announcement posted.');
+    }
+    setPosting(false);
     setTitle('');
     setContent('');
     setCategory('General');
     setShowAddForm(false);
+    load();
   };
 
-  const handleDelete = (id: string) => {
-    setAnnouncements(announcements.filter((a) => a.id !== id));
-  };
-
-  // Filtering: Alumni should only see general announcements or announcements matching their course
-  const filteredAnnouncements = announcements.filter((ann) => {
-    if (userRole.startsWith('admin.')) {
-      const course = userRole.split('.')[1].toUpperCase();
-      return !ann.course || ann.course === course;
+  // Only Alumni Affairs can delete announcements, and deleting removes them for everyone
+  const canDelete = userRole === 'admin';
+  const handleDelete = async (ann: Announcement) => {
+    const ok = await confirmDialog({
+      title: t('Delete this announcement?'),
+      message: t('It will be removed for every account.'),
+      confirmLabel: t('Delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const { data, error } = await supabase.from('announcements').delete().eq('id', ann.id).select('id');
+    if (error || !data?.length) {
+      toast.error(error ? `Could not delete: ${error.message}` : t('Only Alumni Affairs can delete announcements.'));
+      return;
     }
-    return true; // Super Admin or Alumni sees all applicable
+    setAnnouncements((list) => list.filter((a) => a.id !== ann.id));
+    toast.success(t('Announcement deleted.'));
+  };
+
+  const toggleHidden = (id: string) => {
+    if (hidden.includes(id)) setHiddenList(hidden.filter((h) => h !== id));
+    else {
+      setHiddenList([...hidden, id]);
+      toast.success(t('Hidden from your list only. Others still see it.'));
+    }
+  };
+
+  // Course admins only see general announcements or ones for their course
+  const filteredAnnouncements = announcements.filter((ann) => {
+    if (adminCourse && ann.course && ann.course !== adminCourse) return false;
+    return showHidden ? hidden.includes(ann.id) : !hidden.includes(ann.id);
   });
+
+  const paged = usePaged(filteredAnnouncements, 8);
+
+  if (loading) return <LoadingState label={t('Loading announcements...')} />;
+  if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Announcements & Events</h2>
-          <p className="text-muted-foreground mt-1">Stay updated with official college circulars and events</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t('Announcements & Events')}</h2>
+          <p className="text-muted-foreground mt-1">{t('Stay updated with official university circulars and events')}</p>
         </div>
         {isAdmin && (
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all shadow-md shadow-primary/10"
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all"
           >
             <Plus size={18} />
             Post Announcement
@@ -88,41 +200,46 @@ export function Announcements({ userRole }: AnnouncementsProps) {
         )}
       </div>
 
-      {showAddForm && (
+      {showAddForm &&
+        createPortal(
+          // Pop-up over the page, like Post a Job
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Post announcement">
+            <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !posting && setShowAddForm(false)} />
         <form
           onSubmit={handleAdd}
-          className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300"
+          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200"
         >
           <div className="flex justify-between items-center pb-2 border-b border-border">
-            <h3 className="text-lg font-bold text-foreground">Post New Announcement</h3>
+            <h3 className="text-lg font-bold text-foreground">{t('Post New Announcement')}</h3>
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
-              className="text-muted-foreground hover:text-foreground text-sm font-semibold"
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+              aria-label="Close"
             >
-              Cancel
+              <X size={18} />
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Title *</label>
+              <label className="text-sm font-semibold">Title <Req /></label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm"
+                className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
                 placeholder="e.g. 2026 Grand Alumni Homecoming"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Category *</label>
+              <label className="text-sm font-semibold">Category <Req /></label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
-                className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
               >
                 <option value="General">General Notice</option>
                 <option value="Event">Event</option>
@@ -131,15 +248,20 @@ export function Announcements({ userRole }: AnnouncementsProps) {
               </select>
             </div>
 
+            {userRole !== 'admin' && adminCourse && (
+              <p className="md:col-span-2 text-sm text-muted-foreground">
+                {t('This will be shown to {program} alumni and the {program} chair only.', { program: adminCourse })}
+              </p>
+            )}
             {userRole === 'admin' && (
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-sm font-semibold">Target Audience (Course Scope)</label>
                 <select
                   value={targetCourse}
                   onChange={(e) => setTargetCourse(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
                 >
-                  <option value="all">All Alumni (Global)</option>
+                  <option value="all">Everyone (all alumni, chairs and Alumni Affairs)</option>
                   <option value="BSIT">BSIT Only</option>
                   <option value="BEED">BEED Only</option>
                   <option value="BSBA-FM">BSBA Major in Financial Management Only</option>
@@ -151,66 +273,59 @@ export function Announcements({ userRole }: AnnouncementsProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Announcement Content *</label>
+            <label className="text-sm font-semibold">Announcement Content <Req /></label>
             <textarea
               required
               rows={4}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full px-4 py-2.5 bg-input-background border-2 border-border/70 rounded-xl focus:outline-none focus:border-primary text-sm"
+              className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
               placeholder="Write the details here..."
             />
           </div>
 
+          <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+            <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="w-4 h-4" />
+            <span>
+              {userRole === 'admin' && targetCourse === 'all'
+                ? t('Also email this to everyone (alumni, program chairs and Alumni Affairs)')
+                : t('Also email this to {program} alumni and the {program} chair', { program: userRole === 'admin' ? targetCourse : adminCourse || '' })}
+              <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off announcement emails are skipped.')}</span>
+            </span>
+          </label>
+
           <button
             type="submit"
-            className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-sm shadow-md"
+            disabled={posting}
+            className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-sm disabled:opacity-60"
           >
-            Post Notice
+            {posting ? 'Posting...' : 'Post Notice'}
           </button>
         </form>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Announcements List */}
       <div className="space-y-4">
-        {filteredAnnouncements.map((ann) => (
+        {paged.pageItems.map((ann) => (
           <div
             key={ann.id}
-            className="bg-card border border-border/80 rounded-2xl p-6 shadow-md transition-all hover:shadow-lg relative overflow-hidden flex flex-col justify-between"
+            className="bg-card rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between"
           >
             <div className="flex items-start gap-4">
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
-                  ann.category === 'Event'
-                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                    : ann.category === 'Job Seminar'
-                    ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                    : ann.category === 'Homecoming'
-                    ? 'bg-purple-500/10 text-purple-600 border-purple-500/20'
-                    : 'bg-primary/10 text-primary border-primary/20'
-                }`}
-              >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted text-muted-foreground">
                 <Megaphone size={20} />
               </div>
 
               <div className="space-y-1 w-full min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      ann.category === 'Event'
-                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                        : ann.category === 'Job Seminar'
-                        ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
-                        : ann.category === 'Homecoming'
-                        ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
-                        : 'bg-primary/10 text-primary border border-primary/20'
-                    }`}
-                  >
-                    {ann.category}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-border text-muted-foreground">
+                    {t(ann.category)}
                   </span>
                   {ann.course && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                      {ann.course} ONLY
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border text-muted-foreground">
+                      {t('{program} only', { program: ann.course })}
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
@@ -228,27 +343,47 @@ export function Announcements({ userRole }: AnnouncementsProps) {
 
             <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                Posted by: <span className="font-semibold text-foreground">{ann.author}</span>
+                {t('Posted by')}: <span className="font-semibold text-foreground">{ann.author}</span>
               </p>
-              {isAdmin && (
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => handleDelete(ann.id)}
-                  className="flex items-center gap-1 text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  onClick={() => toggleHidden(ann.id)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:bg-muted px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  title={t('Only hides it for you')}
                 >
-                  <Trash2 size={13} />
-                  Delete Notice
+                  {hidden.includes(ann.id) ? <Eye size={13} /> : <EyeOff size={13} />}
+                  {hidden.includes(ann.id) ? t('Unhide') : t('Hide for me')}
                 </button>
-              )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDelete(ann)}
+                    className="flex items-center gap-1 text-xs text-destructive hover:bg-destructive/10 px-2.5 py-1.5 rounded-lg transition-colors font-semibold"
+                  >
+                    <Trash2 size={13} />
+                    {t('Delete')}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
 
+        <Pagination {...paged} label={t('announcements')} />
+
+        {(hidden.length > 0 || showHidden) && (
+          <div className="text-center">
+            <button onClick={() => setShowHidden(!showHidden)} className="text-xs font-semibold text-primary hover:underline">
+              {showHidden ? t('Back to announcements') : t('Show hidden announcements ({n})', { n: hidden.length })}
+            </button>
+          </div>
+        )}
+
         {filteredAnnouncements.length === 0 && (
           <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">
             <Megaphone className="mx-auto mb-4 text-muted-foreground/60" size={56} />
-            <h3 className="font-bold text-xl mb-1 text-foreground">No Announcements</h3>
+            <h3 className="font-bold text-xl mb-1 text-foreground">{t('No Announcements')}</h3>
             <p className="text-muted-foreground text-sm">
-              All quiet here! Updates and events will be posted by administrators.
+              {t('All quiet here! Updates and events will be posted by administrators.')}
             </p>
           </div>
         )}
@@ -256,32 +391,3 @@ export function Announcements({ userRole }: AnnouncementsProps) {
     </div>
   );
 }
-
-const mockAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    title: 'OMSC Annual Grand Alumni Homecoming 2026',
-    content: `We are delighted to invite all graduates of Occidental Mindoro State College to the 2026 Grand Alumni Homecoming!\n\nTheme: "OMSC Alumni: Bridging Milestones, Igniting Futures"\nDate: December 12, 2026\nVenue: OMSC Main Campus Gymnasium, San Jose, Occidental Mindoro\n\nActivities include networking dinners, academic panel updates, outstanding alumni awards, and a live band. Registration details and t-shirt orders will be available in early November. Save the date!`,
-    category: 'Homecoming',
-    date: 'Sep 12, 2026',
-    author: 'Super Admin',
-  },
-  {
-    id: '2',
-    title: 'Upcoming Tech Seminar: Industry Expectations for IT Graduates',
-    content: `The BSIT Department is hosting a virtual seminar focusing on modern software development standards. Guest speakers from GCash, Accenture, and Oracle will share critical industry trends.\n\nDate: October 15, 2026 (Thursday) at 1:30 PM via Zoom.\nThis event is open to all BSIT Alumni and senior students. Certificates of Attendance will be provided. Register via the Job Board link!`,
-    category: 'Job Seminar',
-    date: 'Sep 25, 2026',
-    author: 'BSIT Admin',
-    course: 'BSIT',
-  },
-  {
-    id: '3',
-    title: 'Curriculum Advisory Board Meeting: Call for Alumni Delegates',
-    content: `We are seeking 2 delegates from our BEED alumni to participate in our Curriculum Advisory Board. Your feedback on teaching practices and board exam outcomes will help us optimize future BEED instruction.\n\nInterested parties, please send an expression of interest to the Office of the Dean.`,
-    category: 'General',
-    date: 'Oct 02, 2026',
-    author: 'BEED Admin',
-    course: 'BEED',
-  },
-];
