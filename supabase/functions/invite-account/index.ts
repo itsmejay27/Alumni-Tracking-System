@@ -199,6 +199,12 @@ Deno.serve(async (req) => {
   const isTop = (role: string) => role === 'admin' || role === 'superadmin';
   // Super Admin → Alumni Affairs and Super Admin accounts; Alumni Affairs → all other accounts
   const mayManage = (role: string) => (isSuper ? isTop(role) : !isTop(role));
+  // Account actions go to the activity log the Super Admin monitors
+  const logAction = (action: string, target: string, details: string | null = null) =>
+    admin
+      .from('activity_log')
+      .insert({ actor_id: caller.user.id, actor_email: caller.user.email, actor_role: callerRole, category: 'account', action, target, details })
+      .then(() => {}, () => {});
 
   let body: any;
   try {
@@ -208,9 +214,13 @@ Deno.serve(async (req) => {
   }
 
   // Every action on an existing account checks who that account belongs to
+  let targetEmail = '';
+  let targetRole = '';
   if (['delete', 'deactivate', 'activate', 'reset-mfa', 'resend'].includes(body.action)) {
-    const { data: target } = await admin.from('profiles').select('role').eq('id', String(body.userId || '')).maybeSingle();
+    const { data: target } = await admin.from('profiles').select('role, email').eq('id', String(body.userId || '')).maybeSingle();
     if (!target) return json({ error: 'Account not found' }, 404);
+    targetEmail = target.email || '';
+    targetRole = ROLES[target.role] || target.role;
     if (!mayManage(target.role)) {
       return json({ error: isSuper ? 'The Super Admin manages Alumni Affairs accounts only' : 'Only the Super Admin can change Alumni Affairs accounts' }, 403);
     }
@@ -223,6 +233,7 @@ Deno.serve(async (req) => {
     if (userId === caller.user.id) return json({ error: "You can't remove your own account" }, 400);
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) return json({ error: error.message }, 400);
+    await logAction('Account removed', targetEmail, targetRole);
     return json({ ok: true });
   }
   // Deactivate (block sign-in, keep everything) or activate an account again
@@ -235,6 +246,7 @@ Deno.serve(async (req) => {
     const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: deactivate ? '876000h' : 'none' } as any);
     if (error) return json({ error: error.message }, 400);
     await admin.from('profiles').update({ deactivated_at: deactivate ? new Date().toISOString() : null }).eq('id', userId);
+    await logAction(deactivate ? 'Account deactivated' : 'Account activated', targetEmail, targetRole);
     return json({ ok: true, active: !deactivate });
   }
   // Turn off two-step verification for someone who lost their authenticator app
@@ -249,6 +261,7 @@ Deno.serve(async (req) => {
       if (delError) return json({ error: delError.message }, 400);
       removed++;
     }
+    await logAction('Two-step verification reset', targetEmail, targetRole);
     return json({ ok: true, removed });
   }
   // Resend a pending invitation; the temporary password stays the same for 1 hour
@@ -278,6 +291,7 @@ Deno.serve(async (req) => {
     const siteUrl = String(Deno.env.get('SITE_URL') || body.siteUrl || '').trim();
     const name = `${target.given_name} ${target.last_name}`.trim();
     const result = await sendInvitation({ name, roleLabel: target.title || ROLES[target.role] || '', email: target.email, password, siteUrl });
+    await logAction('Invitation resent', targetEmail, targetRole);
     return json({ ok: true, ...result, tempPassword: password, samePassword: !!recent, expiresAt });
   }
 
@@ -329,6 +343,7 @@ Deno.serve(async (req) => {
 
   await rememberPassword(admin, created.user.id, password);
   const { emailSent, emailError } = await sendInvitation({ name: `${givenName} ${lastName}`, roleLabel: title, email, password, siteUrl });
+  await logAction('Account created', email, ROLES[role] || role);
 
   // The temporary password is returned once so the admin can share it if the email fails
   return json({ ok: true, userId: created.user.id, emailSent, emailError, tempPassword: password });

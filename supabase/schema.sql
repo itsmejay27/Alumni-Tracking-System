@@ -858,3 +858,165 @@ begin
   new.updated_at := now();
   return new;
 end $$;
+-- Activity log: who did what, for the Super Admin to monitor
+create table if not exists public.activity_log (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  actor_id uuid,
+  actor_email text,
+  actor_role text,
+  category text not null,
+  action text not null,
+  target text,
+  details text
+);
+create index if not exists activity_log_created_at_idx on public.activity_log (created_at desc);
+create index if not exists activity_log_category_idx on public.activity_log (category, created_at desc);
+alter table public.activity_log enable row level security;
+drop policy if exists "activity log: super admin reads" on public.activity_log;
+create policy "activity log: super admin reads" on public.activity_log for select to authenticated
+  using ((select public.app_role()) = 'superadmin');
+
+-- Writes one entry; the person is taken from the signed-in session
+create or replace function public.write_activity(p_category text, p_action text, p_target text default null, p_details text default null, p_email text default null)
+returns void language plpgsql security definer set search_path = '' as $$
+declare uid uuid := auth.uid(); em text; rl text;
+begin
+  if uid is not null then
+    select p.email, p.role into em, rl from public.profiles p where p.id = uid;
+  end if;
+  insert into public.activity_log (actor_id, actor_email, actor_role, category, action, target, details)
+  values (uid, coalesce(em, p_email), rl, p_category, p_action, left(p_target, 300), left(p_details, 1000));
+end $$;
+revoke execute on function public.write_activity(text, text, text, text, text) from public, anon, authenticated;
+
+-- Sign-ins: success, wrong password, and lockouts
+create or replace function public.login_succeeded() returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.login_lockouts
+   where email = (select lower(email) from auth.users where id = (select auth.uid()));
+  perform public.write_activity('sign-in', 'Signed in');
+end $$;
+
+create or replace function public.login_failed(p_email text)
+returns json language plpgsql security definer set search_path = '' as $function$
+declare e text := lower(trim(coalesce(p_email, ''))); r public.login_lockouts;
+begin
+  if e = '' or length(e) > 320 then return json_build_object('attemptsLeft', 3); end if;
+  insert into public.login_lockouts as l (email, failed_count, first_failed_at)
+  values (e, 1, now())
+  on conflict (email) do update set
+    failed_count = case
+      when l.locked_until > now() then l.failed_count
+      when l.locked_until is not null or l.first_failed_at < now() - interval '30 minutes' then 1
+      else l.failed_count + 1 end,
+    first_failed_at = case
+      when l.locked_until > now() then l.first_failed_at
+      when l.locked_until is not null or l.first_failed_at < now() - interval '30 minutes' then now()
+      else l.first_failed_at end,
+    locked_until = case when l.locked_until > now() then l.locked_until else null end
+  returning * into r;
+  perform public.write_activity('sign-in', 'Wrong password', e, null, e);
+  if r.locked_until is null and r.failed_count >= 3 then
+    update public.login_lockouts set locked_until = now() + interval '30 minutes' where email = e returning * into r;
+    perform public.write_activity('sign-in', 'Locked for 30 minutes after 3 wrong passwords', e, null, e);
+  end if;
+  return json_build_object('attemptsLeft', greatest(0, 3 - r.failed_count), 'lockedUntil', r.locked_until);
+end $function$;
+
+-- New accounts and role changes
+create or replace function public.log_profile_change() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' then
+    -- Staff accounts are logged by the account function (with who created them)
+    if not exists (select 1 from public.staff_invites s where s.email = lower(new.email)) then
+      insert into public.activity_log (actor_id, actor_email, actor_role, category, action, target)
+      values (new.id, new.email, new.role, 'account', 'Alumni account registered', new.email);
+    end if;
+  elsif new.role is distinct from old.role and auth.uid() is not null then
+    perform public.write_activity('account', 'Role changed', new.email, coalesce(old.role, '') || ' → ' || coalesce(new.role, ''));
+  end if;
+  return new;
+end $$;
+drop trigger if exists log_profile_change on public.profiles;
+create trigger log_profile_change after insert or update of role on public.profiles
+  for each row execute function public.log_profile_change();
+
+-- Alumni records (imports are logged once per import, not once per row)
+create or replace function public.log_record_import() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare n int; c text;
+begin
+  if auth.uid() is null then return null; end if;
+  select count(*), string_agg(distinct course, ', ') into n, c from new_rows;
+  if n = 1 then
+    perform public.write_activity('record', 'Record added',
+      (select trim(coalesce(data->>'givenName', '') || ' ' || coalesce(data->>'lastName', '')) || ' (' || coalesce(course, '') || ')' from new_rows limit 1));
+  elsif n > 1 then
+    perform public.write_activity('record', 'Records imported', n || ' records', 'Programs: ' || coalesce(c, ''));
+  end if;
+  return null;
+end $$;
+drop trigger if exists log_record_import on public.alumni_records;
+create trigger log_record_import after insert on public.alumni_records
+  referencing new table as new_rows for each statement execute function public.log_record_import();
+
+create or replace function public.log_record_change() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare r record;
+begin
+  if auth.uid() is null then return null; end if;
+  if tg_op = 'DELETE' then r := old; else r := new; end if;
+  if tg_op = 'UPDATE' then
+    if new.data is not distinct from old.data and new.course is not distinct from old.course
+       and new.batch is not distinct from old.batch and new.user_id is not distinct from old.user_id then
+      return null;
+    end if;
+  end if;
+  perform public.write_activity('record',
+    case when tg_op = 'DELETE' then 'Record deleted'
+         when r.user_id is not null and r.user_id is distinct from old.user_id then 'Account linked to record'
+         else 'Record updated' end,
+    trim(coalesce(r.data->>'givenName', '') || ' ' || coalesce(r.data->>'lastName', '')) || ' (' || coalesce(r.course, '') || ')');
+  return null;
+end $$;
+drop trigger if exists log_record_change on public.alumni_records;
+create trigger log_record_change after update or delete on public.alumni_records
+  for each row execute function public.log_record_change();
+
+-- Announcements, jobs and site settings
+create or replace function public.log_content_change() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then return null; end if;
+  if tg_table_name = 'announcements' then
+    perform public.write_activity('announcement',
+      case tg_op when 'INSERT' then 'Announcement posted' else 'Announcement deleted' end,
+      coalesce(new.title, old.title), 'For: ' || coalesce(coalesce(new.course, old.course), 'Everyone'));
+  elsif tg_table_name = 'jobs' then
+    if tg_op = 'UPDATE' and new.status is not distinct from old.status then return null; end if;
+    perform public.write_activity('job',
+      case tg_op when 'INSERT' then 'Job posted' when 'DELETE' then 'Job removed'
+        else 'Job ' || new.status end,
+      coalesce(new.title, old.title) || ' at ' || coalesce(new.company, old.company));
+  elsif tg_table_name = 'site_settings' then
+    perform public.write_activity('settings', 'Site settings changed', coalesce(new.key, old.key));
+  end if;
+  return null;
+end $$;
+drop trigger if exists log_announcement_change on public.announcements;
+create trigger log_announcement_change after insert or delete on public.announcements
+  for each row execute function public.log_content_change();
+drop trigger if exists log_job_change on public.jobs;
+create trigger log_job_change after insert or update of status or delete on public.jobs
+  for each row execute function public.log_content_change();
+drop trigger if exists log_settings_change on public.site_settings;
+create trigger log_settings_change after insert or update on public.site_settings
+  for each row execute function public.log_content_change();
+
+revoke execute on function public.log_profile_change() from public, anon, authenticated;
+revoke execute on function public.log_record_import() from public, anon, authenticated;
+revoke execute on function public.log_record_change() from public, anon, authenticated;
+revoke execute on function public.log_content_change() from public, anon, authenticated;

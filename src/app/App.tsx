@@ -5,6 +5,7 @@ import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
 import { AccountsManager } from './components/AccountsManager';
+import { ActivityLogs } from './components/ActivityLogs';
 import { LinkAlumniRecord } from './components/LinkAlumniRecord';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
@@ -40,6 +41,7 @@ import {
   Settings as SettingsIcon,
   UserCog,
   Contact2,
+  ScrollText,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
@@ -193,7 +195,7 @@ function AppInner() {
         // After a refresh, go back to the page that was open
         const pages =
           user.role === 'superadmin'
-            ? ['accounts', 'settings']
+            ? ['accounts', 'logs', 'settings']
             : user.role.startsWith('admin')
               ? ['dashboard', 'records', 'announcements', 'jobs', 'officials', 'contact', 'accounts', 'settings']
               : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
@@ -366,6 +368,7 @@ function AppInner() {
 
   const superMenuItems = [
     { id: 'accounts', label: t('Alumni Affairs Accounts'), icon: <UserCog size={18} /> },
+    { id: 'logs', label: t('Activity Logs'), icon: <ScrollText size={18} /> },
     { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
@@ -564,6 +567,7 @@ function AppInner() {
           {isSuper ? (
             <>
               {activeTab === 'accounts' && <AccountsManager currentUserId={currentUser.id} mode="super" />}
+              {activeTab === 'logs' && <ActivityLogs />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
           ) : isAdmin ? (
