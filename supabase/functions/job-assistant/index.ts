@@ -3,7 +3,8 @@
 // requirements with the user's skills, and can draft a cover letter or interview practice.
 // It can also search the internet (Google Search) for open jobs that fit a graduate.
 //
-// Secrets: GEMINI_API_KEY (required), GEMINI_MODEL (optional, tried first).
+// Secrets: GEMINI_API_KEY (required), GEMINI_API_KEY1 ... GEMINI_API_KEY9 (optional backup keys, used
+// when the first key's daily limit is used up), GEMINI_MODEL (optional, tried first).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 const cors = {
@@ -20,7 +21,7 @@ const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 // Tried in order; busy or unavailable models fall through to the next one.
 // Each model has its own free daily limit, so when one is used up the next one is tried.
 // Google retired gemini-2.5-flash for new keys and points to gemini-3.8-flash.
-const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.8-flash-lite', 'gemini-flash-lite-latest'];
+const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
 
 // ---------- Reading a job page safely ----------
 
@@ -220,8 +221,11 @@ async function callGeminiFull(
   opts: { schema?: unknown; search?: boolean } = {}
 ): Promise<{ text: string; sources: Source[] }> {
   const { schema, search } = opts;
-  const key = Deno.env.get('GEMINI_API_KEY');
-  if (!key) throw new Error('The AI assistant is not set up yet (missing GEMINI_API_KEY).');
+  // Main key first, then backup keys GEMINI_API_KEY1 ... GEMINI_API_KEY9
+  const keys = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+    .map((n) => (Deno.env.get(`GEMINI_API_KEY${n}`) || '').trim())
+    .filter((k, i, all) => k && all.indexOf(k) === i);
+  if (!keys.length) throw new Error('The AI assistant is not set up yet (missing GEMINI_API_KEY).');
   const preferred = Deno.env.get('GEMINI_MODEL');
   const models = preferred ? [preferred, ...FALLBACK_MODELS.filter((m) => m !== preferred)] : FALLBACK_MODELS;
 
@@ -229,7 +233,9 @@ async function callGeminiFull(
   let busy = false;
   let quotaHit = false;
   const started = Date.now();
-  for (const model of models) {
+  // Every model on the first key, then every model on the next key, and so on
+  const tries = keys.flatMap((key, k) => models.map((model) => ({ key, model, label: `key${k ? k : ''} ${model}` })));
+  for (const { key, model, label } of tries) {
     // Stop before the server's time limit (about 150 s); slow web searches use most of it
     if (Date.now() - started > 95_000) break;
     // Two tries per model: Google's "high demand" errors usually clear within seconds
@@ -252,12 +258,17 @@ async function callGeminiFull(
         });
       } catch {
         lastError = 'The AI service did not answer in time.';
-        console.error(`[gemini] ${model}: timed out`);
+        console.error(`[gemini] ${label}: timed out`);
         busy = true;
         break; // try the next model
       }
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) console.error(`[gemini] ${model} (${search ? 'search' : 'text'}): ${res.status} ${body?.error?.status || ''} ${body?.error?.message || ''}`);
+      if (!res.ok) console.error(`[gemini] ${label} (${search ? 'search' : 'text'}): ${res.status} ${body?.error?.status || ''} ${body?.error?.message || ''}`);
+      // A wrong or disabled key: try the next key
+      if ([400, 401, 403].includes(res.status) && /api key|permission|denied|disabled/i.test(body?.error?.message || '')) {
+        lastError = 'One of the Gemini API keys is not valid.';
+        break;
+      }
       if (res.status === 404 || res.status === 400 && /model/i.test(body?.error?.message || '')) {
         lastError = body?.error?.message || `Model ${model} not found`;
         break; // model not available to this key: next model
