@@ -3,7 +3,7 @@
 // requirements with the user's skills, and can draft a cover letter or interview practice.
 // It can also search the internet (Google Search) for open jobs that fit a graduate.
 //
-// Secrets: GEMINI_API_KEY (required), GEMINI_MODEL (optional, default "gemini-flash-latest").
+// Secrets: GEMINI_API_KEY (required), GEMINI_MODEL (optional, tried first).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 
 const cors = {
@@ -17,8 +17,10 @@ const json = (body: unknown, status = 200) =>
 const DAILY_LIMIT = 20;
 const MAX_PAGE_CHARS = 60_000;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
-// Tried in order; busy or unavailable models fall through to the next one
-const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+// Tried in order; busy or unavailable models fall through to the next one.
+// Each model has its own free daily limit, so when one is used up the next one is tried.
+// Google retired gemini-2.5-flash for new keys and points to gemini-3.8-flash.
+const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.8-flash-lite', 'gemini-flash-lite-latest'];
 
 // ---------- Reading a job page safely ----------
 
@@ -225,8 +227,11 @@ async function callGeminiFull(
 
   let lastError = '';
   let busy = false;
-  // Web search is slow, so try fewer models to finish within the server's time limit
-  for (const model of search ? models.slice(0, 3) : models) {
+  let quotaHit = false;
+  const started = Date.now();
+  for (const model of models) {
+    // Stop before the server's time limit (about 150 s); slow web searches use most of it
+    if (Date.now() - started > 95_000) break;
     // Two tries per model: Google's "high demand" errors usually clear within seconds
     for (let attempt = 0; attempt < 2; attempt++) {
       let res: Response;
@@ -260,7 +265,10 @@ async function callGeminiFull(
       if (res.status === 429 || res.status === 500 || res.status === 503 || res.status === 504) {
         busy = true;
         lastError = body?.error?.message || `AI service error (${res.status})`;
-        if (attempt === 0) {
+        // A used-up daily limit will not clear in seconds: go straight to the next model
+        const quotaUsed = /quota/i.test(body?.error?.message || '');
+        if (quotaUsed) quotaHit = true;
+        if (attempt === 0 && !quotaUsed) {
           await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
           continue;
         }
@@ -279,7 +287,7 @@ async function callGeminiFull(
   }
   if (busy) {
     // Google's daily free limit is a different problem from a short busy spell; say which one
-    if (/quota|exhausted|limit/i.test(lastError)) {
+    if (quotaHit || /quota|exhausted/i.test(lastError)) {
       throw new Error(
         search
           ? "Today's free AI internet-search limit has been reached. Please try again tomorrow, or use Explain a job in the meantime."
