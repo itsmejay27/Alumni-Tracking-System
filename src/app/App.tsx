@@ -20,7 +20,7 @@ import { AppToaster } from './components/AppToaster';
 import { ConfirmHost } from './components/ConfirmDialog';
 import { roleLabel } from '@/lib/programs';
 import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
-import { MfaChallenge } from './components/MfaChallenge';
+import { MfaChallenge, EmailChallenge } from './components/MfaChallenge';
 import { supabase } from '@/lib/supabase';
 import { fetchMyRecord, missingProfileFields } from '@/lib/alumni';
 import { 
@@ -38,7 +38,8 @@ import {
   Home as HomeIcon,
   PhoneCall,
   Settings as SettingsIcon,
-  UserCog
+  UserCog,
+  Contact2,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
@@ -116,6 +117,8 @@ function AppInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   // Two-step verification: true while a signed-in user still has to enter their authenticator code
   const [needsMfa, setNeedsMfa] = useState<boolean | null>(null);
+  // Which second step is needed: a code from the authenticator app, or one sent by email
+  const [mfaMode, setMfaMode] = useState<'app' | 'email'>('app');
 
   // Track the Supabase auth session
   useEffect(() => {
@@ -133,7 +136,14 @@ function AppInner() {
   const checkMfa = async () => {
     try {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      setNeedsMfa(!!data && data.nextLevel === 'aal2' && data.currentLevel !== 'aal2');
+      if (data && data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
+        setMfaMode('app');
+        setNeedsMfa(true);
+        return;
+      }
+      const { data: emailNeeded } = await supabase.rpc('email_2fa_needed');
+      setMfaMode('email');
+      setNeedsMfa(emailNeeded === true);
     } catch {
       // Could not read the sign-in level; continue without the extra step rather than hanging
       setNeedsMfa(false);
@@ -182,7 +192,7 @@ function AppInner() {
         setAuthScreen(null);
         // After a refresh, go back to the page that was open
         const pages = user.role.startsWith('admin')
-          ? ['dashboard', 'records', 'announcements', 'jobs', 'contact', 'accounts', 'settings']
+          ? ['dashboard', 'records', 'announcements', 'jobs', 'officials', 'contact', 'accounts', 'settings']
           : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
         let last = '';
         try {
@@ -261,7 +271,7 @@ function AppInner() {
   if (session && needsMfa) {
     return (
       <>
-        <MfaChallenge onVerified={checkMfa} />
+        {mfaMode === 'email' ? <EmailChallenge onVerified={checkMfa} /> : <MfaChallenge onVerified={checkMfa} />}
         <AppToaster />
       </>
     );
@@ -333,6 +343,7 @@ function AppInner() {
     { id: 'records', label: t('Alumni Records'), icon: <Users size={18} /> },
     { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
     { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
+    { id: 'officials', label: t('Directory'), icon: <Contact2 size={18} /> },
     ...(userRole === 'admin' ? [{ id: 'contact', label: t('Contact Info'), icon: <PhoneCall size={18} /> }] : []),
     ...(userRole === 'admin' ? [{ id: 'accounts', label: t('Accounts'), icon: <UserCog size={18} /> }] : []),
     { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
@@ -546,6 +557,7 @@ function AppInner() {
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
               {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'officials' && <CollegeOfficialsDirectory />}
               {activeTab === 'contact' && userRole === 'admin' && <ContactView editable />}
               {activeTab === 'accounts' && userRole === 'admin' && <AccountsManager currentUserId={currentUser.id} />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}

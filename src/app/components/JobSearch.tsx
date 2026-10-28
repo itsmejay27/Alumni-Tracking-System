@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { fetchMyRecord } from '@/lib/alumni';
 import { PROGRAMS } from '@/lib/programs';
+import { salaryInPesos } from '@/lib/money';
 import { usePrefs, useT } from '@/lib/preferences';
 import type { JobPrefill } from './JobAssistant';
 
@@ -46,7 +47,7 @@ const jobText = (j: FoundJob) =>
     `Company: ${j.company}`,
     `Location: ${j.location}`,
     `Type: ${j.type}`,
-    `Salary: ${j.salary || 'Not stated'}`,
+    `Salary: ${salaryInPesos(j.salary) || 'Not stated'}`,
     '',
     j.description,
     '',
@@ -255,7 +256,7 @@ export function JobSearch({
               )}
               {j.description && <p className="text-sm text-muted-foreground">{j.description}</p>}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {j.salary && <span>💰 {j.salary}</span>}
+                {j.salary && <span>💰 {salaryInPesos(j.salary)}</span>}
                 {j.postedDate && <span>🗓 {j.postedDate}</span>}
                 {j.site && (
                   <span>

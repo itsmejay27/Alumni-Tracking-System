@@ -5,6 +5,7 @@ import { Pagination, usePaged } from './Pagination';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
+import { mdy } from '@/lib/dates';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
 import { PROGRAMS } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
@@ -388,7 +389,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
   const list = view === 'responded' ? done : waiting;
   const paged = usePaged(list, 8);
   const when = (iso?: string) =>
-    iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    mdy(iso);
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
@@ -435,7 +436,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
         <select value={fAccount} onChange={(e) => setFAccount(e.target.value)} className="filter-select w-full" aria-label="Account">
           <option value="all">All accounts</option>
           <option value="updated">Updated their record</option>
-          <option value="signed-up">Signed up, not updated yet</option>
+          <option value="signed-up">Signed up, follow up update</option>
           <option value="no-account">No account yet</option>
         </select>
       </div>
@@ -459,7 +460,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
           <p className="text-xl font-bold tabular-nums mt-0.5">{done.length}</p>
         </div>
         <div className="rounded-xl border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, not updated yet</p>
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, follow up update</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{signedUpOnly}</p>
         </div>
         <div className="rounded-xl border border-border px-4 py-3">
@@ -591,7 +592,7 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
       <h3 className="font-semibold">Ask alumni to update their data</h3>
       <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-        Sends an email to alumni of the program who have an account. {last && `Last sent ${new Date(last.created_at).toLocaleDateString()} to ${last.recipients} alumni.`}
+        Sends an email to alumni of the program who have an account. {last && `Last sent ${mdy(last.created_at)} to ${last.recipients} alumni.`}
       </p>
       <div className="grid gap-3 md:grid-cols-[auto_auto_1fr_auto] md:items-center">
         {!scope && (
@@ -602,9 +603,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
           </select>
         )}
         <select value={minYears} onChange={(e) => setMinYears(e.target.value)} className="filter-select">
-          <option value="1">Not updated in 1+ year</option>
-          <option value="2">Not updated in 2+ years</option>
-          <option value="3">Not updated in 3+ years</option>
+          <option value="1">Follow up update: 1+ year</option>
+          <option value="2">Follow up update: 2+ years</option>
+          <option value="3">Follow up update: 3+ years</option>
           <option value="0">Everyone in the program</option>
         </select>
         <input

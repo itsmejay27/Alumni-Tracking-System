@@ -764,3 +764,69 @@ create policy "employment proofs: owner and staff read" on storage.objects for s
 create policy "employment proofs: owner deletes" on storage.objects for delete to authenticated
   using (bucket_id = 'employment-proofs' and (storage.foldername(name))[1] = (select auth.uid())::text);
 alter table public.profiles add column if not exists deactivated_at timestamptz; -- set when Alumni Affairs deactivates an account (sign-in is blocked with an auth ban)
+-- Two-step verification by email: a 6-digit code is emailed at each sign-in
+alter table public.profiles add column if not exists email_2fa boolean not null default false;
+
+-- Codes waiting to be typed in (hashed). Only the email-2fa edge function reads or writes these.
+create table if not exists public.email_2fa_codes (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  code_hash text not null,
+  purpose text not null default 'signin',
+  expires_at timestamptz not null,
+  attempts int not null default 0,
+  sent_at timestamptz not null default now()
+);
+alter table public.email_2fa_codes enable row level security;
+
+-- Sign-in sessions that passed the email code
+create table if not exists public.email_2fa_sessions (
+  session_id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  verified_at timestamptz not null default now()
+);
+alter table public.email_2fa_sessions enable row level security;
+
+-- Data is reachable only after the second step: the authenticator code (aal2),
+-- or the email code for this sign-in session when email two-step is on
+create or replace function public.two_step_ok() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select (coalesce((select auth.jwt()->>'aal'), 'aal1') = 'aal2'
+          or not exists (
+            select 1 from auth.mfa_factors
+             where user_id = (select auth.uid()) and status = 'verified'))
+     and (not coalesce((select p.email_2fa from public.profiles p where p.id = (select auth.uid())), false)
+          or exists (
+            select 1 from public.email_2fa_sessions s
+             where s.user_id = (select auth.uid())
+               and s.session_id::text = (select auth.jwt()->>'session_id')));
+$$;
+
+-- Tells the app whether this sign-in still needs the email code (works before the code is typed)
+create or replace function public.email_2fa_needed() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select coalesce((select p.email_2fa from public.profiles p where p.id = (select auth.uid())), false)
+     and not exists (
+       select 1 from public.email_2fa_sessions s
+        where s.user_id = (select auth.uid())
+          and s.session_id::text = (select auth.jwt()->>'session_id'));
+$$;
+revoke execute on function public.email_2fa_needed() from public, anon;
+grant execute on function public.email_2fa_needed() to authenticated;
+
+-- Email two-step is turned on/off only through the email-2fa function (which checks a code), or by the super admin
+create or replace function public.protect_profile_fields() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if (new.role is distinct from old.role or new.email is distinct from old.email)
+     and (select auth.uid()) is not null
+     and coalesce(public.app_role(), '') <> 'admin' then
+    raise exception 'Only the super admin can change roles';
+  end if;
+  if new.email_2fa is distinct from old.email_2fa
+     and (select auth.uid()) is not null
+     and coalesce(public.app_role(), '') <> 'admin' then
+    raise exception 'Use Settings to change two-step verification';
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;

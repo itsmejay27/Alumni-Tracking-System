@@ -17,8 +17,8 @@ export const DEFAULT_CONTACT: ContactInfo = {
   phone: '+63 (043) 491-1436',
   website: 'https://www.omsu.edu.ph',
   location: 'OMSU Main Campus, Labangan, San Jose, Occidental Mindoro, Philippines, 5100',
-  officeDays: 'Monday to Friday',
-  officeHours: '8:00 AM - 12:00 PM | 1:00 PM - 5:00 PM',
+  officeDays: 'Monday to Thursday',
+  officeHours: 'Mon: 7:00 AM - 6:00 PM | Tue-Thu: 7:30 AM - 6:30 PM',
 };
 
 /** Contact details edited by Alumni Affairs; falls back to defaults while loading. */

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
+import { mdy } from '@/lib/dates';
 import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
@@ -693,7 +694,7 @@ function RecordHistory({ recordId }: { recordId: string }) {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{d.status || '—'}</span>
                     <span className="text-xs text-muted-foreground">
-                      replaced on {new Date(h.changed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                      updated on {mdy(h.changed_at)} {new Date(h.changed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
                   <p className="text-muted-foreground mt-0.5">
@@ -724,12 +725,12 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="font-semibold text-foreground">{j.position || 'Position not given'}</span>
             <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${j.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
-              {j.endDate ? `Until ${j.endDate}` : 'Current'}
+              {j.endDate ? `Until ${mdy(j.endDate)}` : 'Current'}
             </span>
           </div>
           <p className="text-muted-foreground">{j.company}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            {[j.employerType, j.employmentStatus, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${j.startDate}`].filter(Boolean).join(' · ')}
+            {[j.employerType, j.employmentStatus, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${mdy(j.startDate)}`].filter(Boolean).join(' · ')}
           </p>
           {(j.employerAddress || j.employerContact) && (
             <p className="text-xs text-muted-foreground mt-1">{[j.employerAddress, j.employerContact && `Tel. ${j.employerContact}`].filter(Boolean).join(' · ')}</p>

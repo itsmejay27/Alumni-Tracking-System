@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
+import { mdy, todayIso } from '@/lib/dates';
 import {
   Save,
   Trash2,
@@ -173,7 +174,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const saveJob = (entry: EmploymentEntry, isNew: boolean) => {
     if (isNew) {
       // A new job closes the previous current job, so history is kept instead of replaced
-      const month = new Date().toISOString().slice(0, 7);
+      const month = todayIso();
       setHistory((h) => [...h.map((e) => (!e.endDate && !entry.endDate ? { ...e, endDate: e.endDate || month } : e)), entry]);
       if (status === 'Unemployed' && !entry.endDate) setStatus('Employed');
     } else {
@@ -209,7 +210,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}`, campus: campus.trim() });
   const employmentSlice = () => {
     // Marking yourself unemployed ends your current job(s); they stay in your history
-    const month = new Date().toISOString().slice(0, 7);
+    const month = todayIso();
     const finalHistory = (status === 'Unemployed' ? history.map((h) => (h.endDate ? h : { ...h, endDate: month })) : history).map((h) => ({
       ...h,
       position: h.position.trim(),
@@ -846,9 +847,9 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
         </p>
         <p className="text-xs text-muted-foreground truncate">
           {[job.employmentStatus, job.employerType].filter(Boolean).join(' · ')}
-          {job.startDate && job.endDate && ` · ${job.startDate} – ${job.endDate}`}
-          {job.startDate && !job.endDate && ` · since ${job.startDate}`}
-          {!job.startDate && job.endDate && ` · until ${job.endDate}`}
+          {job.startDate && job.endDate && ` · ${mdy(job.startDate)} – ${mdy(job.endDate)}`}
+          {job.startDate && !job.endDate && ` · since ${mdy(job.startDate)}`}
+          {!job.startDate && job.endDate && ` · until ${mdy(job.endDate)}`}
         </p>
       </div>
       <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${job.endDate ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -998,7 +999,7 @@ function JobModal({
             {!isNew && !entry.endDate && (
               <button
                 type="button"
-                onClick={() => onSave({ ...draft, endDate: new Date().toISOString().slice(0, 7) })}
+                onClick={() => onSave({ ...draft, endDate: todayIso() })}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50"
               >
                 {t('I no longer work here')}

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Req } from './RequiredMark';
 import { useT } from '@/lib/preferences';
-import { Megaphone, Calendar, Tag, Trash2, Plus, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
+import { Megaphone, Calendar, Tag, Trash2, Plus, X, AlertCircle, FileText, CheckCircle2, EyeOff, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -42,7 +43,6 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
   const isAdmin = userRole.startsWith('admin');
   const adminCourse = courseScopeForRole(userRole);
   // Program chairs choose: everyone, or their own department only
-  const [chairAudience, setChairAudience] = useState<'department' | 'everyone'>('department');
   const [myId, setMyId] = useState<string | null>(null);
   // Announcements this person hid for themselves (others still see them)
   const [hidden, setHidden] = useState<string[]>([]);
@@ -103,7 +103,8 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     if (!title || !content) return;
 
     const course =
-      userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : chairAudience === 'everyone' ? null : adminCourse;
+      // Program chairs post to their own program only
+      userRole === 'admin' ? (targetCourse === 'all' ? null : targetCourse) : adminCourse;
     setPosting(true);
     const { data: created, error } = await supabase
       .from('announcements')
@@ -190,7 +191,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
         </div>
         {isAdmin && (
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => setShowAddForm(true)}
             className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all"
           >
             <Plus size={18} />
@@ -199,19 +200,24 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
         )}
       </div>
 
-      {showAddForm && (
+      {showAddForm &&
+        createPortal(
+          // Pop-up over the page, like Post a Job
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Post announcement">
+            <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !posting && setShowAddForm(false)} />
         <form
           onSubmit={handleAdd}
-          className="bg-card rounded-2xl p-6 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-300"
+          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200"
         >
           <div className="flex justify-between items-center pb-2 border-b border-border">
-            <h3 className="text-lg font-bold text-foreground">Post New Announcement</h3>
+            <h3 className="text-lg font-bold text-foreground">{t('Post New Announcement')}</h3>
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
-              className="text-muted-foreground hover:text-foreground text-sm font-semibold"
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+              aria-label="Close"
             >
-              Cancel
+              <X size={18} />
             </button>
           </div>
 
@@ -243,17 +249,9 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             </div>
 
             {userRole !== 'admin' && adminCourse && (
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-sm font-semibold">{t('Who is this for?')}</label>
-                <select
-                  value={chairAudience}
-                  onChange={(e) => setChairAudience(e.target.value as 'department' | 'everyone')}
-                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
-                >
-                  <option value="department">{t('{program} department only', { program: adminCourse })}</option>
-                  <option value="everyone">{t('Everyone')}</option>
-                </select>
-              </div>
+              <p className="md:col-span-2 text-sm text-muted-foreground">
+                {t('This will be shown to {program} alumni and the {program} chair only.', { program: adminCourse })}
+              </p>
             )}
             {userRole === 'admin' && (
               <div className="space-y-1.5 md:col-span-2">
@@ -289,7 +287,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           <label className="flex items-center gap-2.5 text-sm cursor-pointer">
             <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="w-4 h-4" />
             <span>
-              {(userRole === 'admin' ? targetCourse === 'all' : chairAudience === 'everyone')
+              {userRole === 'admin' && targetCourse === 'all'
                 ? t('Also email this to everyone (alumni, program chairs and Alumni Affairs)')
                 : t('Also email this to {program} alumni and the {program} chair', { program: userRole === 'admin' ? targetCourse : adminCourse || '' })}
               <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off announcement emails are skipped.')}</span>
@@ -304,7 +302,9 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             {posting ? 'Posting...' : 'Post Notice'}
           </button>
         </form>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Announcements List */}
       <div className="space-y-4">

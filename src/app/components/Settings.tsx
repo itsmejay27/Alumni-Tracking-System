@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase, passwordUpdateError, verifyPassword } from '@/lib/supabase';
+import { emailTwoStep } from '@/lib/emailTwoStep';
 import { PasswordStrength } from './PasswordStrength';
 import { passwordStrength, roleLabel } from '@/lib/programs';
 import { PhoneInput, isValidMobile } from './PhoneInput';
@@ -61,9 +62,12 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
   // Alumni manage their name, photo and details in My Alumni Profile
   const [tab, setTab] = useState<Tab>(isAlumni ? 'security' : 'account');
   const [twoStepOn, setTwoStepOn] = useState<boolean | null>(null);
+  const [emailCodesOn, setEmailCodesOn] = useState(false);
 
-  const refreshTwoStep = () =>
+  const refreshTwoStep = () => {
     supabase.auth.mfa.listFactors().then(({ data }) => setTwoStepOn(!!data?.totp?.some((f) => f.status === 'verified')));
+    emailTwoStep({ action: 'status' }).then((r) => setEmailCodesOn(!!r.enabled));
+  };
   useEffect(() => {
     refreshTwoStep();
   }, []);
@@ -152,7 +156,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 md:w-[26rem] shrink-0">
-            <Chip label={t('Two-step')} value={twoStepOn == null ? '…' : twoStepOn ? t('On') : t('Off')} good={!!twoStepOn} />
+            <Chip label={t('Two-step')} value={twoStepOn == null ? '…' : emailCodesOn ? t('Email') : twoStepOn ? t('App') : t('Off')} good={!!twoStepOn || emailCodesOn} />
             <Chip label={t('Theme')} value={t(theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light')} />
             <Chip label={t('Language')} value={lang === 'fil' ? 'Filipino' : 'English'} />
           </div>
@@ -175,7 +179,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
       </section>
 
       {tab === 'account' && !isAlumni && <AccountPanel currentUser={currentUser} onUpdateProfile={onUpdateProfile} />}
-      {tab === 'security' && <SecurityPanel currentUser={currentUser} twoStepOn={twoStepOn} onTwoStepChange={refreshTwoStep} />}
+      {tab === 'security' && <SecurityPanel currentUser={currentUser} twoStepOn={twoStepOn} emailCodesOn={emailCodesOn} onTwoStepChange={refreshTwoStep} />}
       {tab === 'notifications' && <NotificationsPanel userId={currentUser?.id} isAlumni={isAlumni} />}
       {tab === 'appearance' && <AppearancePanel />}
       {tab === 'privacy' && <PrivacyPanel currentUser={currentUser} isAlumni={isAlumni} onOpenProfile={onOpenProfile} />}
@@ -281,11 +285,11 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
 
 // ---------------- Security ----------------
 
-function SecurityPanel({ currentUser, twoStepOn, onTwoStepChange }: { currentUser: CurrentUser | null; twoStepOn: boolean | null; onTwoStepChange: () => void }) {
+function SecurityPanel({ currentUser, twoStepOn, emailCodesOn, onTwoStepChange }: { currentUser: CurrentUser | null; twoStepOn: boolean | null; emailCodesOn: boolean; onTwoStepChange: () => void }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
       <PasswordCard email={currentUser?.email || ''} />
-      <TwoStepCard enabled={twoStepOn} onChange={onTwoStepChange} />
+      <TwoStepCard enabled={twoStepOn} emailOn={emailCodesOn} onChange={onTwoStepChange} />
       <LoginEmailCard email={currentUser?.email || ''} />
       <SignInActivityCard />
     </div>
@@ -351,13 +355,49 @@ function PasswordCard({ email }: { email: string }) {
   );
 }
 
-/** Authenticator-app two-step verification (Supabase TOTP). */
-function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange: () => void }) {
+/** Two-step verification: a code sent by email, or one from an authenticator app (Supabase TOTP). */
+function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; emailOn: boolean; onChange: () => void }) {
   const t = useT();
   const [enroll, setEnroll] = useState<{ id: string; qr: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  // Email codes: waiting for the code that turns them on or off
+  const [emailStep, setEmailStep] = useState<null | { purpose: 'enable' | 'disable'; sentTo: string }>(null);
+
+  const sendEmailCode = async (purpose: 'enable' | 'disable') => {
+    setBusy(true);
+    const res = await emailTwoStep({ action: 'send', purpose });
+    setBusy(false);
+    if (res.error) return toast.error(t(res.error));
+    setCode('');
+    setEmailStep({ purpose, sentTo: res.sentTo || '' });
+  };
+
+  const finishEmail = async (value = code) => {
+    if (!emailStep || busy) return;
+    if (value.length !== 6) return toast.error(t('Enter the 6-digit code from your email.'));
+    setBusy(true);
+    const res = await emailTwoStep({ action: 'verify', code: value });
+    setBusy(false);
+    if (res.error) {
+      setCode('');
+      return toast.error(t(res.error));
+    }
+    toast.success(emailStep.purpose === 'enable' ? t('Two-step verification is on.') : t('Two-step verification is off.'));
+    setEmailStep(null);
+    setCode('');
+    onChange();
+  };
+
+  const turnOffEmail = async () => {
+    const ok = await confirmDialog({
+      title: t('Turn off two-step verification?'),
+      message: t('Your account will be protected by your password only. We will email you a code to confirm.'),
+      confirmLabel: t('Send code'),
+    });
+    if (ok) sendEmailCode('disable');
+  };
 
   const start = async () => {
     setBusy(true);
@@ -415,8 +455,48 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
   };
 
   return (
-    <Card icon={<Smartphone size={18} />} title={t('Two-step verification')} sub={t('Extra protection: after your password, you also type a code from your phone.')}>
-      {enabled ? (
+    <Card icon={<Smartphone size={18} />} title={t('Two-step verification')} sub={t('Extra protection: after your password, you also type a code sent to your email or shown in an app.')}>
+      {emailStep ? (
+        <div className="flex-1 flex flex-col gap-4">
+          <p className="text-sm">
+            {emailStep.sentTo ? t('We sent a 6-digit code to {email}.', { email: emailStep.sentTo }) : t('We sent a 6-digit code to your email.')}{' '}
+            {emailStep.purpose === 'enable' ? t('Type it below to turn on two-step verification.') : t('Type it below to turn off two-step verification.')}
+          </p>
+          <input
+            autoFocus
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+              setCode(v);
+              if (v.length === 6) finishEmail(v);
+            }}
+            placeholder="000000"
+            className={`${input} max-w-[14rem] text-center tracking-[0.4em] font-mono text-lg`}
+          />
+          <p className="text-xs text-muted-foreground">{t('Not in your inbox? Check Spam or Promotions. The code expires in 10 minutes.')}</p>
+          <div className="flex justify-end gap-2 mt-auto">
+            <button type="button" onClick={() => { setEmailStep(null); setCode(''); }} className={btnSoft}>
+              {t('Cancel')}
+            </button>
+            <button type="button" onClick={() => finishEmail()} disabled={busy || code.length !== 6} className={btnPrimary}>
+              {busy && <Loader2 size={16} className="animate-spin" />} {t('Confirm')}
+            </button>
+          </div>
+        </div>
+      ) : emailOn ? (
+        <div className="flex-1 flex flex-col gap-4">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium">
+            <CheckCircle2 size={18} /> {t('On. A code is emailed to you each time you sign in.')}
+          </p>
+          <div className="flex justify-end mt-auto">
+            <button type="button" onClick={turnOffEmail} disabled={busy} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60">
+              {t('Turn off')}
+            </button>
+          </div>
+        </div>
+      ) : enabled ? (
         <div className="flex-1 flex flex-col gap-4">
           <p className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium">
             <CheckCircle2 size={18} /> {t('On. You will be asked for a code each time you sign in.')}
@@ -521,11 +601,14 @@ function TwoStepCard({ enabled, onChange }: { enabled: boolean | null; onChange:
       ) : (
         <div className="flex-1 flex flex-col gap-4">
           <p className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
-            {t('Off. When it is on, signing in needs your password and a code from your phone, so a stolen password alone is not enough.')}
+            {t('Off. When it is on, signing in needs your password and a 6-digit code, so a stolen password alone is not enough.')}
           </p>
-          <div className="flex justify-end mt-auto">
-            <button type="button" onClick={start} disabled={busy || enabled == null} className={btnPrimary}>
-              {busy && <Loader2 size={16} className="animate-spin" />} {t('Set up')}
+          <div className="flex flex-wrap justify-end gap-2 mt-auto">
+            <button type="button" onClick={start} disabled={busy || enabled == null} className={btnSoft}>
+              <Smartphone size={16} /> {t('Use an authenticator app')}
+            </button>
+            <button type="button" onClick={() => sendEmailCode('enable')} disabled={busy || enabled == null} className={btnPrimary}>
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} {t('Send codes to my email')}
             </button>
           </div>
         </div>

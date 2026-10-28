@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Req } from './RequiredMark';
+import { salaryInPesos } from '@/lib/money';
 import { useT } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { JobAssistant } from './JobAssistant';
 import { JobSearch } from './JobSearch';
-import { Briefcase, Building2, MapPin, Clock, DollarSign, Plus, X, Trash2, Sparkles, Mail, CheckCircle2, XCircle, Hourglass, Globe } from 'lucide-react';
+import { Briefcase, Building2, MapPin, Clock, Banknote, Plus, X, Trash2, Sparkles, Mail, CheckCircle2, XCircle, Hourglass, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
 import { Pagination, usePaged } from './Pagination';
@@ -375,7 +376,7 @@ const jobToText = (j: JobPosting) =>
     `Company: ${j.company}`,
     `Location: ${j.location}`,
     `Type: ${j.type}`,
-    j.salary ? `Salary: ${j.salary}` : 'Salary: not stated',
+    j.salary ? `Salary: ${salaryInPesos(j.salary)}` : 'Salary: not stated',
     '',
     j.description,
     '',
@@ -413,8 +414,8 @@ function JobCard({
 
       {job.salary && (
         <div className="flex items-center gap-1.5 text-sm text-foreground mb-2">
-          <DollarSign size={16} className="text-muted-foreground" />
-          {job.salary}
+          <Banknote size={16} className="text-muted-foreground" />
+          {salaryInPesos(job.salary)}
         </div>
       )}
 
@@ -518,8 +519,8 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
 
         {job.salary && (
           <div className="inline-flex items-center gap-1.5 rounded-xl bg-muted/60 px-3 py-2 text-sm font-medium">
-            <DollarSign size={16} className="text-muted-foreground" />
-            {job.salary}
+            <Banknote size={16} className="text-muted-foreground" />
+            {salaryInPesos(job.salary)}
           </div>
         )}
 

@@ -225,7 +225,8 @@ async function callGeminiFull(
 
   let lastError = '';
   let busy = false;
-  for (const model of models) {
+  // Web search is slow, so try fewer models to finish within the server's time limit
+  for (const model of search ? models.slice(0, 3) : models) {
     // Two tries per model: Google's "high demand" errors usually clear within seconds
     for (let attempt = 0; attempt < 2; attempt++) {
       let res: Response;
@@ -233,7 +234,8 @@ async function callGeminiFull(
         res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          signal: AbortSignal.timeout(90_000),
+          // Searching the web takes longer; still leave time to try another model
+          signal: AbortSignal.timeout(search ? 45_000 : 90_000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
             contents: [{ role: 'user', parts }],
@@ -245,10 +247,12 @@ async function callGeminiFull(
         });
       } catch {
         lastError = 'The AI service did not answer in time.';
+        console.error(`[gemini] ${model}: timed out`);
         busy = true;
         break; // try the next model
       }
       const body = await res.json().catch(() => ({}));
+      if (!res.ok) console.error(`[gemini] ${model} (${search ? 'search' : 'text'}): ${res.status} ${body?.error?.status || ''} ${body?.error?.message || ''}`);
       if (res.status === 404 || res.status === 400 && /model/i.test(body?.error?.message || '')) {
         lastError = body?.error?.message || `Model ${model} not found`;
         break; // model not available to this key: next model
@@ -273,7 +277,17 @@ async function callGeminiFull(
       return { text, sources };
     }
   }
-  if (busy) throw new Error('The AI service is very busy right now. Please try again in a minute.');
+  if (busy) {
+    // Google's daily free limit is a different problem from a short busy spell; say which one
+    if (/quota|exhausted|limit/i.test(lastError)) {
+      throw new Error(
+        search
+          ? "Today's free AI internet-search limit has been reached. Please try again tomorrow, or use Explain a job in the meantime."
+          : "Today's free AI limit has been reached. Please try again tomorrow."
+      );
+    }
+    throw new Error('The AI service is very busy right now. Please try again in a minute.');
+  }
   throw new Error(`No Gemini model is available for this API key. ${lastError}`);
 }
 
