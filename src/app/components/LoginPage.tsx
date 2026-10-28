@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Req } from './RequiredMark';
-import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar } from 'lucide-react';
+import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar, Loader2, Clock, AlertTriangle } from 'lucide-react';
+import { useContactInfo } from '@/lib/settings';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -20,7 +21,7 @@ interface LoginPageProps {
 }
 
 const inputClass =
-  'w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#002060] focus:ring-2 focus:ring-[#002060]/15 text-sm';
+  'w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#002060] focus:ring-2 focus:ring-[#002060]/15 text-sm text-slate-900 autofill:shadow-[inset_0_0_0_1000px_#fff] autofill:[-webkit-text-fill-color:#0f172a]';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const COPY: Record<Step, { title: string; sub: string; button: string }> = {
@@ -200,14 +201,16 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     setBusy(false);
   };
 
+  const contact = useContactInfo();
+  const [capsLock, setCapsLock] = useState(false);
   const copy = COPY[step];
   const codeStep = step === 'verify' || step === 'resetCode';
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={copy.title}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
-      <div className="relative h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300">
-        <div className="flex items-center justify-between px-6 pt-5">
+      <div className="relative h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="OMSU Logo" className="w-9 h-9 object-contain" />
             <span className="text-sm font-bold text-[#002060]">OMSU Alumni Track</span>
@@ -217,7 +220,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           </button>
         </div>
 
-        <div className="px-6 sm:px-8 pt-8 pb-10">
+        {/* Form sits in the middle of the panel; help and links stay at the bottom */}
+        <div className="flex-1 flex flex-col justify-center px-6 sm:px-8 py-8">
           {(step === 'reset' || codeStep) && (
             <button onClick={() => go(step === 'verify' ? 'signup' : 'signin')} className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-[#002060]">
               <ArrowLeft size={15} /> Back
@@ -328,11 +332,18 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                     autoComplete={step === 'signup' ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+                    onBlur={() => setCapsLock(false)}
                     className={`${inputClass} pr-11`}
                     placeholder="••••••••"
                   />
                   <RevealButton shown={showPassword} onToggle={() => setShowPassword((v) => !v)} />
                 </div>
+                {capsLock && (
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-slate-600">
+                    <AlertTriangle size={13} /> Caps Lock is on
+                  </p>
+                )}
                 {step === 'signup' && <PasswordStrength password={password} />}
               </div>
             )}
@@ -413,8 +424,9 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             <button
               type="submit"
               disabled={busy || (codeStep && code.length < 6)}
-              className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-xl font-semibold transition-colors text-sm disabled:opacity-60"
+              className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-xl font-semibold transition-colors text-sm disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
+              {busy && <Loader2 size={16} className="animate-spin" />}
               {busy ? 'Please wait...' : copy.button}
             </button>
           </form>
@@ -435,10 +447,29 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 </button>
               </p>
             )}
-            <p className="text-[11px] text-slate-400 pt-2">
+            <p className="text-xs text-slate-400 pt-1">
               Alumni Affairs and program chair accounts are created by the OMSU Alumni Affairs Office.
             </p>
           </div>
+        </div>
+
+        <div className="px-6 sm:px-8 py-5 border-t border-slate-100 bg-slate-50 text-xs text-slate-500 space-y-2">
+          <p className="font-semibold text-slate-700">Need help signing in?</p>
+          <p className="flex items-start gap-2">
+            <Mail size={14} className="mt-0.5 shrink-0" />
+            <a href={`mailto:${contact.email}`} className="hover:text-[#002060] hover:underline break-all">
+              {contact.email}
+            </a>
+          </p>
+          <p className="flex items-start gap-2">
+            <Clock size={14} className="mt-0.5 shrink-0" />
+            <span>{contact.officeHours}</span>
+          </p>
+          <p className="pt-1">
+            <button type="button" onClick={() => setLegal('terms')} className="text-xs hover:text-[#002060] hover:underline">Terms of Use</button>
+            <span className="mx-2">·</span>
+            <button type="button" onClick={() => setLegal('privacy')} className="text-xs hover:text-[#002060] hover:underline">Privacy Policy</button>
+          </p>
         </div>
       </div>
       {legal && <LegalModal doc={legal} onClose={() => setLegal(null)} />}
