@@ -80,6 +80,8 @@ export function JobSearch({
   const [jobs, setJobs] = useState<FoundJob[] | null>(null);
   const [tips, setTips] = useState<string[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
+  // Shown when the AI search can't run (daily limit or busy): links to search job sites directly
+  const [fallback, setFallback] = useState<{ reason: string } | null>(null);
 
   // Start from the skills saved on this device, or the graduate's program
   useEffect(() => {
@@ -112,13 +114,16 @@ export function JobSearch({
     }
     setBusy(true);
     setJobs(null);
+    setFallback(null);
     const programName = PROGRAMS.find((p) => p.code === program)?.name || program;
     const { data, error } = await supabase.functions.invoke('job-assistant', {
       body: { action: 'search', program: programName, skills, location, jobType, remote, keywords, language: lang },
     });
     setBusy(false);
     if (error) {
-      toast.error(await invokeError(error));
+      const message = await invokeError(error);
+      if (/limit|busy|did not answer/i.test(message)) setFallback({ reason: message });
+      else toast.error(message);
       return;
     }
     setJobs(data.jobs || []);
@@ -208,6 +213,33 @@ export function JobSearch({
         </div>
         {remaining !== null && <p className="text-xs text-muted-foreground">{t('{n} AI requests left today', { n: remaining })}</p>}
       </form>
+
+      {fallback && (
+        <div className="bg-card rounded-2xl shadow-sm p-5 sm:p-6 space-y-4">
+          <div>
+            <p className="font-semibold">{t('Search these job sites directly')}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{t(fallback.reason)}</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {siteSearches(searchWords(program, keywords, skills), location, remote).map((site) => (
+              <a
+                key={site.name}
+                href={site.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-sm hover:bg-muted"
+              >
+                <span>
+                  <span className="font-semibold">{site.name}</span>
+                  <span className="block text-xs text-muted-foreground">{site.note}</span>
+                </span>
+                <ExternalLink size={15} className="text-muted-foreground shrink-0" />
+              </a>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t('Found a job you like? Copy its link and use Explain a job to understand it.')}</p>
+        </div>
+      )}
 
       {busy && (
         <div className="bg-card rounded-2xl shadow-sm p-8 text-center text-sm text-muted-foreground">
@@ -318,4 +350,35 @@ export function JobSearch({
       )}
     </div>
   );
+}
+
+// Words to search for when the AI search is unavailable
+const PROGRAM_WORDS: Record<string, string> = {
+  BSIT: 'IT',
+  BEED: 'elementary teacher',
+  'BSBA-FM': 'finance',
+  'BSBA-OM': 'operations',
+  BSOA: 'office administration',
+};
+function searchWords(program: string, keywords: string, skills: string) {
+  // Skills only when they are a short list (the profile summary is too long to search with)
+  const firstSkill = skills.length <= 60 ? skills.split(/[,;]/)[0].trim() : '';
+  return [PROGRAM_WORDS[program] || firstSkill, keywords.trim()].filter(Boolean).join(' ') || 'fresh graduate';
+}
+
+/** Ready-made searches on job sites, so people can still look for jobs without the AI. */
+function siteSearches(words: string, location: string, remote: boolean) {
+  const q = encodeURIComponent(words);
+  const where = encodeURIComponent(location || 'Philippines');
+  const google = (site: string) => `https://www.google.com/search?q=${encodeURIComponent(`site:${site} ${words} ${location}`)}`;
+  return [
+    { name: 'Indeed Philippines', note: 'ph.indeed.com', url: `https://ph.indeed.com/jobs?q=${q}&l=${where}` },
+    { name: 'LinkedIn Jobs', note: 'linkedin.com/jobs', url: `https://www.linkedin.com/jobs/search/?keywords=${q}&location=${where}` },
+    { name: 'JobStreet', note: 'ph.jobstreet.com', url: google('ph.jobstreet.com') },
+    { name: 'Kalibrr', note: 'kalibrr.com', url: google('kalibrr.com') },
+    { name: 'PhilJobNet (government)', note: 'philjobnet.gov.ph', url: google('philjobnet.gov.ph') },
+    remote
+      ? { name: 'OnlineJobs.ph (work from home)', note: 'onlinejobs.ph', url: `https://www.google.com/search?q=${encodeURIComponent(`site:onlinejobs.ph ${words}`)}` }
+      : { name: 'Google Jobs', note: 'google.com', url: `https://www.google.com/search?q=${encodeURIComponent(`${words} jobs ${location}`)}&ibp=htl;jobs` },
+  ];
 }
