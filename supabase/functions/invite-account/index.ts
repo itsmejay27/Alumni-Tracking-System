@@ -1,5 +1,6 @@
-// Creates an account for a staff member (program chair, director, etc.) with a
-// temporary password, and emails them an invitation. Only Alumni Affairs may call it.
+// Creates an account for a staff member with a temporary password, and emails them an invitation.
+// The Super Admin creates and manages Alumni Affairs accounts; Alumni Affairs manages program chairs
+// (and alumni accounts). Alumni Affairs may create the first Super Admin while none exists.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import nodemailer from 'npm:nodemailer@6.9.16';
 
@@ -10,6 +11,7 @@ const cors = {
 };
 
 const ROLES: Record<string, string> = {
+  'superadmin': 'Super Admin',
   'admin': 'Alumni Affairs',
   'admin.bsit': 'BSIT Program Chair',
   'admin.beed': 'BEED Program Chair',
@@ -186,18 +188,32 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  // Only Alumni Affairs (super admin) may manage accounts
+  // Only the Super Admin and Alumni Affairs may manage accounts
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const { data: caller } = await admin.auth.getUser(token);
   if (!caller?.user) return json({ error: 'Not signed in' }, 401);
   const { data: callerProfile } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
-  if (callerProfile?.role !== 'admin') return json({ error: 'Only Alumni Affairs can manage accounts' }, 403);
+  const callerRole = callerProfile?.role || '';
+  if (callerRole !== 'admin' && callerRole !== 'superadmin') return json({ error: 'Only Alumni Affairs or the Super Admin can manage accounts' }, 403);
+  const isSuper = callerRole === 'superadmin';
+  const isTop = (role: string) => role === 'admin' || role === 'superadmin';
+  // Super Admin → Alumni Affairs and Super Admin accounts; Alumni Affairs → all other accounts
+  const mayManage = (role: string) => (isSuper ? isTop(role) : !isTop(role));
 
   let body: any;
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Invalid request' }, 400);
+  }
+
+  // Every action on an existing account checks who that account belongs to
+  if (['delete', 'deactivate', 'activate', 'reset-mfa', 'resend'].includes(body.action)) {
+    const { data: target } = await admin.from('profiles').select('role').eq('id', String(body.userId || '')).maybeSingle();
+    if (!target) return json({ error: 'Account not found' }, 404);
+    if (!mayManage(target.role)) {
+      return json({ error: isSuper ? 'The Super Admin manages Alumni Affairs accounts only' : 'Only the Super Admin can change Alumni Affairs accounts' }, 403);
+    }
   }
 
   // Remove an account (also used to cancel a pending invitation)
@@ -276,6 +292,13 @@ Deno.serve(async (req) => {
   if (!givenName || !lastName) return json({ error: 'First and last name are required' }, 400);
   if (!ROLES[role]) return json({ error: 'Unknown role' }, 400);
   if (role === 'alumni') return json({ error: 'Alumni create their own accounts' }, 400);
+  if (role === 'superadmin' && !isSuper) {
+    // Alumni Affairs may set up the first Super Admin only
+    const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'superadmin');
+    if ((count ?? 0) > 0) return json({ error: 'Only the Super Admin can create another Super Admin' }, 403);
+  } else if (!mayManage(role)) {
+    return json({ error: isSuper ? 'The Super Admin creates Alumni Affairs accounts only' : 'Only the Super Admin can create Alumni Affairs accounts' }, 403);
+  }
 
   const password = tempPassword();
   // Supabase saves app_metadata only after the user row is inserted, so the sign-up trigger

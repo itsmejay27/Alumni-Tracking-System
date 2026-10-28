@@ -17,6 +17,7 @@ export const PROGRAMS: { code: Course; name: string; short: string; color: strin
 export const programName = (code: string) => PROGRAMS.find((p) => p.code === code)?.name || code;
 
 export const ROLE_LABELS: Record<string, string> = {
+  superadmin: 'Super Admin',
   admin: 'Alumni Affairs',
   'admin.bsit': 'BSIT Program Chair',
   'admin.beed': 'BEED Program Chair',

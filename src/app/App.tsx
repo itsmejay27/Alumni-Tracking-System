@@ -191,16 +191,19 @@ function AppInner() {
         setCurrentUser(user);
         setAuthScreen(null);
         // After a refresh, go back to the page that was open
-        const pages = user.role.startsWith('admin')
-          ? ['dashboard', 'records', 'announcements', 'jobs', 'officials', 'contact', 'accounts', 'settings']
-          : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
+        const pages =
+          user.role === 'superadmin'
+            ? ['accounts', 'settings']
+            : user.role.startsWith('admin')
+              ? ['dashboard', 'records', 'announcements', 'jobs', 'officials', 'contact', 'accounts', 'settings']
+              : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
         let last = '';
         try {
           last = sessionStorage.getItem(`omsu-page:${user.id}`) || '';
         } catch {
           /* storage blocked */
         }
-        setActiveTab(pages.includes(last) ? last : user.role.startsWith('admin') ? 'dashboard' : 'home');
+        setActiveTab(pages.includes(last) ? last : pages[0] === 'accounts' ? 'accounts' : user.role.startsWith('admin') ? 'dashboard' : 'home');
       });
     return () => {
       cancelled = true;
@@ -331,11 +334,13 @@ function AppInner() {
 
   const userRole = currentUser.role;
   const isAdmin = userRole.startsWith('admin');
+  // The Super Admin only manages Alumni Affairs accounts
+  const isSuper = userRole === 'superadmin';
 
   // Convert role to clean label
   const getRoleLabel = () => roleLabel(userRole);
   const getSubLabel = () => roleLabel(userRole);
-  const appName = isAdmin ? 'OMSU Track' : 'OMSU Alumni';
+  const appName = isAdmin || isSuper ? 'OMSU Track' : 'OMSU Alumni';
 
   // Nav menu item details
   const adminMenuItems = [
@@ -359,7 +364,12 @@ function AppInner() {
     { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
-  const menuItems = isAdmin ? adminMenuItems : alumniMenuItems;
+  const superMenuItems = [
+    { id: 'accounts', label: t('Alumni Affairs Accounts'), icon: <UserCog size={18} /> },
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
+  ];
+
+  const menuItems = isSuper ? superMenuItems : isAdmin ? adminMenuItems : alumniMenuItems;
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-background text-foreground overflow-hidden font-sans">
@@ -551,7 +561,12 @@ function AppInner() {
         {/* 3. UNIFIED CONTENT VIEWPORT */}
         <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
           <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
-          {isAdmin ? (
+          {isSuper ? (
+            <>
+              {activeTab === 'accounts' && <AccountsManager currentUserId={currentUser.id} mode="super" />}
+              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+            </>
+          ) : isAdmin ? (
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}

@@ -14,9 +14,14 @@ const ROLE_OPTIONS = [
   { value: 'admin.bsba-om', label: 'BSBA-OM Program Chair' },
   { value: 'admin.bsoa', label: 'BSOA Program Chair' },
   { value: 'admin', label: 'Alumni Affairs' },
+  { value: 'superadmin', label: 'Super Admin' },
   { value: 'alumni', label: 'Alumni Member' },
 ];
-// Alumni sign up themselves (checked against the graduate records), so only staff roles can be created here
+// Only the Super Admin creates and manages Alumni Affairs (and Super Admin) accounts
+const TOP_ROLES = ['admin', 'superadmin'];
+const isTop = (role: string) => TOP_ROLES.includes(role);
+// Roles Alumni Affairs can give: program chairs (alumni sign up themselves)
+const CHAIR_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value.startsWith('admin.'));
 const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni');
 const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
 
@@ -46,7 +51,10 @@ const actionBtn =
 const inputClass =
   'w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm';
 
-export function AccountsManager({ currentUserId }: { currentUserId: string }) {
+export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUserId: string; mode?: 'affairs' | 'super' }) {
+  const isSuper = mode === 'super';
+  // Accounts this person may change: Super Admin → Alumni Affairs; Alumni Affairs → everyone else
+  const canManage = (a: { role: string }) => (isSuper ? isTop(a.role) : !isTop(a.role));
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -58,7 +66,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
   const [givenName, setGivenName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('admin.bsit');
+  const [role, setRole] = useState(isSuper ? 'admin' : 'admin.bsit');
   const [title, setTitle] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<InviteResult | null>(null);
@@ -226,9 +234,19 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     setAccounts((list) => list.filter((a) => a.id !== acc.id));
   };
 
+  // The very first Super Admin is created by Alumni Affairs; after that only Super Admins add Alumni Affairs
+  const noSuperYet = !accounts.some((a) => a.role === 'superadmin');
+  const createOptions = isSuper
+    ? ROLE_OPTIONS.filter((o) => o.value === 'admin')
+    : [...CHAIR_ROLE_OPTIONS, ...(noSuperYet ? ROLE_OPTIONS.filter((o) => o.value === 'superadmin') : [])];
+
   const visible = accounts.filter((a) => {
+    if (isSuper) {
+      if (!isTop(a.role)) return false;
+    } else {
     if (roleFilter === 'staff' && !a.role.startsWith('admin')) return false;
     if (roleFilter !== 'staff' && roleFilter !== 'all' && a.role !== roleFilter) return false;
+    }
     if (statusFilter === 'pending' && !a.must_change_password) return false;
     if (statusFilter === 'active' && (a.must_change_password || a.deactivated_at)) return false;
     if (statusFilter === 'deactivated' && !a.deactivated_at) return false;
@@ -245,15 +263,17 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Manage Accounts</h2>
-          <p className="text-muted-foreground mt-1">Create accounts for program chairs and staff, and assign their roles</p>
+          <h2 className="text-2xl font-bold tracking-tight">{isSuper ? 'Alumni Affairs Accounts' : 'Manage Accounts'}</h2>
+          <p className="text-muted-foreground mt-1">
+            {isSuper ? 'Create and manage the accounts of the Alumni Affairs Office' : 'Create accounts for program chairs and assign their programs'}
+          </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/95"
         >
           <UserPlus size={18} />
-          Create Account
+          {isSuper ? 'Create Alumni Affairs Account' : 'Create Account'}
         </button>
       </div>
 
@@ -330,14 +350,16 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Role / Department <Req /></label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
-                {STAFF_ROLE_OPTIONS.map((o) => (
+                {createOptions.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                Staff accounts are created here. Alumni create their own accounts with their name, birthday and sex, which must match the graduate records.
+                {isSuper
+                  ? 'Alumni Affairs accounts can only be created by the Super Admin.'
+                  : 'Alumni Affairs accounts are created by the Super Admin. Alumni create their own accounts with their name, birthday and sex, which must match the graduate records.'}
               </p>
             </div>
             <div className="space-y-1.5 md:col-span-2">
@@ -380,7 +402,8 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
               className="w-full pl-9 pr-3 py-2 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
-<select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="filter-select sm:w-52" aria-label="Filter by role">
+{!isSuper && (
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="filter-select sm:w-52" aria-label="Filter by role">
             <option value="staff">All staff</option>
             {STAFF_ROLE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -390,6 +413,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
             <option value="alumni">Alumni members</option>
             <option value="all">Everyone</option>
           </select>
+          )}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select sm:w-44" aria-label="Filter by status">
             <option value="all">All statuses</option>
             <option value="active">Active</option>
@@ -427,21 +451,25 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-                <select
-                  value={a.role}
-                  disabled={a.id === currentUserId}
-                  onChange={(e) => handleRoleChange(a, e.target.value)}
-                  className="h-9 px-3 bg-input-background border border-border rounded-lg text-sm disabled:opacity-60 w-full md:w-56"
-                >
-                  {ROLE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                {isSuper || !canManage(a) || a.id === currentUserId ? (
+                  // Role shown as text when it can't be changed here
+                  <span className="h-9 px-3 inline-flex items-center rounded-lg border border-border text-sm text-muted-foreground w-full md:w-56">{roleLabel(a.role)}</span>
+                ) : (
+                  <select
+                    value={a.role}
+                    onChange={(e) => handleRoleChange(a, e.target.value)}
+                    className="h-9 px-3 bg-input-background border border-border rounded-lg text-sm w-full md:w-56"
+                  >
+                    {ROLE_OPTIONS.filter((o) => !isTop(o.value)).map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {/* Two fixed-width action slots so every row lines up */}
                 <div className="w-[7.5rem]">
-                  {!a.must_change_password && a.id !== currentUserId && (
+                  {!a.must_change_password && a.id !== currentUserId && canManage(a) && (
                     <button
                       onClick={() => handleToggleActive(a)}
                       disabled={toggling === a.id}
@@ -454,7 +482,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                       {toggling === a.id ? '...' : a.deactivated_at ? 'Activate' : 'Deactivate'}
                     </button>
                   )}
-                  {a.must_change_password && (
+                  {a.must_change_password && canManage(a) && (
                     <button
                       onClick={() => handleResend(a)}
                       disabled={resending === a.id}
@@ -467,7 +495,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                   )}
                 </div>
                 <div className="w-[7.5rem]">
-                  {a.id !== currentUserId && (
+                  {a.id !== currentUserId && canManage(a) && (
                     <button
                       onClick={() => handleRemove(a)}
                       title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}

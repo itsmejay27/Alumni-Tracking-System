@@ -830,3 +830,31 @@ begin
   new.updated_at := now();
   return new;
 end $$;
+
+-- Super Admin: creates and manages Alumni Affairs accounts (through the invite-account function)
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check check (role = any (array['alumni','admin','superadmin','admin.bsit','admin.beed','admin.bsba-fm','admin.bsba-om','admin.bsoa']));
+create policy "profiles: super admin reads top accounts" on public.profiles for select to authenticated
+  using ((select public.app_role()) = 'superadmin' and role in ('admin', 'superadmin'));
+create or replace function public.protect_profile_fields() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if (select auth.uid()) is not null then
+    if new.email is distinct from old.email and coalesce(public.app_role(), '') <> 'admin' then
+      raise exception 'Only the super admin can change roles';
+    end if;
+    if new.role is distinct from old.role then
+      if coalesce(public.app_role(), '') <> 'admin' then
+        raise exception 'Only the super admin can change roles';
+      end if;
+      if old.role in ('admin', 'superadmin') or new.role in ('admin', 'superadmin') then
+        raise exception 'Only the Super Admin can give or remove Alumni Affairs access';
+      end if;
+    end if;
+    if new.email_2fa is distinct from old.email_2fa and coalesce(public.app_role(), '') <> 'admin' then
+      raise exception 'Use Settings to change two-step verification';
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
