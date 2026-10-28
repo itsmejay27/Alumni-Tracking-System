@@ -382,7 +382,7 @@ const jobToText = (j: JobPosting) =>
     'Requirements:',
     ...j.requirements.map((r) => `- ${r}`),
     '',
-    `Contact: ${j.contactEmail}`,
+    j.contactEmail ? `Contact: ${j.contactEmail}` : '',
   ].join('\n');
 
 function JobCard({
@@ -544,9 +544,13 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
 
         <div className="rounded-xl bg-muted/50 p-4 text-sm">
           <p className="font-semibold mb-0.5">{t('How to apply')}</p>
-          <a href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`} className="text-primary hover:underline break-all">
-            {job.contactEmail}
-          </a>
+          {job.contactEmail ? (
+            <a href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`} className="text-primary hover:underline break-all">
+              {job.contactEmail}
+            </a>
+          ) : (
+            <p className="text-muted-foreground">{t('No email given. Follow the instructions in the job description.')}</p>
+          )}
           <p className="text-xs text-muted-foreground mt-2">{t('Posted {date} by {name}', { date: job.postedDate, name: job.postedBy })}. {t('Never pay a fee to apply for a job.')}</p>
         </div>
 
@@ -563,12 +567,14 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
               <Sparkles size={16} /> {t('Explain with AI')}
             </button>
           )}
-          <a
-            href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
-          >
-            <Mail size={16} /> {t('Apply by email')}
-          </a>
+          {job.contactEmail && (
+            <a
+              href={`mailto:${job.contactEmail}?subject=${encodeURIComponent(`Application: ${job.title}`)}`}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+            >
+              <Mail size={16} /> {t('Apply by email')}
+            </a>
+          )}
         </div>
       </div>
     </div>,
@@ -886,10 +892,9 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Contact Email')} <Req /></label>
+            <label className="block text-sm mb-1.5">{t('Contact Email (Optional)')}</label>
             <input
               type="email"
-              required
               value={formData.contactEmail}
               onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
               className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"

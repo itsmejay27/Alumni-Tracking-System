@@ -39,8 +39,9 @@ interface InviteResult {
   emailError: string | null;
 }
 
+// Calm, neutral buttons (grey outline and text); only the hover hints at what the action does
 const actionBtn =
-  'w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-lg border bg-card text-sm font-medium disabled:opacity-50';
+  'w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-transparent text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted disabled:opacity-50';
 
 const inputClass =
   'w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm';
@@ -419,10 +420,10 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                 </p>
                 <p className="text-sm text-muted-foreground truncate">{a.email}</p>
                 {a.must_change_password && (
-                  <span className="inline-block mt-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Invitation pending</span>
+                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">Invitation pending</span>
                 )}
                 {a.deactivated_at && (
-                  <span className="inline-block mt-1 text-[11px] font-medium text-red-700 bg-red-50 rounded-full px-2 py-0.5">Deactivated</span>
+                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">Deactivated</span>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
@@ -446,8 +447,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                       disabled={toggling === a.id}
                       title={a.deactivated_at ? 'Let this person sign in again' : 'Stop this person from signing in'}
                       className={
-                        actionBtn +
-                        (a.deactivated_at ? ' text-emerald-700 border-emerald-200 hover:bg-emerald-50' : ' text-amber-700 border-amber-200 hover:bg-amber-50')
+                        actionBtn
                       }
                     >
                       {a.deactivated_at ? <CheckCircle2 size={14} /> : <Ban size={14} />}
@@ -459,7 +459,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                       onClick={() => handleResend(a)}
                       disabled={resending === a.id}
                       title="Send a new invitation with a new temporary password"
-                      className={actionBtn + ' text-primary border-primary/25 hover:bg-primary/5'}
+                      className={actionBtn}
                     >
                       <RefreshCw size={14} className={resending === a.id ? 'animate-spin' : ''} />
                       {resending === a.id ? 'Sending' : 'Resend'}
@@ -471,7 +471,7 @@ export function AccountsManager({ currentUserId }: { currentUserId: string }) {
                     <button
                       onClick={() => handleRemove(a)}
                       title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}
-                      className={actionBtn + ' text-red-600 border-red-200 hover:bg-red-50'}
+                      className={actionBtn + ' hover:text-red-500'}
                     >
                       {a.must_change_password ? <X size={14} /> : <Trash2 size={14} />}
                       {a.must_change_password ? 'Cancel' : 'Remove'}

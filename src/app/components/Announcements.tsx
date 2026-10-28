@@ -314,37 +314,17 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             className="bg-card rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between"
           >
             <div className="flex items-start gap-4">
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
-                  ann.category === 'Event'
-                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                    : ann.category === 'Job Seminar'
-                    ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                    : ann.category === 'Homecoming'
-                    ? 'bg-purple-500/10 text-purple-600 border-purple-500/20'
-                    : 'bg-primary/10 text-primary border-primary/20'
-                }`}
-              >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted text-muted-foreground">
                 <Megaphone size={20} />
               </div>
 
               <div className="space-y-1 w-full min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      ann.category === 'Event'
-                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                        : ann.category === 'Job Seminar'
-                        ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
-                        : ann.category === 'Homecoming'
-                        ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
-                        : 'bg-primary/10 text-primary border border-primary/20'
-                    }`}
-                  >
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-border text-muted-foreground">
                     {t(ann.category)}
                   </span>
                   {ann.course && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border text-muted-foreground">
                       {t('{program} only', { program: ann.course })}
                     </span>
                   )}

@@ -493,4 +493,6 @@ export const FIL: Record<string, string> = {
   "Saved jobs are kept as history and can't be edited, but you can still attach the proof of employment.": "Ang mga na-save na trabaho ay itinatago bilang kasaysayan at hindi na mababago, pero maaari ka pa ring mag-attach ng patunay ng trabaho.",
   "Father's name and contact number": "Pangalan at contact number ng ama",
   "Mother's name and contact number": "Pangalan at contact number ng ina",
+  "Contact Email (Optional)": "Contact Email (Opsyonal)",
+  "No email given. Follow the instructions in the job description.": "Walang ibinigay na email. Sundin ang mga tagubilin sa paglalarawan ng trabaho.",
 };
