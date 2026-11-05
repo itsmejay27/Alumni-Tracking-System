@@ -1,6 +1,6 @@
 // Creates an account for a staff member with a temporary password, and emails them an invitation.
 // The Super Admin creates and manages Alumni Affairs accounts; Alumni Affairs manages program chairs
-// (and alumni accounts). Alumni Affairs may create the first Super Admin while none exists.
+// (and alumni accounts) and can never create Alumni Affairs or Super Admin accounts.
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import nodemailer from 'npm:nodemailer@6.9.16';
 
@@ -306,12 +306,14 @@ Deno.serve(async (req) => {
   if (!givenName || !lastName) return json({ error: 'First and last name are required' }, 400);
   if (!ROLES[role]) return json({ error: 'Unknown role' }, 400);
   if (role === 'alumni') return json({ error: 'Alumni create their own accounts' }, 400);
-  if (role === 'superadmin' && !isSuper) {
-    // Alumni Affairs may set up the first Super Admin only
-    const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'superadmin');
-    if ((count ?? 0) > 0) return json({ error: 'Only the Super Admin can create another Super Admin' }, 403);
-  } else if (!mayManage(role)) {
-    return json({ error: isSuper ? 'The Super Admin creates Alumni Affairs accounts only' : 'Only the Super Admin can create Alumni Affairs accounts' }, 403);
+  if (!mayManage(role)) {
+    return json({ error: isSuper ? 'The Super Admin creates Alumni Affairs accounts only' : 'Only the Super Admin can create Alumni Affairs or Super Admin accounts' }, 403);
+  }
+
+  // Say clearly when the email is already used, and by what kind of account
+  const { data: existing } = await admin.from('profiles').select('role').eq('email', email).maybeSingle();
+  if (existing) {
+    return json({ error: `${email} already has an account (${ROLES[existing.role] || existing.role}). Use a different email address.` }, 409);
   }
 
   const password = tempPassword();
@@ -329,7 +331,8 @@ Deno.serve(async (req) => {
   await admin.from('staff_invites').delete().eq('email', email);
   if (createError || !created.user) {
     const exists = /already/i.test(createError?.message || '');
-    return json({ error: exists ? 'An account with this email already exists' : createError?.message || 'Could not create account' }, exists ? 409 : 400);
+    console.error(`[invite] could not create ${email}: ${createError?.message}`);
+    return json({ error: exists ? `${email} already has an account. Use a different email address.` : createError?.message || 'Could not create account' }, exists ? 409 : 400);
   }
 
   const { error: profileError } = await admin
@@ -337,6 +340,7 @@ Deno.serve(async (req) => {
     .update({ role, title, must_change_password: true })
     .eq('id', created.user.id);
   if (profileError) {
+    console.error(`[invite] could not set up profile for ${email}: ${profileError.message}`);
     await admin.auth.admin.deleteUser(created.user.id);
     return json({ error: `Could not set up profile: ${profileError.message}` }, 500);
   }

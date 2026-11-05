@@ -20,9 +20,10 @@ const ROLE_OPTIONS = [
 // Only the Super Admin creates and manages Alumni Affairs (and Super Admin) accounts
 const TOP_ROLES = ['admin', 'superadmin'];
 const isTop = (role: string) => TOP_ROLES.includes(role);
-// Roles Alumni Affairs can give: program chairs (alumni sign up themselves)
+// Roles Alumni Affairs can give: program chairs only (alumni sign up themselves)
 const CHAIR_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value.startsWith('admin.'));
-const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni');
+// Filter choices for Alumni Affairs: program chairs and Alumni Affairs (the Super Admin is not listed)
+const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni' && o.value !== 'superadmin');
 const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
 
 interface Account {
@@ -69,6 +70,8 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
   const [role, setRole] = useState(isSuper ? 'admin' : 'admin.bsit');
   const [title, setTitle] = useState('');
   const [sending, setSending] = useState(false);
+  // Why the last create attempt failed, shown inside the form so it stays readable
+  const [formError, setFormError] = useState('');
   const [result, setResult] = useState<InviteResult | null>(null);
 
   const load = useCallback(async () => {
@@ -91,6 +94,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
+    setFormError('');
     const { data, error } = await supabase.functions.invoke('invite-account', {
       body: {
         email,
@@ -112,6 +116,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       } catch {
         /* keep default message */
       }
+      setFormError(message);
       toast.error(message);
       return;
     }
@@ -234,16 +239,15 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     setAccounts((list) => list.filter((a) => a.id !== acc.id));
   };
 
-  // The very first Super Admin is created by Alumni Affairs; after that only Super Admins add Alumni Affairs
-  const noSuperYet = !accounts.some((a) => a.role === 'superadmin');
-  const createOptions = isSuper
-    ? ROLE_OPTIONS.filter((o) => o.value === 'admin')
-    : [...CHAIR_ROLE_OPTIONS, ...(noSuperYet ? ROLE_OPTIONS.filter((o) => o.value === 'superadmin') : [])];
+  // Super Admin creates Alumni Affairs accounts; Alumni Affairs creates program chair accounts only
+  const createOptions = isSuper ? ROLE_OPTIONS.filter((o) => o.value === 'admin') : CHAIR_ROLE_OPTIONS;
 
   const visible = accounts.filter((a) => {
     if (isSuper) {
       if (!isTop(a.role)) return false;
     } else {
+      // The Super Admin account is not shown to Alumni Affairs
+      if (a.role === 'superadmin') return false;
     if (roleFilter === 'staff' && !a.role.startsWith('admin')) return false;
     if (roleFilter !== 'staff' && roleFilter !== 'all' && a.role !== roleFilter) return false;
     }
@@ -269,7 +273,10 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setFormError('');
+            setShowForm(true);
+          }}
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/95"
         >
           <UserPlus size={18} />
@@ -359,7 +366,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
               <p className="text-xs text-muted-foreground">
                 {isSuper
                   ? 'Alumni Affairs accounts can only be created by the Super Admin.'
-                  : 'Alumni Affairs accounts are created by the Super Admin. Alumni create their own accounts with their name, birthday and sex, which must match the graduate records.'}
+                  : 'You can create program chair accounts. Alumni Affairs accounts are created by the Super Admin. Alumni create their own accounts with their name, birthday and sex, which must match the graduate records.'}
               </p>
             </div>
             <div className="space-y-1.5 md:col-span-2">
@@ -375,6 +382,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
           <p className="text-xs text-muted-foreground">
             They will be asked to change the temporary password the first time they sign in.
           </p>
+          {formError && <p className="rounded-lg border border-border bg-muted px-3 py-2 text-sm">{formError}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted">
               Cancel
