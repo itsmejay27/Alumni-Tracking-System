@@ -1,5 +1,12 @@
-import React, { useState } from 'react';
-import { LoginPage } from './components/LoginPage';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { LoginPage, AuthMode } from './components/LoginPage';
+import { LandingPage } from './components/LandingPage';
+import { LoadingState } from './components/DataState';
+import { SetNewPassword } from './components/SetNewPassword';
+import { AccountsManager } from './components/AccountsManager';
+import { ActivityLogs } from './components/ActivityLogs';
+import { LinkAlumniRecord } from './components/LinkAlumniRecord';
 import { AlumniRecords } from './components/AlumniRecords';
 import { Analytics } from './components/Analytics';
 import { JobBoard } from './components/JobBoard';
@@ -9,7 +16,14 @@ import { Announcements } from './components/Announcements';
 import { Home as HomeView } from './components/Home';
 import { Contact as ContactView } from './components/Contact';
 import { Settings as SettingsView } from './components/Settings';
-import { Toaster } from 'sonner';
+import { toast } from 'sonner';
+import { AppToaster } from './components/AppToaster';
+import { ConfirmHost } from './components/ConfirmDialog';
+import { roleLabel } from '@/lib/programs';
+import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
+import { MfaChallenge, EmailChallenge } from './components/MfaChallenge';
+import { supabase } from '@/lib/supabase';
+import { fetchMyRecord, missingProfileFields } from '@/lib/alumni';
 import { 
   Users, 
   Briefcase, 
@@ -24,13 +38,15 @@ import {
   GraduationCap,
   Home as HomeIcon,
   PhoneCall,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  UserCog,
+  Contact2,
+  ScrollText,
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 
-type UserRole = string | null;
-
 export interface CurrentUser {
+  id: string;
   email: string;
   role: string;
   givenName: string;
@@ -45,157 +61,318 @@ export interface CurrentUser {
   facebookName: string;
   avatarUrl?: string;
   title?: string;
+  mustChangePassword?: boolean;
+}
+
+function profileToUser(p: any): CurrentUser {
+  return {
+    id: p.id,
+    email: p.email,
+    role: p.role,
+    givenName: p.given_name,
+    lastName: p.last_name,
+    middleName: p.middle_name,
+    mobileNo: p.mobile_no,
+    presentAddress: p.present_address,
+    permanentAddress: p.permanent_address,
+    sex: p.sex,
+    dateOfBirth: p.date_of_birth,
+    civilStatus: p.civil_status,
+    facebookName: p.facebook_name,
+    avatarUrl: p.avatar_url,
+    title: p.title,
+    mustChangePassword: p.must_change_password,
+  };
 }
 
 export default function App() {
-  const [userRole, setUserRole] = useState<UserRole>(null);
+  return (
+    <PreferencesProvider>
+      <AppInner />
+    </PreferencesProvider>
+  );
+}
+
+function AppInner() {
+  const t = useT();
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
+  // Alumni accounts must be linked to a graduate record (name + birthday + sex) before using the system
+  const [needsLink, setNeedsLink] = useState<boolean | null>(null);
+  // New alumni must complete their profile before using the rest of the system
+  const [profileGate, setProfileGate] = useState<{ missing: string[]; needsSave: boolean } | null>(null);
+  const refreshGate = useCallback(async (uid: string) => {
+    try {
+      const rec = await fetchMyRecord(uid);
+      const missing = missingProfileFields(rec);
+      const needsSave = !rec?.respondedAt;
+      setProfileGate(missing.length || needsSave ? { missing, needsSave } : null);
+    } catch {
+      setProfileGate(null);
+    }
+  }, []);
+  const [authScreen, setAuthScreen] = useState<AuthMode | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  // Two-step verification: true while a signed-in user still has to enter their authenticator code
+  const [needsMfa, setNeedsMfa] = useState<boolean | null>(null);
+  // Which second step is needed: a code from the authenticator app, or one sent by email
+  const [mfaMode, setMfaMode] = useState<'app' | 'email'>('app');
 
-  const handleLogin = (role: string, email: string) => {
-    setUserRole(role);
-    
-    // Initialize default profile details
-    const initialUser: CurrentUser = {
-      email,
-      role,
-      givenName: '',
-      lastName: '',
-      middleName: '',
-      mobileNo: '09171234567',
-      presentAddress: 'Barangay Fatima, Mamburao, Occidental Mindoro',
-      permanentAddress: 'Barangay Fatima, Mamburao, Occidental Mindoro',
-      sex: 'Male',
-      dateOfBirth: '1998-05-15',
-      civilStatus: 'Single',
-      facebookName: '',
-      avatarUrl: ''
-    };
+  // Track the Supabase auth session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
+      setSession(newSession);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
-    if (role === 'admin') {
-      initialUser.givenName = 'JOSUE';
-      initialUser.lastName = 'DELFIN';
-      initialUser.middleName = 'C.';
-      initialUser.title = 'Campus Director';
-      initialUser.facebookName = 'Josue Delfin';
-    } else if (role === 'admin.bsit') {
-      initialUser.givenName = 'KARESA FAYE';
-      initialUser.lastName = 'ZABALA';
-      initialUser.middleName = 'D.';
-      initialUser.title = 'IT Program Chair';
-      initialUser.facebookName = 'Karesa Faye Zabala';
-    } else if (role === 'admin.beed') {
-      initialUser.givenName = 'DR. JOHN';
-      initialUser.lastName = 'SMITH';
-      initialUser.middleName = '';
-      initialUser.title = 'BEED Program Chair';
-    } else if (role === 'admin.bsba-fm') {
-      initialUser.givenName = 'PROF. KERVIN';
-      initialUser.lastName = 'RAMOS';
-      initialUser.middleName = '';
-      initialUser.title = 'BSBA-FM Program Chair';
-    } else if (role === 'admin.bsba-om') {
-      initialUser.givenName = 'PROF. MARIA';
-      initialUser.lastName = 'SANTOS';
-      initialUser.middleName = '';
-      initialUser.title = 'BSBA-OM Program Chair';
-    } else if (role === 'admin.bsoa') {
-      initialUser.givenName = 'PROF. ELENA';
-      initialUser.lastName = 'CRUZ';
-      initialUser.middleName = '';
-      initialUser.title = 'BSOA Program Chair';
-    } else {
-      // Alumni login
-      const prefix = email.split('@')[0];
-      if (prefix.includes('.')) {
-        const parts = prefix.split('.');
-        initialUser.givenName = parts[0].toUpperCase();
-        initialUser.lastName = parts[1].toUpperCase();
-      } else {
-        initialUser.givenName = prefix.toUpperCase();
-        initialUser.lastName = 'ALUMNI';
+  const checkMfa = async () => {
+    try {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (data && data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
+        setMfaMode('app');
+        setNeedsMfa(true);
+        return;
       }
-      initialUser.middleName = 'MENDOZA';
-      initialUser.facebookName = `${initialUser.givenName.charAt(0) + initialUser.givenName.slice(1).toLowerCase()} ${initialUser.lastName.charAt(0) + initialUser.lastName.slice(1).toLowerCase()}`;
-    }
-
-    const saved = localStorage.getItem(`profile_${email}`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (!parsed.email) parsed.email = email;
-      setCurrentUser(parsed);
-    } else {
-      setCurrentUser(initialUser);
-      localStorage.setItem(`profile_${email}`, JSON.stringify(initialUser));
-    }
-
-    // Alumni defaults to home tab, admin defaults to analytics dashboard
-    setActiveTab(role.startsWith('admin') ? 'dashboard' : 'home');
-  };
-
-  const handleUpdateProfile = (updated: CurrentUser) => {
-    setCurrentUser(updated);
-    if (currentUser) {
-      localStorage.setItem(`profile_${currentUser.email}`, JSON.stringify(updated));
+      const { data: emailNeeded } = await supabase.rpc('email_2fa_needed');
+      setMfaMode('email');
+      setNeedsMfa(emailNeeded === true);
+    } catch {
+      // Could not read the sign-in level; continue without the extra step rather than hanging
+      setNeedsMfa(false);
     }
   };
+  const accessToken = session?.access_token;
+  useEffect(() => {
+    if (!session) {
+      setNeedsMfa(null);
+      return;
+    }
+    checkMfa();
+  }, [accessToken]);
 
-  const handleLogout = () => {
-    setUserRole(null);
-    setCurrentUser(null);
+  // Load the signed-in user's profile (role decides which screens they see)
+  const userId = needsMfa === false ? session?.user.id : undefined;
+  useEffect(() => {
+    if (!userId) {
+      setCurrentUser(null);
+      setNeedsLink(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          toast.error('Could not load your profile. Please sign in again.');
+          supabase.auth.signOut();
+          return;
+        }
+        const user = profileToUser(data);
+        if (user.role === 'alumni') {
+          supabase
+            .from('alumni_records')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+            .then(({ data: rec }) => !cancelled && setNeedsLink(!rec));
+        } else setNeedsLink(false);
+        setCurrentUser(user);
+        setAuthScreen(null);
+        // After a refresh, go back to the page that was open
+        const pages =
+          user.role === 'superadmin'
+            ? ['accounts', 'logs', 'settings']
+            : user.role.startsWith('admin')
+              ? ['dashboard', 'records', 'announcements', 'jobs', 'officials', 'contact', 'accounts', 'settings']
+              : ['home', 'profile', 'officials', 'announcements', 'jobs', 'contact', 'settings'];
+        let last = '';
+        try {
+          last = sessionStorage.getItem(`omsu-page:${user.id}`) || '';
+        } catch {
+          /* storage blocked */
+        }
+        setActiveTab(pages.includes(last) ? last : pages[0] === 'accounts' ? 'accounts' : user.role.startsWith('admin') ? 'dashboard' : 'home');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const handleUpdateProfile = async (updated: CurrentUser) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        given_name: updated.givenName,
+        last_name: updated.lastName,
+        middle_name: updated.middleName,
+        mobile_no: updated.mobileNo,
+        present_address: updated.presentAddress,
+        permanent_address: updated.permanentAddress,
+        sex: updated.sex,
+        date_of_birth: updated.dateOfBirth,
+        civil_status: updated.civilStatus,
+        facebook_name: updated.facebookName,
+        avatar_url: updated.avatarUrl || '',
+      })
+      .eq('id', updated.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    setCurrentUser(profileToUser(data));
+  };
+
+  const handleLogout = async () => {
     setMobileMenuOpen(false);
+    await supabase.auth.signOut();
   };
 
-  if (!userRole) {
+  useApplyPreferences(!!session && !!currentUser && !needsMfa);
+
+  // Remember the open page so a refresh comes back to it
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      sessionStorage.setItem(`omsu-page:${currentUser.id}`, activeTab);
+    } catch {
+      /* storage blocked */
+    }
+  }, [currentUser?.id, activeTab]);
+
+  // Check whether a signed-in graduate still has to complete their profile
+  useEffect(() => {
+    if (currentUser?.role === 'alumni' && needsLink === false) refreshGate(currentUser.id);
+    else setProfileGate(null);
+  }, [currentUser?.id, currentUser?.role, needsLink, refreshGate]);
+
+  // While the profile is incomplete, only My Alumni Profile and Settings are open
+  const GATE_OPEN = ['profile', 'settings'];
+  useEffect(() => {
+    if (profileGate && !GATE_OPEN.includes(activeTab)) setActiveTab('profile');
+  }, [profileGate, activeTab]);
+  const goTab = (id: string) => {
+    if (profileGate && !GATE_OPEN.includes(id)) {
+      toast.info(t('Please complete your profile first. The rest unlocks after you save it.'));
+      setActiveTab('profile');
+      return false;
+    }
+    setActiveTab(id);
+    return true;
+  };
+
+  if (session && needsMfa) {
     return (
       <>
-        <LoginPage onLogin={handleLogin} />
-        <Toaster position="top-right" closeButton richColors />
+        {mfaMode === 'email' ? <EmailChallenge onVerified={checkMfa} /> : <MfaChallenge onVerified={checkMfa} />}
+        <AppToaster />
       </>
     );
   }
 
+  if (!authReady || (session && !currentUser) || (currentUser?.role === 'alumni' && needsLink === null)) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-slate-50">
+        <LoadingState label="Loading..." />
+      </div>
+    );
+  }
+
+  if (session && currentUser && needsLink && !recoveringPassword) {
+    return (
+      <>
+        <LinkAlumniRecord defaultGivenName={currentUser.givenName} defaultLastName={currentUser.lastName} onLinked={() => setNeedsLink(false)} />
+        <AppToaster />
+      </>
+    );
+  }
+
+  if (session && currentUser && (recoveringPassword || currentUser.mustChangePassword)) {
+    const finish = async () => {
+      if (currentUser.mustChangePassword) {
+        await supabase.from('profiles').update({ must_change_password: false }).eq('id', currentUser.id);
+        setCurrentUser({ ...currentUser, mustChangePassword: false });
+      }
+      setRecoveringPassword(false);
+    };
+    return (
+      <>
+        <SetNewPassword
+          onDone={finish}
+          message={
+            currentUser.mustChangePassword
+              ? 'Welcome! You signed in with a temporary password. Please choose your own password to continue.'
+              : undefined
+          }
+        />
+        <AppToaster />
+        <ConfirmHost />
+      </>
+    );
+  }
+
+  if (!session || !currentUser) {
+    return (
+      <>
+        <LandingPage onSignIn={() => setAuthScreen('signin')} onSignUp={() => setAuthScreen('signup')} />
+        {authScreen && <LoginPage key={authScreen} initialMode={authScreen} onClose={() => setAuthScreen(null)} onPasswordRecovery={setRecoveringPassword} />}
+        <AppToaster />
+        <ConfirmHost />
+      </>
+    );
+  }
+
+  const userRole = currentUser.role;
   const isAdmin = userRole.startsWith('admin');
+  // The Super Admin only manages Alumni Affairs accounts
+  const isSuper = userRole === 'superadmin';
 
   // Convert role to clean label
-  const getRoleLabel = () => {
-    if (userRole === 'admin') return 'Super Admin';
-    if (userRole === 'admin.beed') return 'BEED Chair';
-    if (userRole === 'admin.bsit') return 'BSIT Chair';
-    if (userRole === 'admin.bsba-fm') return 'BSBA-FM Chair';
-    if (userRole === 'admin.bsba-om') return 'BSBA-OM Chair';
-    if (userRole === 'admin.bsoa') return 'BSOA Chair';
-    return 'Alumni Member';
-  };
-
-  const getSubLabel = () => {
-    if (userRole === 'admin') return 'Director';
-    if (userRole.startsWith('admin.')) return 'Program Chair';
-    return 'OMSC Graduate';
-  };
+  const getRoleLabel = () => roleLabel(userRole);
+  const getSubLabel = () => roleLabel(userRole);
+  const appName = isAdmin || isSuper ? 'OMSU Track' : 'OMSU Alumni';
 
   // Nav menu item details
   const adminMenuItems = [
-    { id: 'dashboard', label: 'Analytics', icon: <BarChart3 size={18} /> },
-    { id: 'records', label: 'Alumni Records', icon: <Users size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
-    { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
-    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
+    { id: 'dashboard', label: t('Analytics'), icon: <BarChart3 size={18} /> },
+    { id: 'records', label: t('Alumni Records'), icon: <Users size={18} /> },
+    { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
+    { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
+    { id: 'officials', label: t('Directory'), icon: <Contact2 size={18} /> },
+    ...(userRole === 'admin' ? [{ id: 'contact', label: t('Contact Info'), icon: <PhoneCall size={18} /> }] : []),
+    ...(userRole === 'admin' ? [{ id: 'accounts', label: t('Accounts'), icon: <UserCog size={18} /> }] : []),
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
   const alumniMenuItems = [
-    { id: 'home', label: 'Home', icon: <HomeIcon size={18} /> },
-    { id: 'profile', label: 'Tracer Survey Form', icon: <UserCircle size={18} /> },
-    { id: 'officials', label: 'College Officials', icon: <Users size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Megaphone size={18} /> },
-    { id: 'jobs', label: 'Job Board', icon: <Briefcase size={18} /> },
-    { id: 'contact', label: 'Contact Us', icon: <PhoneCall size={18} /> },
-    { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} /> },
+    { id: 'home', label: t('Home'), icon: <HomeIcon size={18} /> },
+    { id: 'profile', label: t('My Alumni Profile'), icon: <UserCircle size={18} /> },
+    { id: 'officials', label: t('Directory'), icon: <Users size={18} /> },
+    { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
+    { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
+    { id: 'contact', label: t('Contact Us'), icon: <PhoneCall size={18} /> },
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
   ];
 
-  const menuItems = isAdmin ? adminMenuItems : alumniMenuItems;
+  const superMenuItems = [
+    { id: 'accounts', label: t('Alumni Affairs Accounts'), icon: <UserCog size={18} /> },
+    { id: 'logs', label: t('Activity Logs'), icon: <ScrollText size={18} /> },
+    { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
+  ];
+
+  const menuItems = isSuper ? superMenuItems : isAdmin ? adminMenuItems : alumniMenuItems;
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] w-full bg-background text-foreground overflow-hidden font-sans">
@@ -209,12 +386,12 @@ export default function App() {
         {/* Sidebar Header */}
         <div className={`p-5 flex items-center border-b border-sidebar-border ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-border shrink-0 shadow-inner overflow-hidden p-0.5">
-            <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+            <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
           </div>
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm tracking-tight truncate">OMSC Tracer</h1>
-              <p className="text-[10px] text-white/65 font-bold tracking-widest uppercase">Tracer Platform</p>
+              <h1 className="font-extrabold text-sm tracking-tight truncate">{appName}</h1>
+              <p className="text-[11px] text-white/60">{t('Graduate Track')}</p>
             </div>
           )}
         </div>
@@ -228,14 +405,16 @@ export default function App() {
         </button>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-3 py-4 space-y-1">
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg font-semibold text-sm transition-all relative ${
+              onClick={() => goTab(item.id)}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors relative ${
+                profileGate && !GATE_OPEN.includes(item.id) ? 'opacity-40' : ''
+              } ${
                 activeTab === item.id 
-                  ? 'bg-white/10 text-white border-l-4 border-white' 
+                  ? 'bg-white/12 text-white' 
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
               title={sidebarCollapsed ? item.label : undefined}
@@ -265,7 +444,7 @@ export default function App() {
                 <p className="font-bold text-xs truncate leading-tight text-white">
                   {currentUser ? `${currentUser.givenName} ${currentUser.lastName}`.trim() : getRoleLabel()}
                 </p>
-                <p className="text-[10px] text-white/60 truncate mt-0.5">{currentUser?.title || getSubLabel()}</p>
+                <p className="text-[10px] text-white/60 truncate mt-0.5">{getSubLabel()}</p>
               </div>
             )}
           </div>
@@ -278,7 +457,7 @@ export default function App() {
             title={sidebarCollapsed ? 'Logout' : undefined}
           >
             <LogOut size={14} />
-            {!sidebarCollapsed && <span>Sign Out</span>}
+            {!sidebarCollapsed && <span>{t('Sign Out')}</span>}
           </button>
         </div>
       </aside>
@@ -290,11 +469,11 @@ export default function App() {
         <header className="md:hidden flex items-center justify-between px-6 py-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="w-9 h-9 bg-white border border-border rounded-full flex items-center justify-center overflow-hidden p-0.5">
-              <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+              <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm leading-none">OMSC Alumni</h1>
-              <p className="text-[9px] text-white/75 tracking-wider font-bold uppercase mt-0.5">Tracer Platform</p>
+              <h1 className="font-extrabold text-sm leading-none">{appName}</h1>
+              <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Track')}</p>
             </div>
           </div>
           <button 
@@ -314,9 +493,9 @@ export default function App() {
                 <div className="flex items-center justify-between pb-4 border-b border-sidebar-border">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-white border rounded-full overflow-hidden p-0.5">
-                      <img src={logo} alt="OMSC Logo" className="w-full h-full object-contain" />
+                      <img src={logo} alt="OMSU Logo" className="w-full h-full object-contain" />
                     </div>
-                    <span className="font-extrabold text-sm">OMSC Navigation</span>
+                    <span className="font-extrabold text-sm">{appName}</span>
                   </div>
                   <button 
                     onClick={() => setMobileMenuOpen(false)}
@@ -331,12 +510,14 @@ export default function App() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setActiveTab(item.id);
+                        goTab(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg font-semibold text-sm transition-all ${
+                      className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors ${
+                        profileGate && !GATE_OPEN.includes(item.id) ? 'opacity-40' : ''
+                      } ${
                         activeTab === item.id 
-                          ? 'bg-white/15 text-white border-l-4 border-white' 
+                          ? 'bg-white/12 text-white' 
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
@@ -364,7 +545,7 @@ export default function App() {
                     <p className="font-bold text-xs truncate leading-tight text-white">
                       {currentUser ? `${currentUser.givenName} ${currentUser.lastName}`.trim() : getRoleLabel()}
                     </p>
-                    <p className="text-[10px] text-white/60 truncate mt-0.5">{currentUser?.title || getSubLabel()}</p>
+                    <p className="text-[10px] text-white/60 truncate mt-0.5">{getSubLabel()}</p>
                   </div>
                 </div>
                 <button
@@ -372,7 +553,7 @@ export default function App() {
                   className="w-full flex items-center justify-center gap-2 py-3 bg-red-600/20 text-red-100 border border-red-500/20 hover:bg-red-600 font-bold text-xs rounded-lg transition-all"
                 >
                   <LogOut size={14} />
-                  Sign Out
+                  {t('Sign Out')}
                 </button>
               </div>
 
@@ -381,30 +562,46 @@ export default function App() {
         )}
 
         {/* 3. UNIFIED CONTENT VIEWPORT */}
-        <main className="flex-1 overflow-y-auto px-6 py-6 md:px-8 md:py-8 min-w-0">
-          {isAdmin ? (
+        <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
+          <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
+          {isSuper ? (
+            <>
+              {activeTab === 'accounts' && <AccountsManager currentUserId={currentUser.id} mode="super" />}
+              {activeTab === 'logs' && <ActivityLogs />}
+              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+            </>
+          ) : isAdmin ? (
             <>
               {activeTab === 'dashboard' && <Analytics userRole={userRole} />}
               {activeTab === 'records' && <AlumniRecords userRole={userRole} />}
-              {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
+              {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'officials' && <CollegeOfficialsDirectory />}
+              {activeTab === 'contact' && userRole === 'admin' && <ContactView editable />}
+              {activeTab === 'accounts' && userRole === 'admin' && <AccountsManager currentUserId={currentUser.id} />}
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
             </>
           ) : (
             <>
-              {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} />}
-              {activeTab === 'profile' && <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+              {activeTab === 'home' && <HomeView onStartSurvey={() => setActiveTab('profile')} userId={currentUser.id} firstName={currentUser.givenName} />}
+              {activeTab === 'profile' && (
+                <AlumniProfile currentUser={currentUser} onUpdateProfile={handleUpdateProfile} gate={profileGate} onSaved={() => refreshGate(currentUser.id)} />
+              )}
               {activeTab === 'officials' && <CollegeOfficialsDirectory />}
-              {activeTab === 'announcements' && <Announcements userRole={userRole} />}
-              {activeTab === 'jobs' && <JobBoard userRole={userRole} />}
+              {activeTab === 'announcements' && <Announcements userRole={userRole} authorName={`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
+              {activeTab === 'jobs' && <JobBoard userRole={userRole} userId={currentUser.id} posterName={isAdmin ? `${`${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} · ${roleLabel(userRole)}` : `${currentUser.givenName} ${currentUser.lastName}`.trim() || currentUser.email} />}
               {activeTab === 'contact' && <ContactView />}
-              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+              {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>
           )}
+          </div>
+          {/* Page buttons of the open list are shown here, always at the bottom edge of the screen */}
+          <div id="page-footer" className="sticky bottom-0 z-20 bg-background border-t border-border px-6 md:px-8 empty:hidden" />
         </main>
       </div>
 
-      <Toaster position="top-right" closeButton richColors />
+      <AppToaster />
+        <ConfirmHost />
     </div>
   );
 }
