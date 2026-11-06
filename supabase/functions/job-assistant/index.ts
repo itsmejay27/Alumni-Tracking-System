@@ -19,11 +19,17 @@ const DAILY_LIMIT = 20;
 const MAX_PAGE_CHARS = 60_000;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 // Tried in order; a model that is busy, used up, unavailable or fails falls through to the next one.
-// Each model has its own free daily limit. gemini-flash-latest is the one that has answered best so far.
-const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest'];
-// Free Gemma models with much higher free limits, tried last when every Gemini model is used up.
+// The light model answers in seconds and has its own free limit. gemini-3.8-flash allows only 20 free
+// requests a day and is often overloaded (gemini-flash-latest is another name for it, so it is not listed).
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.8-flash'];
+// Free Gemma models with much higher free limits, tried when the Gemini models are busy or used up.
 // They take no system prompt and no JSON mode, so the request is adapted for them.
 const GEMMA_MODELS = ['gemma-3-27b-it'];
+// Supabase stops a function after about 150 seconds. Answers must be back before this, measured from
+// the start of the request, so the person always gets a clear message instead of a cut-off request.
+const TIME_BUDGET_MS = 130_000;
+// Longest wait for one model before moving on to the next
+const MAX_WAIT_MS = 45_000;
 
 // ---------- Reading a job page safely ----------
 
@@ -212,8 +218,8 @@ type Part = { text: string } | { inline_data: { mime_type: string; data: string 
 
 type Source = { title: string; uri: string };
 
-async function callGemini(system: string, parts: Part[], schema?: unknown): Promise<string> {
-  return (await callGeminiFull(system, parts, { schema })).text;
+async function callGemini(system: string, parts: Part[], deadline: number, schema?: unknown): Promise<string> {
+  return (await callGeminiFull(system, parts, { schema, deadline })).text;
 }
 
 /** A sample of the JSON shape a schema describes, for models without JSON mode. */
@@ -250,9 +256,10 @@ function quotaReason(body: any): string {
 async function callGeminiFull(
   system: string,
   parts: Part[],
-  opts: { schema?: unknown; search?: boolean } = {}
+  opts: { schema?: unknown; search?: boolean; deadline?: number } = {}
 ): Promise<{ text: string; sources: Source[] }> {
   const { schema, search } = opts;
+  const deadline = opts.deadline ?? Date.now() + TIME_BUDGET_MS;
   // Main key first, then backup keys GEMINI_API_KEY1 ... GEMINI_API_KEY9
   const keys = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     .map((n) => (Deno.env.get(`GEMINI_API_KEY${n}`) || '').trim())
@@ -263,11 +270,12 @@ async function callGeminiFull(
   // Gemma only for plain text (no web search, no uploaded file)
   const gemmaOk = !search && parts.every((p) => 'text' in p);
 
-  // Every Gemini model on the first key, then on the next key; Gemma last
-  const tries = [
-    ...keys.flatMap((key, k) => models.map((model) => ({ key, model, gemma: false, label: `key${k || ''} ${model}` }))),
-    ...(gemmaOk ? keys.flatMap((key, k) => GEMMA_MODELS.map((model) => ({ key, model, gemma: true, label: `key${k || ''} ${model}` }))) : []),
-  ];
+  // For each key: the Gemini models, then Gemma. Busy models are not retried right away, because
+  // Google can take half a minute to say a model is busy; the next model is tried instead.
+  const tries = keys.flatMap((key, k) => [
+    ...models.map((model) => ({ key, model, gemma: false, label: `key${k || ''} ${model}` })),
+    ...(gemmaOk ? GEMMA_MODELS.map((model) => ({ key, model, gemma: true, label: `key${k || ''} ${model}` })) : []),
+  ]);
   const jsonHint = schema
     ? `\n\nReply with ONLY one JSON object, with no markdown and no other text, shaped like this example (replace every value):\n${JSON.stringify(schemaTemplate(schema))}`
     : '';
@@ -275,10 +283,13 @@ async function callGeminiFull(
   let lastError = '';
   let busy = false;
   let quotaHit = false;
-  const started = Date.now();
   for (const { key, model, gemma, label } of tries) {
-    // Stop before the server's time limit (about 150 s)
-    if (Date.now() - started > 100_000) break;
+    // Stop in time to answer before the server's time limit
+    const left = deadline - Date.now();
+    if (left < 8_000) {
+      busy = true;
+      break;
+    }
     const request = gemma
       ? {
           contents: [{ role: 'user', parts: [{ text: system + jsonHint }, ...parts] }],
@@ -292,80 +303,73 @@ async function callGeminiFull(
             ? { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.3 }
             : { temperature: search ? 0.2 : 0.6 },
         };
-    // Two tries per model: Google's "high demand" errors usually clear within seconds
-    for (let attempt = 0; attempt < 2; attempt++) {
-      let res: Response;
-      try {
-        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          signal: AbortSignal.timeout(search ? 45_000 : 60_000),
-          body: JSON.stringify(request),
-        });
-      } catch {
-        lastError = 'The AI service did not answer in time.';
-        console.error(`[gemini] ${label}: timed out`);
-        busy = true;
-        break; // try the next model
-      }
-      const body = await res.json().catch(() => ({}));
-      const message = String(body?.error?.message || '');
-      if (!res.ok) {
-        const quota = quotaReason(body);
-        console.error(`[gemini] ${label} (${search ? 'search' : 'text'}): ${res.status} ${body?.error?.status || ''} ${message}${quota ? ` | quota: ${quota}` : ''}`);
-      }
-      // A wrong or disabled key: try the next key
-      if ([400, 401, 403].includes(res.status) && /api key|permission|denied|disabled/i.test(message)) {
-        lastError = 'One of the Gemini API keys is not valid.';
-        break;
-      }
-      if (res.status === 429 || res.status >= 500) {
-        busy = true;
-        lastError = message || `AI service error (${res.status})`;
-        // A used-up daily limit will not clear in seconds: go straight to the next model
-        const quotaUsed = /quota/i.test(message);
-        if (quotaUsed) quotaHit = true;
-        if (attempt === 0 && !quotaUsed) {
-          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
-          continue;
-        }
-        break; // still busy: next model
-      }
-      // Any other error (model not found, a setting this model doesn't take, ...): next model
-      if (!res.ok) {
-        lastError = message || `AI service error (${res.status})`;
-        break;
-      }
-      if (body?.promptFeedback?.blockReason) throw new Error('The AI could not process this content.');
-      const cand = body?.candidates?.[0];
-      if (cand?.finishReason === 'SAFETY') throw new Error('The AI could not process this content.');
-      let text = (cand?.content?.parts || []).filter((p: any) => !p.thought).map((p: any) => p.text || '').join('');
-      if (!text.trim()) {
-        lastError = 'The AI returned no answer.';
-        console.error(`[gemini] ${label}: empty answer (${cand?.finishReason || 'no reason given'})`);
-        break; // next model
-      }
-      if (gemma && schema) {
-        // Gemma has no JSON mode: keep only the JSON object from its answer
-        const from = text.indexOf('{');
-        const to = text.lastIndexOf('}');
-        try {
-          text = text.slice(from, to + 1);
-          JSON.parse(text);
-        } catch {
-          lastError = 'The AI answer could not be read.';
-          console.error(`[gemini] ${label}: answer was not JSON`);
-          break;
-        }
-      }
-      const sources: Source[] = (cand?.groundingMetadata?.groundingChunks || [])
-        .map((c: any) => ({ title: String(c?.web?.title || ''), uri: String(c?.web?.uri || '') }))
-        .filter((s: Source) => /^https?:\/\//.test(s.uri));
-      console.log(`[gemini] answered by ${label}${search ? ' (search)' : ''}`);
-      return { text, sources };
+    let res: Response;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        signal: AbortSignal.timeout(Math.min(MAX_WAIT_MS, left - 3_000)),
+        body: JSON.stringify(request),
+      });
+    } catch {
+      lastError = 'The AI service did not answer in time.';
+      console.error(`[gemini] ${label}: timed out`);
+      busy = true;
+      continue; // next model
     }
+    const body = await res.json().catch(() => ({}));
+    const message = String(body?.error?.message || '');
+    const quota = res.ok ? '' : quotaReason(body);
+    if (!res.ok) {
+      console.error(`[gemini] ${label} (${search ? 'search' : 'text'}): ${res.status} ${body?.error?.status || ''} ${message}${quota ? ` | quota: ${quota}` : ''}`);
+    }
+    // A wrong or disabled key: next key
+    if ([400, 401, 403].includes(res.status) && /api key|permission|denied|disabled/i.test(message)) {
+      lastError = 'One of the Gemini API keys is not valid.';
+      continue;
+    }
+    if (res.status === 429 || res.status >= 500) {
+      lastError = message || `AI service error (${res.status})`;
+      // A used-up daily limit only clears tomorrow; anything else (overloaded, per-minute limit) soon
+      if (res.status === 429 && (/per day/i.test(message) || /PerDay/i.test(quota))) quotaHit = true;
+      else busy = true;
+      continue; // next model
+    }
+    // Any other error (model not found, a setting this model doesn't take, ...): next model
+    if (!res.ok) {
+      lastError = message || `AI service error (${res.status})`;
+      continue;
+    }
+    if (body?.promptFeedback?.blockReason) throw new Error('The AI could not process this content.');
+    const cand = body?.candidates?.[0];
+    if (cand?.finishReason === 'SAFETY') throw new Error('The AI could not process this content.');
+    let text = (cand?.content?.parts || []).filter((p: any) => !p.thought).map((p: any) => p.text || '').join('');
+    if (!text.trim()) {
+      lastError = 'The AI returned no answer.';
+      console.error(`[gemini] ${label}: empty answer (${cand?.finishReason || 'no reason given'})`);
+      continue; // next model
+    }
+    if (gemma && schema) {
+      // Gemma has no JSON mode: keep only the JSON object from its answer
+      const from = text.indexOf('{');
+      const to = text.lastIndexOf('}');
+      try {
+        text = text.slice(from, to + 1);
+        JSON.parse(text);
+      } catch {
+        lastError = 'The AI answer could not be read.';
+        console.error(`[gemini] ${label}: answer was not JSON`);
+        continue;
+      }
+    }
+    const sources: Source[] = (cand?.groundingMetadata?.groundingChunks || [])
+      .map((c: any) => ({ title: String(c?.web?.title || ''), uri: String(c?.web?.uri || '') }))
+      .filter((s: Source) => /^https?:\/\//.test(s.uri));
+    console.log(`[gemini] answered by ${label}${search ? ' (search)' : ''}`);
+    return { text, sources };
   }
-  // Google's daily free limit is a different problem from a short busy spell; say which one
+  // A short busy spell clears in minutes; say "tomorrow" only when every model is used up for the day
+  if (busy) throw new Error('The AI service is very busy right now. Please try again in a few minutes.');
   if (quotaHit) {
     throw new Error(
       search
@@ -373,7 +377,6 @@ async function callGeminiFull(
         : "Today's free AI limit has been reached. Please try again tomorrow."
     );
   }
-  if (busy) throw new Error('The AI service is very busy right now. Please try again in a minute.');
   throw new Error(lastError ? `The AI could not answer: ${lastError}` : 'No AI model is available for this API key.');
 }
 
@@ -389,6 +392,9 @@ Deno.serve(async (req) => {
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   const { data: caller } = await admin.auth.getUser(token);
   if (!caller?.user) return json({ error: 'Please sign in again.' }, 401);
+
+  // Everything below (reading a job page and asking the AI) must finish before this
+  const deadline = Date.now() + TIME_BUDGET_MS;
 
   let body: any;
   try {
@@ -419,7 +425,7 @@ Deno.serve(async (req) => {
         kind === 'cover_letter'
           ? `You help Occidental Mindoro State University (OMSU) graduates apply for jobs. Write a short, honest cover letter (180-250 words) in ${language === 'simple English' ? 'clear professional English' : language}. Use only facts from the applicant profile; never invent experience. Leave [brackets] where the applicant must fill something in. Plain text, no markdown headings.`
           : `You help Occidental Mindoro State University (OMSU) graduates prepare for job interviews. Write in ${language}. Give 8 likely interview questions for this job. For each: the question, why employers ask it, and a short sample answer based only on the applicant profile, with [brackets] where they should add their own details. Use simple markdown (numbered list, bold questions).`;
-      const text = await callGemini(system, [{ text: `Job analysis:\n${job}\n\nApplicant profile:\n${profile || 'Not provided'}` }]);
+      const text = await callGemini(system, [{ text: `Job analysis:\n${job}\n\nApplicant profile:\n${profile || 'Not provided'}` }], deadline);
       await admin.from('ai_usage').insert({ user_id: caller.user.id, action: kind });
       return json({ text });
     }
@@ -452,7 +458,7 @@ Rules:
       ]
         .filter(Boolean)
         .join('\n');
-      const { text, sources } = await callGeminiFull(system, [{ text: ask }], { search: true });
+      const { text, sources } = await callGeminiFull(system, [{ text: ask }], { search: true, deadline });
       // Pull the JSON object out even if the model wrapped it in text or code fences
       const start = text.indexOf('{');
       const end = text.lastIndexOf('}');
@@ -528,7 +534,7 @@ Rules:
 - Skills check: compare the requirements with the applicant profile. If the profile is empty, use verdict "Not enough information" and give general advice.
 - Warnings: flag scam signs (fees to apply, requests for IDs or bank details early, unrealistic pay, vague employer, chat-app-only contact). Use an empty list if none.
 - If the input is not a job posting, set isJobPosting to false and explain briefly in the summary.`;
-    const raw = await callGemini(system, parts, ANALYSIS_SCHEMA);
+    const raw = await callGemini(system, parts, deadline, ANALYSIS_SCHEMA);
     let analysis: unknown;
     try {
       // Every field the page shows is filled in, even if the AI left one out
