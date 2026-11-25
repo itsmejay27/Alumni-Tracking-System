@@ -534,4 +534,8 @@ export const FIL: Record<string, string> = {
   months: "buwan",
   "Less than a month": "Wala pang isang buwan",
   "e.g. Mamburao Campus": "hal. Mamburao Campus",
+  "Related Programs": "Kaugnay na mga Programa",
+  "Choose one or more, or none for any program.": "Pumili ng isa o higit pa, o wala para sa kahit anong programa.",
+  "{program} departments only": "Mga departamento ng {program} lamang",
+  "Alumni and program chairs of {program}": "Mga alumni at program chair ng {program}",
 };

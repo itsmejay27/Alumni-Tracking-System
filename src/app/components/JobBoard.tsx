@@ -89,7 +89,8 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           postedDate: new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           contactEmail: j.contact_email,
           createdBy: j.created_by,
-          program: j.program,
+          // Several programs are shown as "BSIT, BSOA"
+          program: j.programs?.length ? j.programs.join(', ') : j.program,
           createdAt: j.created_at,
           // Before the approval update is installed every job counts as approved
           status: j.status || 'approved',
@@ -159,7 +160,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
 
   const shown = isAffairs && view === 'review' ? pendingJobs : liveJobs;
   const typeFiltered = filterType === 'all' ? shown : shown.filter((job) => job.type === filterType);
-  const matchScore = (j: JobPosting) => (myProgram && j.program === myProgram ? 2 : j.program ? 0 : 1);
+  const matchScore = (j: JobPosting) => (myProgram && splitPrograms(j.program).includes(myProgram) ? 2 : j.program ? 0 : 1);
   const filteredJobs = [...typeFiltered].sort((a, b) =>
     sortBy === 'match' && myProgram
       ? matchScore(b) - matchScore(a) || b.createdAt.localeCompare(a.createdAt)
@@ -743,16 +744,17 @@ function JobPostingForm({
       requirements: formData.requirements.split('\n').map((r) => r.trim()).filter(Boolean),
       contact_email: formData.contactEmail.trim(),
       posted_by: posterName,
-      program: formData.program || null,
+      program: splitPrograms(formData.program)[0] || null,
       created_by: user?.id,
     };
+    const programs = splitPrograms(formData.program);
     let { data: created, error } = await supabase
       .from('jobs')
-      .insert({ ...row, email_audience: emailAudience })
+      .insert({ ...row, programs, email_audience: emailAudience })
       .select('id, status')
       .single();
     // Database without the approval update yet: post the old way
-    if (error && /email_audience|status/.test(error.message)) {
+    if (error && /email_audience|status|programs/.test(error.message)) {
       ({ data: created, error } = await supabase.from('jobs').insert(row).select('id').single() as any);
     }
     if (error) {
@@ -879,17 +881,31 @@ function JobPostingForm({
           </div>
 
           <div>
-            <label className="block text-sm mb-1.5">{t('Related Program')}</label>
-            <select
-              value={formData.program}
-              onChange={(e) => setFormData({ ...formData, program: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">{t('Any program')}</option>
-              {PROGRAMS.map((p) => (
-                <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
-              ))}
-            </select>
+            <span className="block text-sm mb-1.5">{t('Related Programs')}</span>
+            <div className="flex flex-wrap gap-2" role="group" aria-label={t('Related Programs')}>
+              {PROGRAMS.map((p) => {
+                const list = splitPrograms(formData.program);
+                const on = list.includes(p.code);
+                return (
+                  <label
+                    key={p.code}
+                    title={p.name}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-input-background border-border hover:bg-muted'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={on}
+                      onChange={() =>
+                        setFormData({ ...formData, program: (on ? list.filter((c) => c !== p.code) : PROGRAMS.map((x) => x.code).filter((c) => c === p.code || list.includes(c))).join(', ') })
+                      }
+                    />
+                    {p.code}
+                  </label>
+                );
+              })}
+            </div>
+            <span className="block text-xs text-muted-foreground mt-1">{t('Choose one or more, or none for any program.')}</span>
           </div>
 
           <div>
@@ -942,7 +958,19 @@ function JobPostingForm({
               {(
                 [
                   ['everyone', t('Everyone'), t('All alumni, program chairs and Alumni Affairs')],
-                  ['department', formData.program ? t('{program} department only', { program: formData.program }) : t('My department only'), formData.program ? t('{program} alumni and the {program} chair', { program: formData.program }) : t('Choose a Related Program above first')],
+                  [
+                    'department',
+                    !formData.program
+                      ? t('My department only')
+                      : splitPrograms(formData.program).length > 1
+                        ? t('{program} departments only', { program: formData.program })
+                        : t('{program} department only', { program: formData.program }),
+                    !formData.program
+                      ? t('Choose a Related Program above first')
+                      : splitPrograms(formData.program).length > 1
+                        ? t('Alumni and program chairs of {program}', { program: formData.program })
+                        : t('{program} alumni and the {program} chair', { program: formData.program }),
+                  ],
                 ] as const
               ).map(([value, title, sub]) => {
                 const disabled = value === 'department' && !formData.program;
@@ -987,4 +1015,9 @@ function JobPostingForm({
     </div>,
     document.body
   );
+}
+
+/** "BSIT, BSOA" (or a single code) -> ['BSIT', 'BSOA'] */
+function splitPrograms(value: string | null | undefined): string[] {
+  return (value || '').split(',').map((v) => v.trim()).filter(Boolean);
 }
