@@ -68,6 +68,8 @@ export interface AlumniRecord {
    * record by name only. The database keeps the earlier details hidden until then.
    */
   verification?: 'pending';
+  /** Removed by staff (wrong entry). Hidden from lists and reports; staff can restore it. */
+  archived?: boolean;
   suggestions?: string;
   isPublic?: boolean;
 
@@ -137,7 +139,7 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
   const lastName = d.lastName || '';
   return {
     middleName: '',
-    sex: 'Male',
+    sex: '', // unknown stays unknown (913 imported records have no sex on file)
     dateOfBirth: '',
     civilStatus: 'Single',
     mobileNo: '',
@@ -160,7 +162,7 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
 }
 
 /** Loads every tracer record the signed-in user is allowed to see (row level security does the scoping). */
-export function useAlumniRecords() {
+export function useAlumniRecords(options: { includeRemoved?: boolean } = {}) {
   const [records, setRecords] = useState<AlumniRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,10 +190,11 @@ export function useAlumniRecords() {
       setError(failed);
     } else {
       setError(null);
-      setRecords(all.map(rowToRecord));
+      const recs = all.map(rowToRecord);
+      setRecords(options.includeRemoved ? recs : recs.filter((r) => !r.archived));
     }
     setLoading(false);
-  }, []);
+  }, [options.includeRemoved]);
 
   useEffect(() => {
     reload();
@@ -268,4 +271,32 @@ export function missingProfileFields(r: AlumniRecord | null): string[] {
     else if ((r.employmentHistory || []).some((h) => !h.endDate && !h.proofPath)) missing.push('Proof of employment');
   }
   return missing;
+}
+
+/**
+ * Staff change only the given fields of a record's data (and optionally its program/batch/email).
+ * Reads the stored data first so display defaults are never written back. A field set to
+ * undefined is removed. Resolves false when the database refused the change.
+ */
+export async function patchRecord(
+  id: string,
+  patch: Partial<Record<keyof AlumniRecord, unknown>>,
+  columns: { course?: Course; batch?: string; email?: string | null } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: row, error: readError } = await supabase.from('alumni_records').select('data').eq('id', id).maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!row) return { ok: false, error: "You can't change this record." };
+  const data: Record<string, unknown> = { ...(row.data as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete data[k];
+    else data[k] = v;
+  }
+  const { data: saved, error } = await supabase
+    .from('alumni_records')
+    .update({ ...columns, data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  if (!saved?.length) return { ok: false, error: "You can't change this record." };
+  return { ok: true };
 }

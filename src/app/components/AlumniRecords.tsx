@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
 import { mdy } from '@/lib/dates';
+import { facebookUrl, capitalizeWords } from '@/lib/text';
+import { programName, PROGRAMS } from '@/lib/programs';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
-import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
+import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom, patchRecord } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
   s === 'Employed'
@@ -28,9 +30,12 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const [filterBatch, setFilterBatch] = useState<string>('all');
   const [filterCourse, setFilterCourse] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'class-new' | 'class-old' | 'status' | 'updated'>('name');
   const [selectedRecord, setSelectedRecord] = useState<AlumniRecord | null>(null);
   const [viewTab, setViewTab] = useState<'records' | 'suggestions'>('records');
-  const { records, loading, error, reload } = useAlumniRecords();
+  const { records: everyRecord, loading, error, reload } = useAlumniRecords({ includeRemoved: true });
+  const removedRecords = everyRecord.filter((r) => r.archived);
+  const records = filterStatus === 'removed' ? removedRecords : everyRecord.filter((r) => !r.archived);
   const [showImport, setShowImport] = useState(false);
 
   const isSuperAdmin = userRole === 'admin';
@@ -68,11 +73,23 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     // 5. Status Filter
     const matchesStatus =
       filterStatus === 'all' ||
+      filterStatus === 'removed' ||
       (filterStatus === 'pending' ? record.verification === 'pending' : record.status === filterStatus);
 
     return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
   });
 
+  const STATUS_ORDER: Record<string, number> = { Employed: 0, 'Self-Employed': 1, Unemployed: 2, 'Not Tracked': 3 };
+  const byName = (a: AlumniRecord, b: AlumniRecord) => a.lastName.localeCompare(b.lastName) || a.givenName.localeCompare(b.givenName);
+  filteredRecords.sort((a, b) => {
+    switch (sortBy) {
+      case 'class-new': return (b.yearGraduated || 0) - (a.yearGraduated || 0) || byName(a, b);
+      case 'class-old': return (a.yearGraduated || 0) - (b.yearGraduated || 0) || byName(a, b);
+      case 'status': return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || byName(a, b);
+      case 'updated': return (b.respondedAt || '').localeCompare(a.respondedAt || '') || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
   const pendingCount = records.filter((r) => r.verification === 'pending' && (!courseScope || r.course === courseScope)).length;
   const paged = usePaged(filteredRecords, 15);
   const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
@@ -198,7 +215,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
         <>
           {/* Filters */}
           <div className="bg-card rounded-2xl p-5 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Search */}
               <div className="relative md:col-span-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -259,6 +276,23 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <option value="Unemployed">Unemployed</option>
                   <option value="Not Tracked">Not tracked</option>
                   <option value="pending">Waiting for verification{pendingCount ? ` (${pendingCount})` : ''}</option>
+                  <option value="removed">Removed records{removedRecords.length ? ` (${removedRecords.length})` : ''}</option>
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  aria-label="Sort graduates"
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
+                >
+                  <option value="name">Sort: Name (A–Z)</option>
+                  <option value="class-new">Sort: Class (newest first)</option>
+                  <option value="class-old">Sort: Class (oldest first)</option>
+                  <option value="status">Sort: Status</option>
+                  <option value="updated">Sort: Recently updated</option>
                 </select>
               </div>
             </div>
@@ -424,9 +458,15 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     <Mail size={12} /> Contact Email
                   </a>
                   {r.facebookName && (
-                    <span className="text-muted-foreground flex items-center gap-1.5">
+                    <a
+                      href={facebookUrl(r.facebookName) || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1.5"
+                      title="Open on Facebook"
+                    >
                       <Facebook size={12} /> {r.facebookName}
-                    </span>
+                    </a>
                   )}
                   <span className="text-muted-foreground ml-auto">Last updated: {r.lastUpdated}</span>
                 </div>
@@ -448,11 +488,13 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       )}
 
       {/* Detail Modal */}
-      {showImport && <CsvImport scope={courseScope as any} existing={records} onDone={reload} onClose={() => setShowImport(false)} />}
+      {showImport && <CsvImport scope={courseScope as any} existing={everyRecord} onDone={reload} onClose={() => setShowImport(false)} />}
 
       {selectedRecord && (
         <RecordDetailModal
           record={selectedRecord}
+          allRecords={everyRecord}
+          canRemove={isSuperAdmin || !!courseScope}
           onClose={() => setSelectedRecord(null)}
           onChanged={() => {
             setSelectedRecord(null);
@@ -464,7 +506,36 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   );
 }
 
-function RecordDetailModal({ record, onClose, onChanged }: { record: AlumniRecord; onClose: () => void; onChanged: () => void }) {
+function RecordDetailModal({
+  record,
+  allRecords,
+  canRemove,
+  onClose,
+  onChanged,
+}: {
+  record: AlumniRecord;
+  allRecords: AlumniRecord[];
+  canRemove: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const setRemoved = async (removed: boolean) => {
+    const ok = await confirmDialog(
+      removed
+        ? { title: 'Remove this record?', message: 'Use this for a wrong or duplicate entry. It is hidden from lists and reports, and you can restore it from "Removed records".', confirmLabel: 'Remove', danger: true }
+        : { title: 'Restore this record?', message: 'It shows again in lists and reports.', confirmLabel: 'Restore' }
+    );
+    if (!ok) return;
+    setBusy(true);
+    const res = await patchRecord(record.id, { archived: removed ? true : undefined });
+    setBusy(false);
+    if (!res.ok) return toast.error(`Couldn't save: ${res.error}`);
+    toast.success(removed ? 'Record removed. Restore it from "Removed records".' : 'Record restored');
+    onChanged();
+  };
+  if (editing) return <EditRecord record={record} allRecords={allRecords} onClose={() => setEditing(false)} onSaved={onChanged} />;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
@@ -499,6 +570,26 @@ function RecordDetailModal({ record, onClose, onChanged }: { record: AlumniRecor
         </div>
 
         <div className="space-y-6 pt-6">
+          <div className="flex flex-wrap gap-2">
+            {!record.archived && (
+              <button type="button" onClick={() => setEditing(true)} className="px-3.5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90">
+                Edit record
+              </button>
+            )}
+            {canRemove && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setRemoved(!record.archived)}
+                className={`px-3.5 py-2 rounded-lg text-sm font-semibold border disabled:opacity-60 ${record.archived ? 'border-border hover:bg-muted' : 'border-red-300 text-red-700 hover:bg-red-50'}`}
+              >
+                {record.archived ? 'Restore record' : 'Remove record'}
+              </button>
+            )}
+          </div>
+          {record.archived && (
+            <p className="rounded-xl bg-muted px-4 py-3 text-sm">This record was removed. It is hidden from lists, reports and reminders until restored.</p>
+          )}
           {record.verification === 'pending' && <VerifyClaim record={record} onDone={onChanged} />}
 
           {/* PERSONAL INFRASTRUCTURE DETAILS */}
@@ -519,7 +610,13 @@ function RecordDetailModal({ record, onClose, onChanged }: { record: AlumniRecor
                 <p className="text-xs text-muted-foreground font-semibold">Facebook Profile</p>
                 <div className="flex items-center gap-1 text-blue-600 font-bold mt-0.5 break-all">
                   <Facebook size={14} className="shrink-0" />
-                  <span>{record.facebookName}</span>
+                  {record.facebookName ? (
+                    <a href={facebookUrl(record.facebookName) || undefined} target="_blank" rel="noopener noreferrer" className="hover:underline" title="Open on Facebook">
+                      {record.facebookName}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground font-normal">Not given</span>
+                  )}
                 </div>
               </div>
               <div>
@@ -585,11 +682,11 @@ function RecordDetailModal({ record, onClose, onChanged }: { record: AlumniRecor
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Finished Course / Degree</p>
-                <p className="font-bold text-foreground mt-0.5">{record.course}</p>
+                <p className="text-xs text-muted-foreground font-semibold">Program</p>
+                <p className="font-bold text-foreground mt-0.5">{programName(record.course)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Academic Year Graduated</p>
+                <p className="text-xs text-muted-foreground font-semibold">Year Graduated (Academic Year)</p>
                 <p className="font-bold text-foreground mt-0.5">{record.batch}</p>
               </div>
               <div>
@@ -880,6 +977,138 @@ function VerifyClaim({ record, onDone }: { record: AlumniRecord; onDone: () => v
           Reject
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Staff edit a graduate's record (panel: Program Head can update student data, fix a wrong batch).
+ * Nothing changes until Save. Program chairs keep records in their own program; Alumni Affairs
+ * can also move a record to another program.
+ */
+function EditRecord({ record, allRecords, onClose, onSaved }: { record: AlumniRecord; allRecords: AlumniRecord[]; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState({
+    givenName: record.givenName,
+    middleName: record.middleName || '',
+    lastName: record.lastName,
+    course: record.course,
+    yearGraduated: record.yearGraduated || new Date().getFullYear(),
+    sex: record.sex || '',
+    dateOfBirth: record.dateOfBirth || '',
+    mobileNo: record.mobileNo || '',
+    email: record.email || '',
+    presentAddress: record.presentAddress || '',
+    permanentAddress: record.permanentAddress || '',
+    status: record.status,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (patch: Partial<typeof f>) => setF((v) => ({ ...v, ...patch }));
+  const years = Array.from({ length: new Date().getFullYear() - 1979 }, (_, i) => new Date().getFullYear() + 1 - i);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const givenName = capitalizeWords(f.givenName);
+    const lastName = capitalizeWords(f.lastName);
+    const middleName = capitalizeWords(f.middleName);
+    if (!givenName || !lastName) return setError('Enter the first and last name.');
+    if (f.mobileNo && !/^09\d{9}$/.test(f.mobileNo)) return setError('Mobile number must be 11 digits starting with 09.');
+    if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) return setError('Enter a valid email address, or leave it empty.');
+    const key = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+    const dup = allRecords.find(
+      (r) => r.id !== record.id && !r.archived && r.course === f.course && key(r.givenName) === key(givenName) && key(r.lastName) === key(lastName),
+    );
+    if (dup && !(await confirmDialog({ title: 'Possible duplicate', message: `${dup.givenName} ${dup.lastName} (${dup.course}, ${dup.batch}) is already on file. Save anyway?`, confirmLabel: 'Save anyway' }))) return;
+
+    const data = {
+      givenName,
+      middleName,
+      lastName,
+      yearGraduated: Number(f.yearGraduated),
+      sex: f.sex,
+      dateOfBirth: f.dateOfBirth,
+      mobileNo: f.mobileNo,
+      email: f.email.trim().toLowerCase(),
+      presentAddress: f.presentAddress.trim(),
+      permanentAddress: f.permanentAddress.trim(),
+      status: f.status,
+    };
+    // Only send what changed, so untouched fields keep exactly what is stored
+    const before: Record<string, unknown> = {
+      givenName: record.givenName, middleName: record.middleName || '', lastName: record.lastName, yearGraduated: record.yearGraduated,
+      sex: record.sex || '', dateOfBirth: record.dateOfBirth || '', mobileNo: record.mobileNo || '', email: (record.email || '').toLowerCase(),
+      presentAddress: record.presentAddress || '', permanentAddress: record.permanentAddress || '', status: record.status,
+    };
+    const patch = Object.fromEntries(Object.entries(data).filter(([k, v]) => v !== before[k]));
+    const moved = f.course !== record.course || Number(f.yearGraduated) !== record.yearGraduated;
+    if (!Object.keys(patch).length && !moved) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    const res = await patchRecord(record.id, patch, {
+      course: f.course,
+      batch: `${Number(f.yearGraduated) - 1}-${f.yearGraduated}`,
+      ...('email' in patch ? { email: data.email || null } : {}),
+    });
+    setBusy(false);
+    if (!res.ok) return setError(/row-level security|policy/i.test(res.error || '') ? 'You can only keep records in your own program.' : res.error || 'Could not save.');
+    toast.success('Record saved');
+    onSaved();
+  };
+
+  const field = 'w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm';
+  const label = 'block text-xs font-semibold text-muted-foreground mb-1';
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Edit record">
+      <form onSubmit={save} className="bg-card rounded-2xl p-5 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-lg space-y-5 my-auto">
+        <div>
+          <h3 className="text-xl font-bold">Edit record</h3>
+          <p className="text-sm text-muted-foreground mt-1">Nothing changes until you save. Every change is kept in the record history and the activity log.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label><span className={label}>First name *</span><input required value={f.givenName} onChange={(e) => set({ givenName: e.target.value })} className={field} /></label>
+          <label><span className={label}>Middle name</span><input value={f.middleName} onChange={(e) => set({ middleName: e.target.value })} className={field} /></label>
+          <label><span className={label}>Last name *</span><input required value={f.lastName} onChange={(e) => set({ lastName: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-2">
+            <span className={label}>Program</span>
+            <select value={f.course} onChange={(e) => set({ course: e.target.value as AlumniRecord['course'] })} className={field}>
+              {PROGRAMS.map((p) => <option key={p.code} value={p.code}>{p.code} – {p.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className={label}>Year graduated</span>
+            <select value={f.yearGraduated} onChange={(e) => set({ yearGraduated: Number(e.target.value) })} className={field}>
+              {years.map((y) => <option key={y} value={y}>{y - 1}-{y}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className={label}>Sex</span>
+            <select value={f.sex} onChange={(e) => set({ sex: e.target.value as AlumniRecord['sex'] })} className={field}>
+              <option value="">Not given</option><option>Male</option><option>Female</option>
+            </select>
+          </label>
+          <label><span className={label}>Date of birth</span><input type="date" value={f.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} className={field} /></label>
+          <label>
+            <span className={label}>Employment status</span>
+            <select value={f.status} onChange={(e) => set({ status: e.target.value as AlumniRecord['status'] })} className={field}>
+              <option>Employed</option><option>Self-Employed</option><option>Unemployed</option><option value="Not Tracked">Not tracked</option>
+            </select>
+          </label>
+          <label><span className={label}>Mobile no.</span><input inputMode="numeric" value={f.mobileNo} onChange={(e) => set({ mobileNo: e.target.value.replace(/\D/g, '').slice(0, 11) })} className={field} placeholder="09XXXXXXXXX" /></label>
+          <label className="sm:col-span-2"><span className={label}>Email</span><input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-3"><span className={label}>Present address</span><input value={f.presentAddress} onChange={(e) => set({ presentAddress: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-3"><span className={label}>Permanent address</span><input value={f.permanentAddress} onChange={(e) => set({ permanentAddress: e.target.value })} className={field} /></label>
+        </div>
+        {error && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-sm font-medium">Cancel</button>
+          <button type="submit" disabled={busy} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+            {busy ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

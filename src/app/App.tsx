@@ -1,21 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { LoginPage, AuthMode } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
-import { AccountsManager } from './components/AccountsManager';
-import { ActivityLogs } from './components/ActivityLogs';
 import { LinkAlumniRecord } from './components/LinkAlumniRecord';
-import { AlumniRecords } from './components/AlumniRecords';
-import { Analytics } from './components/Analytics';
-import { JobBoard } from './components/JobBoard';
-import { AlumniProfile } from './components/AlumniProfile';
-import { CollegeOfficialsDirectory } from './components/CollegeOfficialsDirectory';
-import { Announcements } from './components/Announcements';
 import { Home as HomeView } from './components/Home';
-import { Contact as ContactView } from './components/Contact';
-import { Settings as SettingsView } from './components/Settings';
+
+// Pages load when first opened, so the first screen downloads much less (panel: slow loading)
+const AccountsManager = lazy(() => import('./components/AccountsManager').then((m) => ({ default: m.AccountsManager })));
+const ActivityLogs = lazy(() => import('./components/ActivityLogs').then((m) => ({ default: m.ActivityLogs })));
+const AlumniRecords = lazy(() => import('./components/AlumniRecords').then((m) => ({ default: m.AlumniRecords })));
+const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })));
+const JobBoard = lazy(() => import('./components/JobBoard').then((m) => ({ default: m.JobBoard })));
+const AlumniProfile = lazy(() => import('./components/AlumniProfile').then((m) => ({ default: m.AlumniProfile })));
+const CollegeOfficialsDirectory = lazy(() => import('./components/CollegeOfficialsDirectory').then((m) => ({ default: m.CollegeOfficialsDirectory })));
+const Announcements = lazy(() => import('./components/Announcements').then((m) => ({ default: m.Announcements })));
+const ContactView = lazy(() => import('./components/Contact').then((m) => ({ default: m.Contact })));
+const SettingsView = lazy(() => import('./components/Settings').then((m) => ({ default: m.Settings })));
 import { toast } from 'sonner';
 import { AppToaster } from './components/AppToaster';
 import { ConfirmHost } from './components/ConfirmDialog';
@@ -564,6 +566,7 @@ function AppInner() {
         {/* 3. UNIFIED CONTENT VIEWPORT */}
         <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
           <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
+          <Suspense fallback={<LoadingState />}>
           {isSuper ? (
             <>
               {activeTab === 'accounts' && <AccountsManager currentUserId={currentUser.id} mode="super" />}
@@ -594,6 +597,7 @@ function AppInner() {
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>
           )}
+          </Suspense>
           </div>
           {/* Page buttons of the open list are shown here, always at the bottom edge of the screen */}
           <div id="page-footer" className="sticky bottom-0 z-20 bg-background border-t border-border px-6 md:px-8 empty:hidden" />
