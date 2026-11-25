@@ -320,7 +320,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
       </div>
 
 
-      <ReminderPanel scope={scope} />
+      <ReminderPanel scope={scope} records={records} />
     </div>
   );
 }
@@ -585,8 +585,37 @@ function Stat({ label, value, note }: { label: string; value: React.ReactNode; n
 }
 
 /** Program chairs ask their alumni (by email) to update their tracer record. */
-function ReminderPanel({ scope }: { scope: Course | null }) {
+function ReminderPanel({ scope, records }: { scope: Course | null; records: AlumniRecord[] }) {
   const [course, setCourse] = useState<string>(scope || 'BSIT');
+  const [audience, setAudience] = useState<'accounts' | 'invite' | 'both'>('accounts');
+  // Graduates of this program who have no account yet (panel: reach every graduate)
+  const isMail = (v?: string) => !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const isMobile = (v?: string) => /^09\d{9}$/.test(v || '');
+  const noAccount = records.filter((r) => r.course === course && !r.accountLinked);
+  const withEmail = noAccount.filter((r) => isMail(r.email)).length;
+  const withMobileOnly = noAccount.filter((r) => !isMail(r.email) && isMobile(r.mobileNo)).length;
+  const withFacebookOnly = noAccount.filter((r) => !isMail(r.email) && !isMobile(r.mobileNo) && (r.facebookName || '').trim()).length;
+  const unreachable = noAccount.length - withEmail - withMobileOnly - withFacebookOnly;
+  const downloadContacts = () => {
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Last Name', 'Given Name', 'Middle Name', 'Program', 'Year Graduated', 'Email', 'Mobile No.', 'Facebook Name', 'How to reach'],
+      ...[...noAccount]
+        .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.givenName.localeCompare(b.givenName))
+        .map((r) => [
+          r.lastName, r.givenName, r.middleName, r.course, r.yearGraduated || r.batch,
+          isMail(r.email) ? r.email : '', isMobile(r.mobileNo) ? r.mobileNo : '', r.facebookName || '',
+          isMail(r.email) ? 'Email invitation' : isMobile(r.mobileNo) ? 'Text message' : (r.facebookName || '').trim() ? 'Facebook message' : 'No contact on file',
+        ]),
+    ];
+    const blob = new Blob([rows.map((r) => r.map(cell).join(',')).join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OMSU_${course}_No_Account_Contacts_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const [minYears, setMinYears] = useState('1');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -604,16 +633,20 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
   }, [course, sending]);
 
   const send = async () => {
-    const target = minYears === '0' ? 'all alumni with an account' : `alumni who haven't updated in ${minYears}+ year(s)`;
+    const reminderText =
+      minYears === '0'
+        ? tr('{program} alumni with an account get a reminder to update.', { program: course })
+        : tr("{program} alumni who haven't updated in {n}+ year(s) get a reminder.", { program: course, n: minYears });
+    const inviteText = tr('{n} {program} graduates without an account get an invitation to sign up (each at most once every 30 days).', { n: withEmail, program: course });
     const ok = await confirmDialog({
-      title: tr('Send update reminder?'),
-      message: `An email will be sent to ${course} ${target}.`,
-      confirmLabel: tr('Send reminder'),
+      title: tr('Send these emails?'),
+      message: audience === 'accounts' ? reminderText : audience === 'invite' ? inviteText : `${reminderText} ${inviteText}`,
+      confirmLabel: tr('Send'),
     });
     if (!ok) return;
     setSending(true);
     const { data, error } = await supabase.functions.invoke('send-reminders', {
-      body: { course, minYears: Number(minYears), message },
+      body: { course, minYears: Number(minYears), message, audience },
     });
     setSending(false);
     if (error) {
@@ -627,7 +660,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
       toast.error(msg);
       return;
     }
-    toast.success(data.sent ? `Reminder sent to ${data.sent} alumni` : 'Nobody needs a reminder right now');
+    if (!data.sent) toast.info(data.skippedRecent ? tr('Nobody to email right now. {n} were already invited in the last 30 days.', { n: data.skippedRecent }) : tr('Nobody needs a reminder right now'));
+    else if (data.invited) toast.success(tr('Emails sent: {a} reminders and {b} invitations.', { a: data.reminded ?? 0, b: data.invited }));
+    else toast.success(tr('Reminder sent to {n} alumni', { n: data.sent }));
     setMessage('');
   };
 
@@ -635,9 +670,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
       <h3 className="font-semibold">{tr("Ask alumni to update their data")}</h3>
       <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-        {tr('Sends an email to alumni of the program who have an account.')} {last && tr('Last sent {date} to {n} alumni.', { date: mdy(last.created_at), n: last.recipients })}
+        {tr('Sends a reminder to alumni with an account, and an invitation to sign up to graduates without one.')} {last && tr('Last sent {date} to {n} alumni.', { date: mdy(last.created_at), n: last.recipients })}
       </p>
-      <div className="grid gap-3 md:grid-cols-[auto_auto_1fr_auto] md:items-center">
+      <div className="grid gap-3 md:grid-cols-[auto_auto_auto_1fr_auto] md:items-center">
         {!scope && (
           <select value={course} onChange={(e) => setCourse(e.target.value)} className="filter-select">
             {PROGRAMS.map((p) => (
@@ -645,7 +680,12 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
             ))}
           </select>
         )}
-        <select value={minYears} onChange={(e) => setMinYears(e.target.value)} className="filter-select">
+        <select value={audience} onChange={(e) => setAudience(e.target.value as typeof audience)} className="filter-select" aria-label={tr('Who gets the email')}>
+          <option value="accounts">{tr('Alumni with an account (reminder)')}</option>
+          <option value="invite">{tr('Graduates without an account (invitation)')}</option>
+          <option value="both">{tr('Both')}</option>
+        </select>
+        <select value={minYears} disabled={audience === 'invite'} onChange={(e) => setMinYears(e.target.value)} className="filter-select disabled:opacity-50">
           <option value="1">{tr("Follow up update: 1+ year")}</option>
           <option value="2">{tr("Follow up update: 2+ years")}</option>
           <option value="3">{tr("Follow up update: 3+ years")}</option>
@@ -664,6 +704,32 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
         >
           <Send size={15} /> {sending ? tr('Sending...') : tr('Send reminder')}
         </button>
+      </div>
+
+      {/* Graduates without an account: who can be reached, and how */}
+      <div className="mt-5 rounded-xl border border-border p-4 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">{tr('{program} graduates without an account: {n}', { program: course, n: noAccount.length })}</p>
+            <p className="text-xs text-muted-foreground">{tr('Email invitations reach those with an email on file. Download the list to reach the rest by text or Facebook.')}</p>
+          </div>
+          <button type="button" onClick={downloadContacts} disabled={!noAccount.length} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted disabled:opacity-50 shrink-0">
+            {tr('Download contact list (CSV)')}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+          {[
+            [tr('Can be emailed'), withEmail],
+            [tr('Mobile number only'), withMobileOnly],
+            [tr('Facebook only'), withFacebookOnly],
+            [tr('No contact on file'), unreachable],
+          ].map(([label, n]) => (
+            <div key={String(label)} className="rounded-lg bg-muted/50 px-3 py-2">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-lg font-bold tabular-nums">{n}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
