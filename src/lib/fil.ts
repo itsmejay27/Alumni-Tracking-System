@@ -546,4 +546,5 @@ export const FIL: Record<string, string> = {
   Graduated: "Nagtapos",
   Ongoing: "Kasalukuyang kinukuha",
   Year: "Taon",
+  "Employment status not answered yet": "Hindi pa nasasagot ang katayuan sa trabaho",
 };

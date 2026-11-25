@@ -506,7 +506,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               {programName(course)} · {t('Class of')} {yearGraduated}
             </p>
             <div className="flex flex-wrap gap-2 justify-center md:justify-start pt-2">
-              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{t(status)}</span>
+              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
+                {/* Show the saved answer; before the first answer there is none yet */}
+                {record && record.status !== 'Not Tracked' ? t(record.status) : t('Employment status not answered yet')}
+              </span>
               {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">{t('Updated')} {record.lastUpdated}</span>}
               {avatarUrl && (
                 <button type="button" onClick={() => savePhoto('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">

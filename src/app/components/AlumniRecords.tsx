@@ -622,6 +622,16 @@ function RecordDetailModal({
     toast.success(removed ? 'Record removed. Restore it from "Removed records".' : 'Record restored');
     onChanged();
   };
+  // Escape closes the window (or the edit form first), like the other windows in the app
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role=alertdialog]')) return;
+      if (editing) setEditing(false);
+      else onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, onClose]);
   if (editing) return <EditRecord record={record} allRecords={allRecords} onClose={() => setEditing(false)} onSaved={onChanged} />;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>

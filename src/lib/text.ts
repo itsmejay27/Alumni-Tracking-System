@@ -6,8 +6,9 @@
  */
 export function capitalizeWords(value: string, keepCase = false): string {
   const clean = value.replace(/\s+/g, ' ').trim();
-  return (keepCase ? clean : clean.toLowerCase())
-    .replace(/(^|[\s\-'’.(])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+  const out = (keepCase ? clean : clean.toLowerCase()).replace(/(^|[\s\-'’.(])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+  // Titles keep small joining words lowercase: "Master in IT", "Bachelor of Science in ..."
+  return keepCase ? out.replace(/ (In|Of|And|The|For|On|At|To|Major) /g, (m) => m.toLowerCase()) : out;
 }
 
 /**
