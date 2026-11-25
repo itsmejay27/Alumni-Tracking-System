@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { Req } from './RequiredMark';
@@ -76,7 +78,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       .select('id, title, content, category, course, author, created_at, created_by')
       .order('created_at', { ascending: false });
     if (error) {
-      setLoadError(error.message);
+      setLoadError(friendlyError(error, 'Could not load the announcements.'));
     } else {
       setLoadError(null);
       setAnnouncements(
@@ -123,7 +125,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       toast.error(
         /row-level security/i.test(error.message) && !course
           ? t('Posting to everyone is not enabled yet. Ask the admin to run the latest database update, or choose your department only.')
-          : `Could not post announcement: ${error.message}`
+          : friendlyError(error, 'Could not post the announcement.')
       );
       return;
     }
@@ -133,7 +135,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
         body: { announcementId: created.id },
       });
       if (mailError) toast.warning(tr('Announcement posted, but the email could not be sent.'));
-      else toast.success(t('Announcement posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
+      else toast.success(t(plural(mail?.sent ?? 0, 'Announcement posted and emailed to {n} person (including your copy).', 'Announcement posted and emailed to {n} people (including your copy).'), { n: mail?.sent ?? 0 }));
     } else {
       toast.success(tr('Announcement posted.'));
     }
@@ -157,7 +159,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     if (!ok) return;
     const { data, error } = await supabase.from('announcements').delete().eq('id', ann.id).select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : t('Only Alumni Affairs can delete announcements.'));
+      toast.error(error ? friendlyError(error, 'Could not delete the announcement.') : t('Only Alumni Affairs can delete announcements.'));
       return;
     }
     setAnnouncements((list) => list.filter((a) => a.id !== ann.id));

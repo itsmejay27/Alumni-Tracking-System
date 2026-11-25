@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { User, LogOut, Calendar } from 'lucide-react';
@@ -34,7 +35,7 @@ export function LinkAlumniRecord({
       p_sex: sex,
     });
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(friendlyError(error, 'Could not link your record.'));
     if (data === 'ok' || data === 'already_linked') {
       toast.success(tr('Your account is now linked to your graduate record'));
       onLinked();

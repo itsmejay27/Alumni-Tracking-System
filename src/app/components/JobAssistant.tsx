@@ -1,4 +1,6 @@
 import { usePrefs } from '@/lib/preferences';
+import { functionError } from '@/lib/errors';
+import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -100,17 +102,6 @@ const VERDICT_STYLE: Record<string, string> = {
   'Not yet a match': 'bg-red-100 text-red-700',
   'Not enough information': 'bg-slate-100 text-slate-700',
 };
-
-async function invokeError(error: any) {
-  let message = error?.message || 'Something went wrong';
-  try {
-    const body = await error.context?.json();
-    if (body?.error) message = body.error;
-  } catch {
-    /* keep default */
-  }
-  return message as string;
-}
 
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -225,7 +216,7 @@ export function JobAssistant({
     const { data, error } = await supabase.functions.invoke('job-assistant', { body });
     setBusy(false);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     setAnalysis(data.analysis as Analysis);
@@ -241,7 +232,7 @@ export function JobAssistant({
     });
     setAssistBusy(null);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     setAssist({ kind, text: data.text });
@@ -366,7 +357,7 @@ export function JobAssistant({
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
             {busy ? tr('Reading the job... this can take up to a minute') : tr('Explain this job')}
           </button>
-          {remaining != null && <p className="text-xs text-center text-muted-foreground">{remaining} AI requests left today</p>}
+          {remaining != null && <p className="text-xs text-center text-muted-foreground">{tr(plural(remaining, '{n} AI request left today', '{n} AI requests left today'), { n: remaining })}</p>}
         </section>
 
         <section className={`${card} space-y-3`}>

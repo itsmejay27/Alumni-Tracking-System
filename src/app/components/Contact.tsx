@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { useT } from '@/lib/preferences';
 import { Mail, Phone, MapPin, Globe, Clock, Pencil, Save, X } from 'lucide-react';
@@ -38,7 +39,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
       setEditing(false);
       toast.success(tr('Contact details updated'));
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save the contact details.'));
     }
     setSaving(false);
   };

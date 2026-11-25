@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { friendlyError } from './errors';
+import { tr } from './preferences';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -19,10 +21,11 @@ export const supabase = createClient(url || 'http://localhost', key || 'missing-
 export async function passwordUpdateError(error: { message: string; code?: string; status?: number }) {
   if (/session/i.test(error.message) || error.code === 'session_not_found') {
     await supabase.auth.signOut({ scope: 'local' });
-    return 'Your session has ended, possibly because the password was changed on another device. Please log in again.';
+    return tr('Your session has ended, possibly because the password was changed on another device. Please log in again.');
   }
-  if (error.code === 'same_password') return 'Your new password must be different from your current one.';
-  return error.message;
+  if (error.code === 'same_password') return tr('Your new password must be different from your current one.');
+  if (error.code === 'weak_password' || /weak|at least/i.test(error.message)) return tr('Please choose a stronger password (at least 8 characters).');
+  return friendlyError(error, 'Could not change your password.');
 }
 
 /**

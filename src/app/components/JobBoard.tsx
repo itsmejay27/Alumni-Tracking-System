@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { salaryInPesos } from '@/lib/money';
@@ -73,7 +75,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) {
-      setLoadError(error.message);
+      setLoadError(friendlyError(error, 'Could not load the job posts.'));
     } else {
       setLoadError(null);
       setJobs(
@@ -111,7 +113,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
     if (!(await confirmDialog({ title: t('Remove this job posting?'), message: t('It will be removed for everyone.'), confirmLabel: t('Remove'), danger: true }))) return;
     const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
+      toast.error(error ? friendlyError(error, 'Could not delete the job post.') : tr('You can only remove your own job posts.'));
       return;
     }
     setJobs((list) => list.filter((j) => j.id !== id));
@@ -124,7 +126,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .eq('id', job.id)
       .select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not approve: ${error.message}` : t('Could not approve this job.'));
+      toast.error(error ? friendlyError(error, 'Could not approve the job post.') : t('Could not approve this job.'));
       return;
     }
     // Send the email the poster asked for, now that the job is live
@@ -133,7 +135,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         body: { jobId: job.id, audience: job.emailAudience },
       });
       if (mailError) toast.warning(t('Job approved, but the email could not be sent.'));
-      else toast.success(t('Job approved and emailed to {n} people.', { n: mail?.sent ?? 0 }));
+      else toast.success(t(plural(mail?.sent ?? 0, 'Job approved and emailed to {n} person.', 'Job approved and emailed to {n} people.'), { n: mail?.sent ?? 0 }));
     } else {
       toast.success(t('Job approved. It is now on the Job Board.'));
     }
@@ -147,7 +149,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .update({ status: 'rejected', reviewed_by: userId, reviewed_at: new Date().toISOString() })
       .eq('id', job.id);
     if (error) {
-      toast.error(`Could not reject: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not reject the job post.'));
       return;
     }
     toast.success(t('Job rejected.'));
@@ -179,7 +181,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{t('Job Board')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {t('{n} job opportunities', { n: filteredJobs.length })}{myProgram ? ` · ${t('{program} jobs shown first', { program: myProgram })}` : ''}
+            {t(plural(filteredJobs.length, '{n} job opportunity', '{n} job opportunities'), { n: filteredJobs.length })}{myProgram ? ` · ${t('{program} jobs shown first', { program: myProgram })}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -759,7 +761,7 @@ function JobPostingForm({
     }
     if (error) {
       setSubmitting(false);
-      toast.error(`Could not post job: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not post the job.'));
       return;
     }
     const live = !created?.status || created.status === 'approved';
@@ -779,7 +781,7 @@ function JobPostingForm({
         }
         toast.warning(message);
       } else {
-        toast.success(t('Job posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
+        toast.success(t(plural(mail?.sent ?? 0, 'Job posted and emailed to {n} person (including your copy).', 'Job posted and emailed to {n} people (including your copy).'), { n: mail?.sent ?? 0 }));
       }
     } else {
       toast.success(t('Job posted!'));

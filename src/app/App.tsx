@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { AppToaster } from './components/AppToaster';
 import { ConfirmHost } from './components/ConfirmDialog';
 import { roleLabel } from '@/lib/programs';
-import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
+import { PreferencesProvider, tr, useApplyPreferences, useT } from '@/lib/preferences';
 import { MfaChallenge, EmailChallenge } from './components/MfaChallenge';
 import { supabase } from '@/lib/supabase';
 import { fetchMyRecord, missingProfileFields } from '@/lib/alumni';
@@ -180,7 +180,7 @@ function AppInner() {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {
-          toast.error('Could not load your profile. Please sign in again.');
+          toast.error(tr('Could not load your profile. Please sign in again.'));
           supabase.auth.signOut();
           return;
         }

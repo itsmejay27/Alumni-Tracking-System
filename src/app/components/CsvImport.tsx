@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import { Upload, X, FileSpreadsheet, Download, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -257,7 +259,7 @@ export function CsvImport({
       const chunk = payload.slice(i, i + 200);
       const { error } = await supabase.from('alumni_records').insert(chunk);
       if (error) {
-        toast.error(`Stopped after ${done} records: ${error.message}`);
+        toast.error(`${tr(plural(done, 'Stopped after {n} record.', 'Stopped after {n} records.'), { n: done })} ${friendlyError(error)}`);
         setImporting(false);
         if (done) onDone();
         return;
@@ -265,7 +267,7 @@ export function CsvImport({
       done += chunk.length;
     }
     setImporting(false);
-    toast.success(`Imported ${done} graduates`);
+    toast.success(tr(plural(done, 'Imported {n} graduate.', 'Imported {n} graduates.'), { n: done }));
     onDone();
     onClose();
   };
@@ -388,8 +390,8 @@ export function CsvImport({
             {toImport.length > 0 && (
               <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1">
                 <p className="font-semibold">
-                  {toImport.length} graduates ready to import from {perFile.filter((p) => p.ready.length).length} file
-                  {perFile.filter((p) => p.ready.length).length === 1 ? '' : 's'}
+                  {tr(plural(toImport.length, '{n} graduate ready to import', '{n} graduates ready to import'), { n: toImport.length })}{' '}
+                  {tr(plural(perFile.filter((p) => p.ready.length).length, 'from {n} file', 'from {n} files'), { n: perFile.filter((p) => p.ready.length).length })}
                 </p>
                 <p className="text-muted-foreground">
                   {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError, functionError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw, Ban, CheckCircle2 } from 'lucide-react';
@@ -80,7 +81,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       .from('profiles')
       .select('id, email, role, given_name, last_name, title, must_change_password, created_at, deactivated_at')
       .order('created_at', { ascending: false });
-    if (error) setLoadError(error.message);
+    if (error) setLoadError(friendlyError(error, 'Could not load the accounts.'));
     else {
       setLoadError(null);
       setAccounts(data as Account[]);
@@ -109,14 +110,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     setSending(false);
 
     if (error) {
-      // The function puts a readable message in the response body
-      let message = error.message;
-      try {
-        const body = await (error as any).context?.json();
-        if (body?.error) message = body.error;
-      } catch {
-        /* keep default message */
-      }
+      const message = await functionError(error);
       setFormError(message);
       toast.error(message);
       return;
@@ -143,22 +137,11 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       .update({ role: newRole, title: roleLabel(newRole) })
       .eq('id', acc.id);
     if (error) {
-      toast.error(`Could not change role: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not change the role.'));
       return;
     }
     toast.success(`${acc.email} is now ${roleLabel(newRole)}. They need to sign in again to see the change.`);
     load();
-  };
-
-  const invokeError = async (error: any) => {
-    let message = error.message;
-    try {
-      const body = await error.context?.json();
-      if (body?.error) message = body.error;
-    } catch {
-      /* keep default message */
-    }
-    return message as string;
   };
 
   const [resending, setResending] = useState<string | null>(null);
@@ -169,7 +152,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     });
     setResending(null);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     const until = data.expiresAt ? new Date(data.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
@@ -204,7 +187,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     });
     setToggling(null);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     setAccounts((list) => list.map((x) => (x.id === acc.id ? { ...x, deactivated_at: deactivate ? new Date().toISOString() : null } : x)));
@@ -233,7 +216,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     if (!ok) return;
     const { error } = await supabase.functions.invoke('invite-account', { body: { action: 'delete', userId: acc.id } });
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     toast.success(pending ? tr('Invitation cancelled') : tr('Account removed'));

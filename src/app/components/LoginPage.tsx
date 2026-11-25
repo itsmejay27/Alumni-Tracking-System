@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { plural } from '@/lib/text';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { captchaEnabled, withCaptcha } from '@/lib/captcha';
 import { BotCheck } from './BotCheck';
@@ -90,9 +92,9 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         ? await supabase.auth.resend({ type: 'signup', email: cleanEmail, options: withCaptcha({}, captchaToken) })
         : await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
     freshCaptcha();
-    if (error) setError(error.message);
+    if (error) setError(friendlyError(error, 'Could not send a new code.'));
     else {
-      setNotice('A new code has been sent.');
+      setNotice(tr('A new code has been sent.'));
       setCooldown(60);
     }
   };
@@ -106,12 +108,12 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       p_sex: sex,
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error, 'Could not check your graduate record.'));
       return false;
     }
     if (data === 'not_found') {
       setError(
-        "We couldn't find a graduate with this name, birthday and sex. Type your first and last name exactly as in your school records, check your birthday, or contact your program chair or the Alumni Affairs Office."
+        tr("We couldn't find a graduate with this name, birthday and sex. Type your first and last name exactly as in your school records, check your birthday, or contact your program chair or the Alumni Affairs Office.")
       );
       return false;
     }
@@ -136,10 +138,9 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     if (step === 'signin') {
       // 3 wrong passwords lock the email for 30 minutes
       const lockedText = (until: string) =>
-        `Too many wrong passwords. This account is locked until ${new Date(until).toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
-        })}. You can wait, or use "Forgot password?" to reset it.`;
+        tr('Too many wrong passwords. This account is locked until {time}. You can wait, or use "Forgot password?" to reset it.', {
+          time: new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        });
       const { data: lockedUntil } = await supabase.rpc('login_lock_status', { p_email: cleanEmail });
       if (lockedUntil) {
         setError(lockedText(lockedUntil as string));
@@ -159,13 +160,13 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           const t = (tally || {}) as { attemptsLeft?: number; lockedUntil?: string | null };
           if (t.lockedUntil) setError(lockedText(t.lockedUntil));
           else if (typeof t.attemptsLeft === 'number')
-            setError(`Incorrect email or password. ${t.attemptsLeft} attempt${t.attemptsLeft === 1 ? '' : 's'} left before the account is locked for 30 minutes.`);
+            setError(tr(plural(t.attemptsLeft, 'Incorrect email or password. {n} try left before the account is locked for 30 minutes.', 'Incorrect email or password. {n} tries left before the account is locked for 30 minutes.'), { n: t.attemptsLeft }));
           else setError(tr('Incorrect email or password.'));
         } else if (/captcha/i.test(error.message)) {
           setError(tr('The bot check expired. Please do it again, then sign in.'));
         } else if (/banned/i.test(error.message) || (error as any).code === 'user_banned') {
           setError(tr('This account has been deactivated. Please contact the OMSU Alumni Affairs Office.'));
-        } else setError(error.message);
+        } else setError(friendlyError(error, 'Could not sign in.'));
       } else {
         // Correct password: start counting from zero again
         await supabase.rpc('login_succeeded');
@@ -193,7 +194,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           },
         });
         freshCaptcha();
-        if (error) setError(/database error|alumni_record/i.test(error.message) ? 'Your name, birthday and sex do not match our graduate records.' : error.message);
+        if (error) setError(/database error|alumni_record/i.test(error.message) ? tr('Your name, birthday and sex do not match our graduate records.') : friendlyError(error, 'Could not create your account.'));
         else if (data.user && data.user.identities?.length === 0) setError(tr('An account with this email already exists. Try signing in.'));
         else if (!data.session) {
           go('verify');
@@ -207,7 +208,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     } else if (step === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
       freshCaptcha();
-      if (error) setError(error.message);
+      if (error) setError(friendlyError(error, 'Could not send the reset code.'));
       else {
         go('resetCode');
         setCooldown(60);

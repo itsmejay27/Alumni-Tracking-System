@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { Pencil, Save, X, Plus, Trash2, Eye, Target, Heart } from 'lucide-react';
 import { toast } from 'sonner';
@@ -30,7 +31,7 @@ export function AboutEditor() {
       setEditing(false);
       toast.success(tr('Vision, Mission, Goals and Core Values updated'));
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save the page.'));
     }
     setSaving(false);
   };

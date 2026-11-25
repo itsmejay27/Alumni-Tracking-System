@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { Search, RefreshCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -52,7 +53,7 @@ export function ActivityLogs() {
     if (from) q = q.gte('created_at', new Date(`${from}T00:00:00`).toISOString());
     if (to) q = q.lte('created_at', new Date(`${to}T23:59:59.999`).toISOString());
     const { data, error: loadError } = await q;
-    if (loadError) setError(loadError.message);
+    if (loadError) setError(friendlyError(loadError, 'Could not load the activity log.'));
     else {
       setError(null);
       setEntries((data || []) as LogEntry[]);

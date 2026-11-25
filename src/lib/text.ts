@@ -61,3 +61,6 @@ export function feedbackTone(text: string | null | undefined): FeedbackTone {
   if (hasWord(t, POSITIVE)) return 'Positive';
   return 'Neutral';
 }
+
+/** Picks the singular or plural text for a count: plural(1, 'graduate', 'graduates') -> 'graduate'. */
+export const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);

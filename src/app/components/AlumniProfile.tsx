@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
@@ -19,8 +20,10 @@ import {
   Camera,
   FileText,
   Upload,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 
 import { CurrentUser } from '../App';
@@ -61,7 +64,13 @@ const newEntry = (): EmploymentEntry => ({
   recordedAt: new Date().toISOString(),
 });
 
-export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: AlumniProfileProps) {
+/** Cancel reloads the saved profile by mounting a fresh copy of the page. */
+export function AlumniProfile(props: AlumniProfileProps) {
+  const [version, setVersion] = useState(0);
+  return <AlumniProfileView key={version} {...props} onDiscard={() => setVersion((v) => v + 1)} />;
+}
+
+function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDiscard }: AlumniProfileProps & { onDiscard: () => void }) {
   const t = useT();
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<AlumniRecord | null>(null);
@@ -148,7 +157,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         setSurvey(rec.peoSurvey?.answers || {});
         setIsPublic(rec.isPublic ?? true);
       })
-      .catch((err) => toast.error(`Could not load your record: ${err.message}`))
+      .catch((err) => toast.error(friendlyError(err, 'Could not load your record.')))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -195,6 +204,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   // ---- Saving, one section at a time ----
   type SectionId = 'personal' | 'education' | 'employment' | 'feedback';
   const [tab, setTab] = useState<SectionId>('personal');
+  // View-only until the alumnus presses "Update profile", so nothing changes by accident.
+  // A profile that still needs answers opens ready to edit.
+  const mustFill = !!gate && (gate.missing.length > 0 || gate.needsSave);
+  const [editing, setEditing] = useState(mustFill);
   const [savingSection, setSavingSection] = useState<SectionId | null>(null);
 
   const personalSlice = () => ({
@@ -427,9 +440,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       });
       toast.success(t('Your alumni profile has been saved'));
       clearDraft();
+      setEditing(false);
       onSaved?.();
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your profile.'));
     }
     setSavingSection(null);
   };
@@ -442,7 +456,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       await onUpdateProfile({ ...currentUser, avatarUrl: url });
       toast.success(url ? t('Photo updated') : t('Photo removed'));
     } catch (err: any) {
-      toast.error(`Could not save photo: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your photo.'));
     }
   };
 
@@ -475,6 +489,22 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   ];
   const tabIndex = tabs.findIndex((x) => x.id === tab);
   const anyDirty = Object.values(dirty).some(Boolean);
+  // Unsaved answers (e.g. restored after a refresh) keep the form open for editing
+  const isEditing = editing || anyDirty;
+  const cancelEditing = async () => {
+    if (
+      anyDirty &&
+      !(await confirmDialog({
+        title: t('Discard your changes?'),
+        message: t('Everything you changed since your last save will be put back.'),
+        confirmLabel: t('Discard changes'),
+        danger: true,
+      }))
+    )
+      return;
+    clearDraft();
+    onDiscard();
+  };
   /** Moving forward is only allowed when the steps before it have their required answers. */
   const goToTab = (id: SectionId) => {
     const target = tabs.findIndex((x) => x.id === id);
@@ -600,6 +630,17 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         </div>
 
         <div className="p-5 sm:p-7 space-y-6">
+          {!isEditing && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3">
+              <p className="text-sm sm:mr-auto">
+                <span className="font-semibold">{t('View only.')}</span> {t('Press Update profile to change your details.')}
+              </p>
+              <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground">
+                <Pencil size={15} /> {t('Update profile')}
+              </button>
+            </div>
+          )}
+          <fieldset disabled={!isEditing} className="space-y-6 min-w-0 border-0 p-0 m-0">
           {/* PERSONAL */}
           {tab === 'personal' && (
             <>
@@ -865,6 +906,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
             </>
           )}
 
+          </fieldset>
+
           {/* Back / Next between steps; one Save at the end so each save is one history entry */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 pt-5 border-t border-border/60">
             <span className="text-xs sm:mr-auto">
@@ -885,7 +928,24 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 <ChevronLeft size={16} /> {t('Back')}
               </button>
             )}
-            {tabIndex < tabs.length - 1 ? (
+            {isEditing && !mustFill && (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+              >
+                {t('Cancel')}
+              </button>
+            )}
+            {!isEditing ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm"
+              >
+                <Pencil size={16} /> {t('Update profile')}
+              </button>
+            ) : tabIndex < tabs.length - 1 ? (
               <button
                 type="button"
                 onClick={() => goToTab(tabs[tabIndex + 1].id)}
@@ -1058,7 +1118,7 @@ function JobModal({
     const { error } = await supabase.storage.from('employment-proofs').upload(path, file, { contentType: file.type });
     setUploading(false);
     if (error) {
-      toast.error(`${t('Could not upload the file')}: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not upload the file.'));
       return;
     }
     set({ proofPath: path, proofName: file.name.slice(0, 120) });

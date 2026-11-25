@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { functionError } from '@/lib/errors';
+import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Send, Table2, LineChart as LineIcon, CheckCircle2, UserCheck, UserX, Clock } from 'lucide-react';
@@ -486,10 +488,10 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
       {active > 0 && (
         <div className="flex items-center justify-between text-sm -mt-2">
           <p className="text-muted-foreground">
-            Showing {records.length} of {all.length} graduates
+            {tr('Showing {a} of {b}', { a: records.length, b: all.length })} {tr(plural(all.length, 'graduate', 'graduates'))}
           </p>
           <button onClick={clear} className="font-semibold text-primary hover:underline">
-            Clear filters ({active})
+            {tr('Clear filters')} ({active})
           </button>
         </div>
       )}
@@ -636,8 +638,8 @@ function ReminderPanel({ scope, records }: { scope: Course | null; records: Alum
     const reminderText =
       minYears === '0'
         ? tr('{program} alumni with an account get a reminder to update.', { program: course })
-        : tr("{program} alumni who haven't updated in {n}+ year(s) get a reminder.", { program: course, n: minYears });
-    const inviteText = tr('{n} {program} graduates without an account get an invitation to sign up (each at most once every 30 days).', { n: withEmail, program: course });
+        : tr(plural(Number(minYears), "{program} alumni who haven't updated in {n}+ year get a reminder.", "{program} alumni who haven't updated in {n}+ years get a reminder."), { program: course, n: minYears });
+    const inviteText = tr(plural(withEmail, '{n} {program} graduate without an account gets an invitation to sign up (at most once every 30 days).', '{n} {program} graduates without an account get an invitation to sign up (each at most once every 30 days).'), { n: withEmail, program: course });
     const ok = await confirmDialog({
       title: tr('Send these emails?'),
       message: audience === 'accounts' ? reminderText : audience === 'invite' ? inviteText : `${reminderText} ${inviteText}`,
@@ -650,19 +652,12 @@ function ReminderPanel({ scope, records }: { scope: Course | null; records: Alum
     });
     setSending(false);
     if (error) {
-      let msg = error.message;
-      try {
-        const body = await (error as any).context?.json();
-        if (body?.error) msg = body.error;
-      } catch {
-        /* keep default */
-      }
-      toast.error(msg);
+      toast.error(await functionError(error));
       return;
     }
-    if (!data.sent) toast.info(data.skippedRecent ? tr('Nobody to email right now. {n} were already invited in the last 30 days.', { n: data.skippedRecent }) : tr('Nobody needs a reminder right now'));
-    else if (data.invited) toast.success(tr('Emails sent: {a} reminders and {b} invitations.', { a: data.reminded ?? 0, b: data.invited }));
-    else toast.success(tr('Reminder sent to {n} alumni', { n: data.sent }));
+    if (!data.sent) toast.info(data.skippedRecent ? tr(plural(data.skippedRecent, 'Nobody to email right now. {n} was already invited in the last 30 days.', 'Nobody to email right now. {n} were already invited in the last 30 days.'), { n: data.skippedRecent }) : tr('Nobody needs a reminder right now'));
+    else if (data.invited) toast.success(tr('Emails sent: {a} and {b}.', { a: tr(plural(data.reminded ?? 0, '{n} reminder', '{n} reminders'), { n: data.reminded ?? 0 }), b: tr(plural(data.invited, '{n} invitation', '{n} invitations'), { n: data.invited }) }));
+    else toast.success(tr(plural(data.sent, 'Reminder sent to {n} alumnus', 'Reminder sent to {n} alumni'), { n: data.sent }));
     setMessage('');
   };
 
@@ -670,7 +665,7 @@ function ReminderPanel({ scope, records }: { scope: Course | null; records: Alum
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
       <h3 className="font-semibold">{tr("Ask alumni to update their data")}</h3>
       <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-        {tr('Sends a reminder to alumni with an account, and an invitation to sign up to graduates without one.')} {last && tr('Last sent {date} to {n} alumni.', { date: mdy(last.created_at), n: last.recipients })}
+        {tr('Sends a reminder to alumni with an account, and an invitation to sign up to graduates without one.')} {last && tr(plural(last.recipients, 'Last sent {date} to {n} alumnus.', 'Last sent {date} to {n} alumni.'), { date: mdy(last.created_at), n: last.recipients })}
       </p>
       <div className="grid gap-3 md:grid-cols-[auto_auto_auto_1fr_auto] md:items-center">
         {!scope && (

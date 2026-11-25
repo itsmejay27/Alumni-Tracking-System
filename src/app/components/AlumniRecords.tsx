@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
@@ -144,7 +145,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       URL.revokeObjectURL(url);
       toast.success(tr('Backup downloaded. Keep it in a safe place: it contains personal data.'));
     } catch (err) {
-      toast.error(`Backup failed: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(friendlyError(err, 'Could not make the backup.'));
     }
     setBackingUp(false);
   };
@@ -618,7 +619,7 @@ function RecordDetailModal({
     setBusy(true);
     const res = await patchRecord(record.id, { archived: removed ? true : undefined });
     setBusy(false);
-    if (!res.ok) return toast.error(`Couldn't save: ${res.error}`);
+    if (!res.ok) return toast.error(friendlyError(res.error, 'Could not save the record.'));
     toast.success(removed ? tr('Record removed. Restore it from "Removed records".') : tr('Record restored'));
     onChanged();
   };
@@ -1004,7 +1005,7 @@ function VerifyClaim({ record, onDone }: { record: AlumniRecord; onDone: () => v
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (error) setLoadError(error.message);
+        if (error) setLoadError(friendlyError(error, 'Could not load the records.'));
         else setHeld((data?.held_data as Partial<AlumniRecord>) || {});
       });
     return () => {
@@ -1022,7 +1023,7 @@ function VerifyClaim({ record, onDone }: { record: AlumniRecord; onDone: () => v
     setBusy(true);
     const { data, error } = await supabase.rpc('review_record_link', { p_record_id: record.id, p_approve: approve });
     setBusy(false);
-    if (error) return toast.error(`Couldn't save: ${error.message}`);
+    if (error) return toast.error(friendlyError(error, 'Could not save the record.'));
     if (data === 'not_pending') toast.info(tr('Someone already reviewed this graduate.'));
     else toast.success(approve ? tr('Graduate verified') : tr('Link rejected'));
     onDone();
@@ -1165,7 +1166,7 @@ function EditRecord({ record, allRecords, onClose, onSaved }: { record: AlumniRe
       ...('email' in patch ? { email: data.email || null } : {}),
     });
     setBusy(false);
-    if (!res.ok) return setError(/row-level security|policy/i.test(res.error || '') ? 'You can only keep records in your own program.' : res.error || 'Could not save.');
+    if (!res.ok) return setError(/row-level security|policy/i.test(res.error || '') ? tr('You can only keep records in your own program.') : friendlyError(res.error, 'Could not save the record.'));
     toast.success(tr('Record saved'));
     onSaved();
   };

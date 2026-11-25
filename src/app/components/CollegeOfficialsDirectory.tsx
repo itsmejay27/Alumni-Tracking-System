@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { useT } from '@/lib/preferences';
 import { Mail, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +29,7 @@ export function CollegeOfficialsDirectory() {
 
   useEffect(() => {
     supabase.rpc('staff_directory').then(({ data, error }) => {
-      if (error) setError(error.message);
+      if (error) setError(friendlyError(error, 'Could not load the officials.'));
       else setStaff((data as Staff[]) || []);
       setLoading(false);
     });

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import {
@@ -84,7 +85,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
       await onUpdateProfile({ ...currentUser, avatarUrl });
       toast.success(avatarUrl ? t('Photo updated.') : t('Photo removed.'));
     } catch (err: any) {
-      toast.error(`${t('Could not save')}: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your settings.'));
     }
     setSavingPhoto(false);
   };
@@ -248,7 +249,7 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
       });
       toast.success(t('Your account details have been saved.'));
     } catch (err: any) {
-      toast.error(`${t('Could not save')}: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your settings.'));
     }
     setSaving(false);
   };
@@ -417,7 +418,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
     for (const f of list?.all || []) if (f.status !== 'verified') await supabase.auth.mfa.unenroll({ factorId: f.id });
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)}` });
     setBusy(false);
-    if (error || !data) return toast.error(`${t('Could not start setup')}: ${error?.message}`);
+    if (error || !data) return toast.error(friendlyError(error || 'No setup data', 'Could not start the two-step verification setup.'));
     setEnroll({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
   };
 
@@ -456,7 +457,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
       const { error } = await supabase.auth.mfa.unenroll({ factorId: f.id });
       if (error) {
         setBusy(false);
-        return toast.error(`${t('Could not turn off')}: ${error.message}`);
+        return toast.error(friendlyError(error, 'Could not turn off two-step verification.'));
       }
     }
     setBusy(false);
@@ -719,7 +720,7 @@ function SignInActivityCard() {
     setBusy(true);
     const { error } = await supabase.auth.signOut({ scope: 'others' });
     setBusy(false);
-    if (error) toast.error(`${t('Could not sign out other devices')}: ${error.message}`);
+    if (error) toast.error(friendlyError(error, 'Could not sign out your other devices.'));
     else toast.success(t('Other devices have been signed out'));
   };
 
@@ -791,7 +792,7 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
     if (error) {
       setPrefs(prefs);
-      toast.error(`${t('Could not save')}: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not save your settings.'));
     } else {
       setSaved((s) => (s ? { ...s, [key]: value } : s));
       toast.success(value ? t('Emails turned on') : t('Emails turned off'));
@@ -811,7 +812,7 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     const { error } = await supabase.from('profiles').update({ app_notifications: value }).eq('id', userId);
     if (error) {
       setInApp(!value);
-      return toast.error(`${t('Could not save')}: ${error.message}`);
+      return toast.error(friendlyError(error, 'Could not save your settings.'));
     }
     window.dispatchEvent(new Event('omsu-notifications-changed'));
     toast.success(value ? t('Notifications in the system turned on') : t('Notifications in the system turned off'));
@@ -834,7 +835,7 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     };
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
     setBusy(false);
-    if (error) return toast.error(`${t('Could not save')}: ${error.message}`);
+    if (error) return toast.error(friendlyError(error, 'Could not save your settings.'));
     setSaved({ ...prefs, ...patch });
     toast.success(t('Job alert filters saved'));
   };
