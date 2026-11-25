@@ -76,7 +76,10 @@ export function NotificationBell({ userId, onOpenTab, tone = 'light' }: { userId
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) setOpen(false);
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) {
+        setOpen(false);
+        load(); // picks up the new "seen" time so the count clears
+      }
     };
     document.addEventListener('mousedown', close);
     document.addEventListener('keydown', close);
@@ -84,7 +87,7 @@ export function NotificationBell({ userId, onOpenTab, tone = 'light' }: { userId
       document.removeEventListener('mousedown', close);
       document.removeEventListener('keydown', close);
     };
-  }, [open]);
+  }, [open, load]);
 
   if (!enabled) return null;
   const unread = items.filter((i) => !seenAt || i.at > seenAt).length;
