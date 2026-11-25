@@ -38,7 +38,7 @@ export interface AlumniRecord {
   yearGraduated: number;
   sex: 'Female' | 'Male' | '';
   dateOfBirth: string;
-  civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
+  civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
   mobileNo: string;
   facebookName: string;
   twitter?: string;
@@ -149,7 +149,7 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
     middleName: '',
     sex: '', // unknown stays unknown (913 imported records have no sex on file)
     dateOfBirth: '',
-    civilStatus: 'Single',
+    civilStatus: '', // unknown stays unknown (the import used to fill in "Single")
     mobileNo: '',
     facebookName: '',
     presentAddress: '',

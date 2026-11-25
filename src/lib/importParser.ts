@@ -248,7 +248,7 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       yearGraduated: toYear(get(r, 'yearGraduated')) || opts.defaultYear,
       sex: /^f/i.test(sexText) ? 'Female' : /^m/i.test(sexText) ? 'Male' : currentSex,
       dateOfBirth: get(r, 'dateOfBirth').slice(0, 10),
-      civilStatus: get(r, 'civilStatus') || 'Single',
+      civilStatus: get(r, 'civilStatus'),
       mobileNo: toPhone(get(r, 'mobileNo')),
       presentAddress: get(r, 'presentAddress'),
       permanentAddress: get(r, 'permanentAddress'),

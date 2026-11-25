@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 /** One of each list's labels, for "Showing 1–1 of 1 record" */
 const SINGULAR: Record<string, string> = {
   items: 'item', records: 'record', graduates: 'graduate', announcements: 'announcement', jobs: 'job',
-  accounts: 'account', people: 'person', entries: 'entry', officials: 'official', alumni: 'alumnus',
+  accounts: 'account', people: 'person', entries: 'entry', officials: 'official', alumni: 'alumnus', responses: 'response',
 };
 
 export function usePaged<T>(items: T[], pageSize = 10) {

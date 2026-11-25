@@ -87,7 +87,7 @@ export function CollegeOfficialsDirectory() {
             );
           })}
         </div>
-        <Pagination {...paged} label={t('people')} />
+        <Pagination {...paged} label="people" />
         </div>
       )}
     </div>

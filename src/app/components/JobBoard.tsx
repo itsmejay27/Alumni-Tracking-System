@@ -117,6 +117,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       return;
     }
     setJobs((list) => list.filter((j) => j.id !== id));
+    toast.success(t('Job post removed.'));
   };
 
   const handleApprove = async (job: JobPosting) => {
@@ -359,7 +360,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
-        <Pagination {...paged} label={t('jobs')} />
+        <Pagination {...paged} label="jobs" />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />

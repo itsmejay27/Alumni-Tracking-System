@@ -463,7 +463,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
               </div>
             </div>
 
-            <Pagination {...paged} label={tr("records")} />
+            <Pagination {...paged} label="records" />
 
             {filteredRecords.length === 0 && (
               <div className="bg-card rounded-2xl text-center py-16 shadow-sm">
@@ -730,7 +730,7 @@ function RecordDetailModal({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">{tr("Civil Status")}</p>
-                <p className="font-bold text-foreground mt-0.5">{record.civilStatus}</p>
+                <p className="font-bold text-foreground mt-0.5">{record.civilStatus ? tr(record.civilStatus) : tr('Not given')}</p>
               </div>
               {(record.twitter || record.otherSocialNetwork || record.otherSocialId) && (
                 <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5">

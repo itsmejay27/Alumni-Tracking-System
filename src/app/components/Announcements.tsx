@@ -371,7 +371,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           </div>
         ))}
 
-        <Pagination {...paged} label={t('announcements')} />
+        <Pagination {...paged} label="announcements" />
 
         {(hidden.length > 0 || showHidden) && (
           <div className="text-center">

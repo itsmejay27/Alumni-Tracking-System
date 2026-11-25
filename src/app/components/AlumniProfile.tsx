@@ -80,9 +80,9 @@ function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDisc
   const [givenName, setGivenName] = useState(currentUser?.givenName || '');
   const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
   const [lastName, setLastName] = useState(currentUser?.lastName || '');
-  const [sex, setSex] = useState<'Male' | 'Female'>(currentUser?.sex || 'Male');
+  const [sex, setSex] = useState<'' | 'Male' | 'Female'>(currentUser?.sex || '');
   const [dateOfBirth, setDateOfBirth] = useState(currentUser?.dateOfBirth || '');
-  const [civilStatus, setCivilStatus] = useState<CurrentUser['civilStatus']>(currentUser?.civilStatus || 'Single');
+  const [civilStatus, setCivilStatus] = useState<CurrentUser['civilStatus']>(currentUser?.civilStatus || '');
   const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
   const [facebookName, setFacebookName] = useState(currentUser?.facebookName || '');
   const [twitter, setTwitter] = useState('');
@@ -296,6 +296,8 @@ function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDisc
       }
       const age = ageFrom(dateOfBirth);
       if (age == null || age < 15) return 'Please enter your correct date of birth';
+      if (!sex) return 'Please choose your sex';
+      if (!civilStatus) return 'Please choose your civil status';
       if (!presentAddress.trim() || !permanentAddress.trim()) return 'Enter your present and permanent address';
     }
     if (section === 'feedback' && needsSurvey && suggestions.trim() && !surveyDone && suggestions.trim() !== (record?.suggestions || '').trim()) {
@@ -655,7 +657,8 @@ function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDisc
               <Group title={tr("Personal details")}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Field label={tr("Sex *")}>
-                    <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
+                    <select required value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
+                      <option value="" disabled>{t('Choose...')}</option>
                       <option value="Female">{t('Female')}</option>
                       <option value="Male">{t('Male')}</option>
                     </select>
@@ -664,7 +667,8 @@ function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDisc
                     <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
                   </Field>
                   <Field label={tr("Civil status *")}>
-                    <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
+                    <select required value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
+                      <option value="" disabled>{t('Choose...')}</option>
                       <option value="Single">{t('Single')}</option>
                       <option value="Married">{t('Married')}</option>
                       <option value="Separated">{t('Separated')}</option>

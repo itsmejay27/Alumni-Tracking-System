@@ -58,9 +58,9 @@ export interface CurrentUser {
   mobileNo: string;
   presentAddress: string;
   permanentAddress: string;
-  sex: 'Female' | 'Male';
+  sex: '' | 'Female' | 'Male';
   dateOfBirth: string;
-  civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
+  civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
   facebookName: string;
   avatarUrl?: string;
   title?: string;

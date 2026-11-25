@@ -569,7 +569,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
               ))}
             </tbody>
           </table>
-          <Pagination {...paged} label={tr("graduates")} inline />
+          <Pagination {...paged} label="graduates" inline />
         </div>
       )}
     </div>
@@ -885,7 +885,7 @@ function SliceList({ chart, slice, onClose }: { chart: string; slice: Slice; onC
             );
           })}
         </ul>
-        <Pagination {...paged} label={tr("graduates")} />
+        <Pagination {...paged} label="graduates" />
       </div>
     </div>
   );

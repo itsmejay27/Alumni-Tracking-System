@@ -252,6 +252,45 @@ function quotaReason(body: any): string {
     .join(', ');
 }
 
+// Google retires and renames models over time. The models each key can use are looked up once
+// (per server start) so a removed model is skipped and newer ones are used as backups.
+const modelCache = new Map<string, Promise<string[] | null>>();
+function availableModels(key: string): Promise<string[] | null> {
+  if (!modelCache.has(key)) {
+    modelCache.set(
+      key,
+      fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+        headers: { 'x-goog-api-key': key },
+        signal: AbortSignal.timeout(6_000),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) =>
+          body?.models
+            ? (body.models as any[])
+                .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+                .map((m) => String(m.name).replace(/^models\//, ''))
+            : null
+        )
+        .catch(() => null)
+    );
+  }
+  return modelCache.get(key)!;
+}
+const version = (name: string) => Number((name.match(/(\d+(?:\.\d+)?)/) || [])[1] || 0);
+/** Gemini Flash models and Gemma models this key can use, newest first (stable releases only). */
+function pickModels(list: string[] | null, configured: string[]) {
+  if (!list) return { gemini: configured, gemma: GEMMA_MODELS };
+  const stable = (n: string) => !/preview|exp|tts|image|live|audio|embedding|thinking|computer|robotics|native/i.test(n);
+  const flash = list.filter((n) => /^gemini-[\d.]+-flash(-lite)?$/.test(n) && stable(n)).sort((a, b) => version(b) - version(a));
+  const gemini = [...configured.filter((m) => list.includes(m) || /-latest$/.test(m)), ...flash.filter((m) => !configured.includes(m)).slice(0, 3)];
+  const size = (n: string) => Number((n.match(/-(\d+)b-/) || [])[1] || 0);
+  const gemma = list
+    .filter((n) => /^gemma-\d[\w.-]*-it$/.test(n) && stable(n))
+    .sort((a, b) => version(b) - version(a) || size(b) - size(a))
+    .slice(0, 2);
+  return { gemini: gemini.length ? gemini : configured, gemma };
+}
+
 /** Calls Gemini. With search: true it may look things up on Google and returns the pages it used. */
 async function callGeminiFull(
   system: string,
@@ -272,10 +311,14 @@ async function callGeminiFull(
 
   // For each key: the Gemini models, then Gemma. Busy models are not retried right away, because
   // Google can take half a minute to say a model is busy; the next model is tried instead.
-  const tries = keys.flatMap((key, k) => [
-    ...models.map((model) => ({ key, model, gemma: false, label: `key${k || ''} ${model}` })),
-    ...(gemmaOk ? GEMMA_MODELS.map((model) => ({ key, model, gemma: true, label: `key${k || ''} ${model}` })) : []),
-  ]);
+  const lists = await Promise.all(keys.map((key) => availableModels(key)));
+  const tries = keys.flatMap((key, k) => {
+    const picked = pickModels(lists[k], models);
+    return [
+      ...picked.gemini.map((model) => ({ key, model, gemma: false, label: `key${k || ''} ${model}` })),
+      ...(gemmaOk ? picked.gemma.map((model) => ({ key, model, gemma: true, label: `key${k || ''} ${model}` })) : []),
+    ];
+  });
   const jsonHint = schema
     ? `\n\nReply with ONLY one JSON object, with no markdown and no other text, shaped like this example (replace every value):\n${JSON.stringify(schemaTemplate(schema))}`
     : '';
