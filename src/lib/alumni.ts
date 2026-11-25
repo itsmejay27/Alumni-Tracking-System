@@ -71,6 +71,8 @@ export interface AlumniRecord {
   /** Removed by staff (wrong entry). Hidden from lists and reports; staff can restore it. */
   archived?: boolean;
   suggestions?: string;
+  /** Every piece of feedback the graduate has sent, oldest first (new feedback never replaces old). */
+  feedbackHistory?: { text: string; at: string }[];
   isPublic?: boolean;
 
   jobLevel?: string;

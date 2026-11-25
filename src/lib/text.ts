@@ -30,3 +30,33 @@ export function facebookUrl(value: string | null | undefined): string | null {
   if (/^@?[A-Za-z0-9.]{5,50}$/.test(v) && !/\s/.test(v)) return `https://www.facebook.com/${v.replace(/^@/, '')}`;
   return `https://www.facebook.com/search/people/?q=${encodeURIComponent(v)}`;
 }
+
+export type FeedbackTone = 'Negative' | 'Positive' | 'Neutral';
+
+// Simple word lists (English and Filipino) used to sort feedback for review. It is a guide for
+// staff, not a judgment: anything with a negative word is shown under "Negative".
+const NEGATIVE = [
+  'bad', 'poor', 'worst', 'terrible', 'slow', 'difficult', 'hard', 'problem*', 'issue*', 'lack', 'lacking', 'outdated',
+  'not good', 'no help', 'useless', 'disappoint*', 'complain*', 'unfair', 'rude', 'confusing', 'broken', 'error*', 'late', 'expensive',
+  'pangit', 'hindi maganda', 'di maganda', 'mabagal', 'mahirap', 'kulang', 'sira', 'walang kwenta', 'nakakainis', 'bulok', 'magulo', 'luma',
+];
+const POSITIVE = [
+  'good', 'great', 'excellent', 'helpful', 'thank*', 'love', 'nice', 'best', 'amazing', 'well done', 'satisfied', 'grateful', 'easy',
+  'maganda', 'mahusay', 'salamat', 'magaling', 'masaya', 'ayos', 'malaking tulong', 'nakatulong',
+];
+// Whole words only ("hard" does not match "hardware"); a trailing * also matches longer words
+const hasWord = (text: string, words: string[]) =>
+  words.some((w) => {
+    const stem = w.endsWith('*');
+    const body = (stem ? w.slice(0, -1) : w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^\\p{L}])${body}${stem ? '' : '(?![\\p{L}])'}`, 'iu').test(text);
+  });
+
+/** Sorts a piece of feedback into Negative / Positive / Neutral for the staff review filter. */
+export function feedbackTone(text: string | null | undefined): FeedbackTone {
+  const t = (text || '').toLowerCase();
+  if (!t.trim()) return 'Neutral';
+  if (hasWord(t, NEGATIVE)) return 'Negative';
+  if (hasWord(t, POSITIVE)) return 'Positive';
+  return 'Neutral';
+}

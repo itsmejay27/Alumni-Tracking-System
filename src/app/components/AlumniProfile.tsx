@@ -358,9 +358,17 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       ),
     );
     const { id: _id, name: _name, ...base } = (record || {}) as AlumniRecord;
+    // Feedback is kept as history: a new or changed suggestion is added, earlier ones stay
+    const nowIso = new Date().toISOString();
+    let feedbackHistory = [...(record?.feedbackHistory || [])];
+    const prevText = (record?.suggestions || '').trim();
+    if (!feedbackHistory.length && prevText) feedbackHistory.push({ text: prevText, at: record?.respondedAt || '' });
+    const newText = suggestions.trim();
+    if (newText && newText !== (feedbackHistory[feedbackHistory.length - 1]?.text || '')) feedbackHistory.push({ text: newText, at: nowIso });
     const next = {
       ...base,
       ...patch,
+      feedbackHistory: feedbackHistory.length ? feedbackHistory : undefined,
       id: record?.id,
       email: currentUser.email,
       lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
@@ -643,7 +651,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                     ))}
                   </select>
                 </Field>
-                <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
+                <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. Mamburao Campus')} /></Field>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
                 {t('Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.')}
@@ -739,6 +747,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {tab === 'feedback' && (
             <>
               <Group title="Suggestions">
+                <p className="text-sm text-muted-foreground mb-3">
+                  {t('Your suggestions go to the Alumni Affairs Office and your program chair. They use them to improve the programs, services for alumni, and this tracer study. Earlier feedback is kept, so writing new feedback does not erase the old.')}
+                </p>
                 <Field label="Suggestions & feedback">
                   <textarea
                     rows={4}
@@ -748,6 +759,19 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                     placeholder={t('How can OMSU improve its programs or this tracer study?')}
                   />
                 </Field>
+                {(record?.feedbackHistory?.length || 0) > 1 && (
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer text-primary font-medium">{t('Your earlier feedback')} ({record!.feedbackHistory!.length - 1})</summary>
+                    <ul className="mt-2 space-y-2">
+                      {record!.feedbackHistory!.slice(0, -1).reverse().map((f, i) => (
+                        <li key={i} className="rounded-lg bg-muted/50 px-3 py-2">
+                          <p className="whitespace-pre-wrap">{f.text}</p>
+                          {f.at && <p className="text-xs text-muted-foreground mt-1">{mdy(f.at)}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </Group>
               <Group title="Privacy">
                 <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-border p-4">

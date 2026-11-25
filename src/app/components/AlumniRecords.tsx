@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
 import { mdy } from '@/lib/dates';
-import { facebookUrl, capitalizeWords } from '@/lib/text';
+import { facebookUrl, capitalizeWords, feedbackTone, FeedbackTone } from '@/lib/text';
 import { programName, PROGRAMS } from '@/lib/programs';
 import { toast } from 'sonner';
 import { confirmDialog } from './ConfirmDialog';
@@ -92,7 +92,9 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   });
   const pendingCount = records.filter((r) => r.verification === 'pending' && (!courseScope || r.course === courseScope)).length;
   const paged = usePaged(filteredRecords, 15);
-  const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
+  const [tone, setTone] = useState<'all' | FeedbackTone>('all');
+  const withFeedback = filteredRecords.filter((r) => r.suggestions);
+  const feedback = usePaged(withFeedback.filter((r) => tone === 'all' || feedbackTone(r.suggestions) === tone), 10);
 
   const batches = Array.from(new Set(records.map(r => r.batch))).sort().reverse();
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
@@ -425,6 +427,23 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       ) : (
         /* Suggestions Tracker Board */
         <div className="grid grid-cols-1 gap-4">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter feedback">
+            {(['all', 'Negative', 'Neutral', 'Positive'] as const).map((k) => {
+              const n = k === 'all' ? withFeedback.length : withFeedback.filter((r) => feedbackTone(r.suggestions) === k).length;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={tone === k}
+                  onClick={() => setTone(k)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${tone === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-muted'}`}
+                >
+                  {k === 'all' ? 'All feedback' : k} ({n})
+                </button>
+              );
+            })}
+            <span className="text-xs text-muted-foreground">Sorted by words used; a guide for review, not a judgment.</span>
+          </div>
           {feedback.pageItems.map((r) => (
               <div
                 key={r.id}
@@ -439,8 +458,16 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                       <GraduationCap size={13} /> {r.course} • Batch {r.batch}
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-primary/5 text-primary border border-primary/10 rounded-lg">
-                    SUBMITTED SUGGESTION
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                      feedbackTone(r.suggestions) === 'Negative'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : feedbackTone(r.suggestions) === 'Positive'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-primary/5 text-primary border-primary/10'
+                    }`}
+                  >
+                    {feedbackTone(r.suggestions).toUpperCase()}
                   </span>
                 </div>
 
@@ -448,6 +475,18 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <p className="text-sm italic text-foreground leading-relaxed">
                     "{r.suggestions}"
                   </p>
+                  {(r.feedbackHistory?.length || 0) > 1 && (
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer text-primary font-semibold">Earlier feedback ({r.feedbackHistory!.length - 1})</summary>
+                      <ul className="mt-2 space-y-1.5">
+                        {r.feedbackHistory!.slice(0, -1).reverse().map((f, i) => (
+                          <li key={i} className="not-italic">
+                            "{f.text}" {f.at && <span className="text-muted-foreground">· {mdy(f.at)}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50 text-xs">
