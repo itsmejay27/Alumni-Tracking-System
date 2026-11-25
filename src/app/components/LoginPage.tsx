@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { tr } from '@/lib/preferences';
+import { captchaEnabled, withCaptcha } from '@/lib/captcha';
+import { BotCheck } from './BotCheck';
 import { Req } from './RequiredMark';
 import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar, Loader2, Clock, AlertTriangle } from 'lucide-react';
 import { useContactInfo } from '@/lib/settings';
@@ -68,12 +70,26 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
   const cleanEmail = email.toLowerCase().trim();
 
+  // Bot check: one token per attempt; a new widget is shown after each try
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const freshCaptcha = () => setCaptchaKey((k) => k + 1);
+  const needCaptcha = () => {
+    if (captchaEnabled && !captchaToken) {
+      setError(tr('Please finish the bot check below first.'));
+      return true;
+    }
+    return false;
+  };
+
   const resendCode = async () => {
     setError('');
+    if (needCaptcha()) return;
     const { error } =
       step === 'verify'
-        ? await supabase.auth.resend({ type: 'signup', email: cleanEmail })
-        : await supabase.auth.resetPasswordForEmail(cleanEmail);
+        ? await supabase.auth.resend({ type: 'signup', email: cleanEmail, options: withCaptcha({}, captchaToken) })
+        : await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
+    freshCaptcha();
     if (error) setError(error.message);
     else {
       setNotice('A new code has been sent.');
@@ -114,6 +130,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       setError(tr('The app is not connected to the database yet. Please contact the administrator.'));
       return;
     }
+    if ((step === 'signin' || step === 'signup' || step === 'reset') && needCaptcha()) return;
     setBusy(true);
 
     if (step === 'signin') {
@@ -129,14 +146,14 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         setBusy(false);
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password, options: withCaptcha({}, captchaToken) });
+      freshCaptcha();
       if (error) {
         if (error.message === 'Email not confirmed') {
           // Send a fresh code and ask for it
-          await supabase.auth.resend({ type: 'signup', email: cleanEmail });
+          // The bot-check token was used by the sign-in; the new code can be requested with "Send again"
           go('verify');
-          setNotice('Your email is not verified yet. We sent you a new code.');
-          setCooldown(60);
+          setNotice(tr('Your email is not verified yet. Press "Resend code", then enter the code from your email.'));
         } else if (/invalid login credentials/i.test(error.message)) {
           const { data: tally } = await supabase.rpc('login_failed', { p_email: cleanEmail });
           const t = (tally || {}) as { attemptsLeft?: number; lockedUntil?: string | null };
@@ -144,6 +161,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           else if (typeof t.attemptsLeft === 'number')
             setError(`Incorrect email or password. ${t.attemptsLeft} attempt${t.attemptsLeft === 1 ? '' : 's'} left before the account is locked for 30 minutes.`);
           else setError(tr('Incorrect email or password.'));
+        } else if (/captcha/i.test(error.message)) {
+          setError(tr('The bot check expired. Please do it again, then sign in.'));
         } else if (/banned/i.test(error.message) || (error as any).code === 'user_banned') {
           setError(tr('This account has been deactivated. Please contact the OMSU Alumni Affairs Office.'));
         } else setError(error.message);
@@ -168,10 +187,12 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           email: cleanEmail,
           password,
           options: {
+            ...withCaptcha({}, captchaToken),
             emailRedirectTo: window.location.origin,
             data: { given_name: givenName.trim(), last_name: lastName.trim(), birth_date: birthDate, sex },
           },
         });
+        freshCaptcha();
         if (error) setError(/database error|alumni_record/i.test(error.message) ? 'Your name, birthday and sex do not match our graduate records.' : error.message);
         else if (data.user && data.user.identities?.length === 0) setError(tr('An account with this email already exists. Try signing in.'));
         else if (!data.session) {
@@ -184,7 +205,8 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       if (error) setError(tr('That code is wrong or has expired. Check the latest email or send a new code.'));
       else toast.success(tr('Email verified. Welcome to the OMSU Alumni Track!'));
     } else if (step === 'reset') {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
+      freshCaptcha();
       if (error) setError(error.message);
       else {
         go('resetCode');
@@ -404,11 +426,13 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
                   <span>{tr("Check your spam folder if you don't see it.")}</span>
                   <button type="button" disabled={cooldown > 0} onClick={resendCode} className="font-semibold text-[#002060] disabled:text-slate-400 hover:underline">
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                    {cooldown > 0 ? tr('Resend in {n}s', { n: cooldown }) : tr('Resend code')}
                   </button>
                 </div>
               </div>
             )}
+
+            <BotCheck onToken={setCaptchaToken} resetKey={captchaKey} theme="light" />
 
             {error && (
               <div className="bg-red-50 rounded-xl px-4 py-3">

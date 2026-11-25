@@ -30,6 +30,8 @@ import {
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase, passwordUpdateError, verifyPassword } from '@/lib/supabase';
+import { captchaEnabled } from '@/lib/captcha';
+import { BotCheck } from './BotCheck';
 import { emailTwoStep } from '@/lib/emailTwoStep';
 import { PasswordStrength } from './PasswordStrength';
 import { passwordStrength, roleLabel } from '@/lib/programs';
@@ -314,13 +316,18 @@ function PasswordCard({ email }: { email: string }) {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (captchaEnabled && !captchaToken) return toast.error(t('Please finish the bot check below first.'));
     if (next.length < 8 || passwordStrength(next).label === 'Weak') return toast.error(t('Please choose a stronger password (at least 8 characters).'));
     if (next !== confirm) return toast.error(t('New passwords do not match.'));
     setBusy(true);
-    if (!(await verifyPassword(email, current))) {
+    const ok = await verifyPassword(email, current, captchaToken);
+    setCaptchaKey((k) => k + 1); // a token works once
+    if (!ok) {
       setBusy(false);
       return toast.error(t('Current password is incorrect.'));
     }
@@ -343,6 +350,9 @@ function PasswordCard({ email }: { email: string }) {
             <PasswordStrength password={next} />
           </div>
           <PasswordField label={`${t('Confirm new password')} *`} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+        </div>
+        <div>
+          <BotCheck onToken={setCaptchaToken} resetKey={captchaKey} />
         </div>
         {confirm && next !== confirm && <p className="text-xs text-red-600">{t("Passwords don't match yet.")}</p>}
         <div className="flex justify-end mt-auto pt-2">

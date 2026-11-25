@@ -29,11 +29,11 @@ export async function passwordUpdateError(error: { message: string; code?: strin
  * Checks a password without touching the signed-in session (which may already have passed
  * two-step verification). Uses a separate, memory-only client and signs it out locally.
  */
-export async function verifyPassword(email: string, password: string): Promise<boolean> {
+export async function verifyPassword(email: string, password: string, captchaToken?: string | null): Promise<boolean> {
   const probe = createClient(url || 'http://localhost', key || 'missing-key', {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'omsu-password-check' },
   });
-  const { error } = await probe.auth.signInWithPassword({ email, password });
+  const { error } = await probe.auth.signInWithPassword({ email, password, options: captchaToken ? { captchaToken } : undefined });
   if (!error) await probe.auth.signOut({ scope: 'local' });
   return !error;
 }
