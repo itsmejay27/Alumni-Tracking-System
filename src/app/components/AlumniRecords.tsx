@@ -732,6 +732,21 @@ function RecordDetailModal({
                 <p className="text-xs text-muted-foreground font-semibold">Campus</p>
                 <p className="font-bold text-foreground mt-0.5">{record.campus || '—'}</p>
               </div>
+              {!!record.otherDegrees?.length && (
+                <div className="sm:col-span-3">
+                  <p className="text-xs text-muted-foreground font-semibold">Other degrees and further studies</p>
+                  <ul className="mt-1 space-y-1">
+                    {record.otherDegrees.map((d, i) => (
+                      <li key={i} className="font-semibold text-foreground">
+                        {d.degree || 'Degree'}
+                        <span className="font-normal text-muted-foreground">
+                          {d.school && ` · ${d.school}`} · {d.status === 'Ongoing' ? 'Ongoing' : `Graduated${d.year ? ` ${d.year}` : ''}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 

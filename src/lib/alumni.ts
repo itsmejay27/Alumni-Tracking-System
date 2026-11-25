@@ -71,6 +71,8 @@ export interface AlumniRecord {
   /** Removed by staff (wrong entry). Hidden from lists and reports; staff can restore it. */
   archived?: boolean;
   suggestions?: string;
+  /** Other degrees or further studies (e.g. a master's), besides the OMSU program on file. */
+  otherDegrees?: { degree: string; school: string; year?: string; status: 'Graduated' | 'Ongoing' }[];
   /** Every piece of feedback the graduate has sent, oldest first (new feedback never replaces old). */
   feedbackHistory?: { text: string; at: string }[];
   isPublic?: boolean;

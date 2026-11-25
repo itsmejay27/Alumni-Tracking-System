@@ -88,6 +88,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   // Education
   const [course, setCourse] = useState<Course>('BSIT');
   const [campus, setCampus] = useState('');
+  const [otherDegrees, setOtherDegrees] = useState<NonNullable<AlumniRecord['otherDegrees']>>([]);
   const [yearGraduated, setYearGraduated] = useState<number>(THIS_YEAR);
 
   // Employment
@@ -118,6 +119,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         setOtherSocialNetwork(rec.otherSocialNetwork || '');
         setOtherSocialId(rec.otherSocialId || '');
         setCampus(rec.campus || '');
+        setOtherDegrees(rec.otherDegrees || []);
         setPresentAddress((v) => v || rec.presentAddress);
         setPermanentAddress((v) => v || rec.permanentAddress);
         setIsIP(!!rec.isIP);
@@ -208,7 +210,15 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     motherName: motherName.trim().toUpperCase(),
     motherContact: motherContact.trim(),
   });
-  const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}`, campus: campus.trim() });
+  const educationSlice = () => ({
+    course,
+    yearGraduated,
+    batch: `${yearGraduated - 1}-${yearGraduated}`,
+    campus: campus.trim(),
+    otherDegrees: otherDegrees
+      .map((d) => ({ ...d, degree: capitalizeWords(d.degree, true), school: capitalizeWords(d.school, true), year: (d.year || '').trim() }))
+      .filter((d) => d.degree || d.school),
+  });
   const employmentSlice = () => {
     // Marking yourself unemployed ends your current job(s); they stay in your history
     const month = todayIso();
@@ -281,7 +291,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const draftState = {
     givenName, middleName, lastName, sex, dateOfBirth, civilStatus, mobileNo, facebookName, twitter,
     otherSocialNetwork, otherSocialId, presentAddress, permanentAddress, fatherName, fatherContact,
-    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic,
+    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic, otherDegrees,
   };
   const [draftReady, setDraftReady] = useState(false);
   // Restore once, right after the saved record has loaded
@@ -314,6 +324,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         if (v.status) setStatus(v.status);
         if (Array.isArray(v.history)) setHistory(v.history);
         if ('suggestions' in v) setSuggestions(v.suggestions);
+        if (Array.isArray(v.otherDegrees)) setOtherDegrees(v.otherDegrees);
         if ('isPublic' in v) setIsPublic(v.isPublic);
         if (d.tab) setTab(d.tab);
       }
@@ -656,6 +667,41 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               <p className="text-xs text-muted-foreground mt-3">
                 {t('Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.')}
               </p>
+            </Group>
+          )}
+          {tab === 'education' && (
+            <Group title="Other degrees and further studies">
+              <p className="text-sm text-muted-foreground mb-3">{t("Add any other degree you finished or are taking, for example a master's degree or a second bachelor's degree.")}</p>
+              <div className="space-y-3">
+                {otherDegrees.map((d, i) => {
+                  const upd = (patch: Partial<typeof d>) => setOtherDegrees((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                  return (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr_1fr_auto] gap-3 items-end rounded-xl border border-border p-3">
+                      <Field label="Degree"><input value={d.degree} onChange={(e) => upd({ degree: e.target.value })} className={input} placeholder={t('e.g. Master in Information Technology')} /></Field>
+                      <Field label="School"><input value={d.school} onChange={(e) => upd({ school: e.target.value })} className={input} /></Field>
+                      <Field label="Status">
+                        <select value={d.status} onChange={(e) => upd({ status: e.target.value as typeof d.status })} className={input}>
+                          <option value="Graduated">{t('Graduated')}</option>
+                          <option value="Ongoing">{t('Ongoing')}</option>
+                        </select>
+                      </Field>
+                      <Field label="Year">
+                        <input inputMode="numeric" value={d.year || ''} onChange={(e) => upd({ year: e.target.value.replace(/\D/g, '').slice(0, 4) })} className={input} placeholder="2024" />
+                      </Field>
+                      <button type="button" onClick={() => setOtherDegrees((list) => list.filter((_, j) => j !== i))} className="px-3 py-2 rounded-xl text-sm text-red-600 hover:bg-red-50" aria-label={t('Remove')}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOtherDegrees((list) => [...list, { degree: '', school: '', year: '', status: 'Graduated' }])}
+                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+              >
+                + {t('Add a degree')}
+              </button>
             </Group>
           )}
 

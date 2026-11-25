@@ -538,4 +538,12 @@ export const FIL: Record<string, string> = {
   "Choose one or more, or none for any program.": "Pumili ng isa o higit pa, o wala para sa kahit anong programa.",
   "{program} departments only": "Mga departamento ng {program} lamang",
   "Alumni and program chairs of {program}": "Mga alumni at program chair ng {program}",
+  "Other degrees and further studies": "Iba pang digri at karagdagang pag-aaral",
+  "Add any other degree you finished or are taking, for example a master's degree or a second bachelor's degree.": "Idagdag ang iba pang digri na natapos o kinukuha mo, halimbawa master's degree o pangalawang bachelor's degree.",
+  "Add a degree": "Magdagdag ng digri",
+  Degree: "Digri",
+  School: "Paaralan",
+  Graduated: "Nagtapos",
+  Ongoing: "Kasalukuyang kinukuha",
+  Year: "Taon",
 };
