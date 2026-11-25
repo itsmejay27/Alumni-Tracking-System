@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
-import { mdy, todayIso } from '@/lib/dates';
+import { mdy, todayIso, serviceLength, formatMonths } from '@/lib/dates';
+import { capitalizeWords } from '@/lib/text';
+import { SurveyAnswers, surveyApplies, unansweredQuestions } from '@/lib/survey';
+import { PeoSurveyForm } from './PeoSurvey';
 import {
   Save,
   Trash2,
@@ -15,13 +20,15 @@ import {
   Camera,
   FileText,
   Upload,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 
 import { CurrentUser } from '../App';
 import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
-import { PROGRAMS, EMPLOYMENT_STATUSES, EMPLOYER_TYPES, programName } from '@/lib/programs';
+import { PROGRAMS, EMPLOYMENT_STATUSES, EMPLOYER_TYPES, INDUSTRIES, programName } from '@/lib/programs';
 import { LoadingState } from './DataState';
 import { PhoneInput, isValidMobile } from './PhoneInput';
 
@@ -57,7 +64,13 @@ const newEntry = (): EmploymentEntry => ({
   recordedAt: new Date().toISOString(),
 });
 
-export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: AlumniProfileProps) {
+/** Cancel reloads the saved profile by mounting a fresh copy of the page. */
+export function AlumniProfile(props: AlumniProfileProps) {
+  const [version, setVersion] = useState(0);
+  return <AlumniProfileView key={version} {...props} onDiscard={() => setVersion((v) => v + 1)} />;
+}
+
+function AlumniProfileView({ currentUser, onUpdateProfile, onSaved, gate, onDiscard }: AlumniProfileProps & { onDiscard: () => void }) {
   const t = useT();
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<AlumniRecord | null>(null);
@@ -67,9 +80,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const [givenName, setGivenName] = useState(currentUser?.givenName || '');
   const [middleName, setMiddleName] = useState(currentUser?.middleName || '');
   const [lastName, setLastName] = useState(currentUser?.lastName || '');
-  const [sex, setSex] = useState<'Male' | 'Female'>(currentUser?.sex || 'Male');
+  const [sex, setSex] = useState<'' | 'Male' | 'Female'>(currentUser?.sex || '');
   const [dateOfBirth, setDateOfBirth] = useState(currentUser?.dateOfBirth || '');
-  const [civilStatus, setCivilStatus] = useState<CurrentUser['civilStatus']>(currentUser?.civilStatus || 'Single');
+  const [civilStatus, setCivilStatus] = useState<CurrentUser['civilStatus']>(currentUser?.civilStatus || '');
   const [mobileNo, setMobileNo] = useState(currentUser?.mobileNo || '');
   const [facebookName, setFacebookName] = useState(currentUser?.facebookName || '');
   const [twitter, setTwitter] = useState('');
@@ -87,6 +100,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   // Education
   const [course, setCourse] = useState<Course>('BSIT');
   const [campus, setCampus] = useState('');
+  const [otherDegrees, setOtherDegrees] = useState<NonNullable<AlumniRecord['otherDegrees']>>([]);
   const [yearGraduated, setYearGraduated] = useState<number>(THIS_YEAR);
 
   // Employment
@@ -96,6 +110,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const [page, setPage] = useState(0);
 
   const [suggestions, setSuggestions] = useState('');
+  // BSIT alumni answer the PEO survey before giving suggestions (panel: Ma'am Faye)
+  const [survey, setSurvey] = useState<SurveyAnswers>({});
   const [isPublic, setIsPublic] = useState(true);
 
   useEffect(() => {
@@ -117,6 +133,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         setOtherSocialNetwork(rec.otherSocialNetwork || '');
         setOtherSocialId(rec.otherSocialId || '');
         setCampus(rec.campus || '');
+        setOtherDegrees(rec.otherDegrees || []);
         setPresentAddress((v) => v || rec.presentAddress);
         setPermanentAddress((v) => v || rec.permanentAddress);
         setIsIP(!!rec.isIP);
@@ -137,9 +154,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         setHistory(h);
         setSavedIds(new Set(h.map((e) => e.id)));
         setSuggestions(rec.suggestions || '');
+        setSurvey(rec.peoSurvey?.answers || {});
         setIsPublic(rec.isPublic ?? true);
       })
-      .catch((err) => toast.error(`Could not load your record: ${err.message}`))
+      .catch((err) => toast.error(friendlyError(err, 'Could not load your record.')))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -186,6 +204,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   // ---- Saving, one section at a time ----
   type SectionId = 'personal' | 'education' | 'employment' | 'feedback';
   const [tab, setTab] = useState<SectionId>('personal');
+  // View-only until the alumnus presses "Update profile", so nothing changes by accident.
+  // A profile that still needs answers opens ready to edit.
+  const mustFill = !!gate && (gate.missing.length > 0 || gate.needsSave);
+  const [editing, setEditing] = useState(mustFill);
   const [savingSection, setSavingSection] = useState<SectionId | null>(null);
 
   const personalSlice = () => ({
@@ -207,7 +229,15 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     motherName: motherName.trim().toUpperCase(),
     motherContact: motherContact.trim(),
   });
-  const educationSlice = () => ({ course, yearGraduated, batch: `${yearGraduated - 1}-${yearGraduated}`, campus: campus.trim() });
+  const educationSlice = () => ({
+    course,
+    yearGraduated,
+    batch: `${yearGraduated - 1}-${yearGraduated}`,
+    campus: campus.trim(),
+    otherDegrees: otherDegrees
+      .map((d) => ({ ...d, degree: capitalizeWords(d.degree, true), school: capitalizeWords(d.school, true), year: (d.year || '').trim() }))
+      .filter((d) => d.degree || d.school),
+  });
   const employmentSlice = () => {
     // Marking yourself unemployed ends your current job(s); they stay in your history
     const month = todayIso();
@@ -231,7 +261,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       jobDescription: employed ? latest!.jobDescription : undefined,
     };
   };
-  const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic });
+  const needsSurvey = surveyApplies(course);
+  const surveyDone = needsSurvey && unansweredQuestions(survey).length === 0;
+  const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic, ...(needsSurvey ? { peoSurvey: { answers: survey } } : {}) });
 
   // Which sections have changes that are not saved yet (compared with what was loaded or last saved)
   const snapshot = (section: SectionId) =>
@@ -264,7 +296,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       }
       const age = ageFrom(dateOfBirth);
       if (age == null || age < 15) return 'Please enter your correct date of birth';
+      if (!sex) return 'Please choose your sex';
+      if (!civilStatus) return 'Please choose your civil status';
       if (!presentAddress.trim() || !permanentAddress.trim()) return 'Enter your present and permanent address';
+    }
+    if (section === 'feedback' && needsSurvey && suggestions.trim() && !surveyDone && suggestions.trim() !== (record?.suggestions || '').trim()) {
+      return 'Answer all the survey questions first, then write your suggestions';
     }
     if (section === 'employment') {
       if (status !== 'Unemployed' && !history.some((h) => !h.endDate)) return 'Add your current job, or choose Unemployed';
@@ -280,7 +317,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const draftState = {
     givenName, middleName, lastName, sex, dateOfBirth, civilStatus, mobileNo, facebookName, twitter,
     otherSocialNetwork, otherSocialId, presentAddress, permanentAddress, fatherName, fatherContact,
-    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic,
+    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic, otherDegrees, survey,
   };
   const [draftReady, setDraftReady] = useState(false);
   // Restore once, right after the saved record has loaded
@@ -313,6 +350,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         if (v.status) setStatus(v.status);
         if (Array.isArray(v.history)) setHistory(v.history);
         if ('suggestions' in v) setSuggestions(v.suggestions);
+        if (Array.isArray(v.otherDegrees)) setOtherDegrees(v.otherDegrees);
+        if (v.survey && typeof v.survey === 'object') setSurvey(v.survey);
         if ('isPublic' in v) setIsPublic(v.isPublic);
         if (d.tab) setTab(d.tab);
       }
@@ -357,9 +396,25 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       ),
     );
     const { id: _id, name: _name, ...base } = (record || {}) as AlumniRecord;
+    // Feedback is kept as history: a new or changed suggestion is added, earlier ones stay
+    const nowIso = new Date().toISOString();
+    let feedbackHistory = [...(record?.feedbackHistory || [])];
+    const prevText = (record?.suggestions || '').trim();
+    if (!feedbackHistory.length && prevText) feedbackHistory.push({ text: prevText, at: record?.respondedAt || '' });
+    const newText = suggestions.trim();
+    if (newText && newText !== (feedbackHistory[feedbackHistory.length - 1]?.text || '')) feedbackHistory.push({ text: newText, at: nowIso });
+    const peoSurvey = needsSurvey
+      ? {
+          answers: survey,
+          completedAt: surveyDone ? record?.peoSurvey?.completedAt || nowIso : undefined,
+          updatedAt: nowIso,
+        }
+      : record?.peoSurvey;
     const next = {
       ...base,
       ...patch,
+      peoSurvey,
+      feedbackHistory: feedbackHistory.length ? feedbackHistory : undefined,
       id: record?.id,
       email: currentUser.email,
       lastUpdated: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
@@ -387,9 +442,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       });
       toast.success(t('Your alumni profile has been saved'));
       clearDraft();
+      setEditing(false);
       onSaved?.();
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your profile.'));
     }
     setSavingSection(null);
   };
@@ -402,7 +458,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       await onUpdateProfile({ ...currentUser, avatarUrl: url });
       toast.success(url ? t('Photo updated') : t('Photo removed'));
     } catch (err: any) {
-      toast.error(`Could not save photo: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your photo.'));
     }
   };
 
@@ -425,16 +481,32 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const tabs: { id: SectionId; label: string; saveLabel: string; done: boolean; optional?: boolean }[] = [
     {
       id: 'personal',
-      label: 'Personal information',
+      label: tr('Personal information'),
       saveLabel: 'Save personal information',
       done: validateSafe('personal'),
     },
-    { id: 'education', label: 'Education', saveLabel: 'Save education', done: !!course && !!yearGraduated },
-    { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: validateSafe('employment') },
-    { id: 'feedback', label: 'Feedback', saveLabel: 'Save', done: !!suggestions.trim(), optional: true },
+    { id: 'education', label: tr('Education'), saveLabel: 'Save education', done: !!course && !!yearGraduated },
+    { id: 'employment', label: tr('Employment'), saveLabel: 'Save employment', done: validateSafe('employment') },
+    { id: 'feedback', label: needsSurvey ? 'Survey & feedback' : 'Feedback', saveLabel: 'Save', done: needsSurvey ? surveyDone : !!suggestions.trim(), optional: true },
   ];
   const tabIndex = tabs.findIndex((x) => x.id === tab);
   const anyDirty = Object.values(dirty).some(Boolean);
+  // Unsaved answers (e.g. restored after a refresh) keep the form open for editing
+  const isEditing = editing || anyDirty;
+  const cancelEditing = async () => {
+    if (
+      anyDirty &&
+      !(await confirmDialog({
+        title: t('Discard your changes?'),
+        message: t('Everything you changed since your last save will be put back.'),
+        confirmLabel: t('Discard changes'),
+        danger: true,
+      }))
+    )
+      return;
+    clearDraft();
+    onDiscard();
+  };
   /** Moving forward is only allowed when the steps before it have their required answers. */
   const goToTab = (id: SectionId) => {
     const target = tabs.findIndex((x) => x.id === id);
@@ -452,6 +524,15 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
   return (
     <div className="w-full space-y-6 pb-12 animate-in fade-in duration-300">
+      {record?.verification === 'pending' && (
+        <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+          <p className="font-semibold">{t('Waiting for verification')}</p>
+          <p className="mt-0.5">
+            {t('Your account matched a graduate record by name only, so Alumni Affairs will check that it is yours. Until then, the details saved earlier stay hidden. Fill in your profile below; your answers are kept.')}
+          </p>
+        </div>
+      )}
+
       {/* Profile header */}
       <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white">
         <div
@@ -459,7 +540,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
         />
         <div className="relative flex flex-col md:flex-row md:items-center gap-6 p-6 sm:p-8">
-          <label className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden shrink-0 cursor-pointer self-center md:self-auto" title="Change photo">
+          <label className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden shrink-0 cursor-pointer self-center md:self-auto" title={tr("Change photo")}>
             <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
             {avatarUrl ? (
               <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
@@ -477,7 +558,10 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               {programName(course)} · {t('Class of')} {yearGraduated}
             </p>
             <div className="flex flex-wrap gap-2 justify-center md:justify-start pt-2">
-              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{t(status)}</span>
+              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
+                {/* Show the saved answer; before the first answer there is none yet */}
+                {record && record.status !== 'Not Tracked' ? t(record.status) : t('Employment status not answered yet')}
+              </span>
               {record?.lastUpdated && <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs">{t('Updated')} {record.lastUpdated}</span>}
               {avatarUrl && (
                 <button type="button" onClick={() => savePhoto('')} className="inline-flex items-center gap-1 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1 text-xs">
@@ -548,30 +632,43 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         </div>
 
         <div className="p-5 sm:p-7 space-y-6">
+          {!isEditing && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3">
+              <p className="text-sm sm:mr-auto">
+                <span className="font-semibold">{t('View only.')}</span> {t('Press Update profile to change your details.')}
+              </p>
+              <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground">
+                <Pencil size={15} /> {t('Update profile')}
+              </button>
+            </div>
+          )}
+          <fieldset disabled={!isEditing} className="space-y-6 min-w-0 border-0 p-0 m-0">
           {/* PERSONAL */}
           {tab === 'personal' && (
             <>
-              <Group title="Name">
+              <Group title={tr("Name")}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} /></Field>
-                  <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} /></Field>
-                  <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} /></Field>
+                  <Field label={tr("First name *")}><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} onBlur={(e) => setGivenName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label={tr("Middle name")}><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} onBlur={(e) => setMiddleName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label={tr("Last name *")}><input required value={lastName} onChange={(e) => setLastName(e.target.value)} onBlur={(e) => setLastName(capitalizeWords(e.target.value))} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Personal details">
+              <Group title={tr("Personal details")}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="Sex *">
-                    <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
+                  <Field label={tr("Sex *")}>
+                    <select required value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
+                      <option value="" disabled>{t('Choose...')}</option>
                       <option value="Female">{t('Female')}</option>
                       <option value="Male">{t('Male')}</option>
                     </select>
                   </Field>
-                  <Field label="Date of birth *">
+                  <Field label={tr("Date of birth *")}>
                     <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
                   </Field>
-                  <Field label="Civil status *">
-                    <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
+                  <Field label={tr("Civil status *")}>
+                    <select required value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
+                      <option value="" disabled>{t('Choose...')}</option>
                       <option value="Single">{t('Single')}</option>
                       <option value="Married">{t('Married')}</option>
                       <option value="Separated">{t('Separated')}</option>
@@ -581,35 +678,35 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 </div>
               </Group>
 
-              <Group title="Contact">
+              <Group title={tr("Contact")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label="Email"><input readOnly value={currentUser?.email || ''} className={`${input} bg-muted text-muted-foreground`} /></Field>
-                  <Field label="Mobile number *"><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
+                  <Field label={tr("Mobile number *")}><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Address">
+              <Group title={tr("Address")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Present address *"><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
-                  <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Present address *")}><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Permanent address *")}><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Social media">
+              <Group title={tr("Social media")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Facebook name"><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
-                  <Field label="Twitter / X"><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder="@username" /></Field>
-                  <Field label="Other social network"><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
-                  <Field label="Other social network ID"><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
+                  <Field label={tr("Facebook name")}><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Twitter / X")}><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder={tr("@username")} /></Field>
+                  <Field label={tr("Other social network")}><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
+                  <Field label={tr("Other social network ID")}><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
                 </div>
               </Group>
 
-              <Group title="Parents">
+              <Group title={tr("Parents")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Father's name *"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
-                  <Field label="Father's contact number *"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-                  <Field label="Mother's name *"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
-                  <Field label="Mother's contact number *"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
+                  <Field label={tr("Father's name *")}><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} onBlur={(e) => setFatherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full name')} /></Field>
+                  <Field label={tr("Father's contact number *")}><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
+                  <Field label={tr("Mother's name *")}><input value={motherName} onChange={(e) => setMotherName(e.target.value)} onBlur={(e) => setMotherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full maiden name')} /></Field>
+                  <Field label={tr("Mother's contact number *")}><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
                 </div>
               </Group>
             </>
@@ -617,31 +714,69 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
           {/* EDUCATION */}
           {tab === 'education' && (
-            <Group title="Degree finished from OMSU">
+            <Group title={tr("Degree finished from OMSU")}>
               <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
-                <Field label="Program *">
-                  <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
+                <Field label={tr("Program *")}>
+                  <select value={course} disabled onChange={(e) => setCourse(e.target.value as Course)} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {PROGRAMS.map((p) => (
                       <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Year graduated *">
-                  <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
+                <Field label={tr("Year graduated *")}>
+                  <select value={yearGraduated} disabled onChange={(e) => setYearGraduated(Number(e.target.value))} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {GRAD_YEARS.map((y) => (
                       <option key={y} value={y}>{y - 1}-{y}</option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
+                <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. Mamburao Campus')} /></Field>
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                {t('Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.')}
+              </p>
+            </Group>
+          )}
+          {tab === 'education' && (
+            <Group title={tr("Other degrees and further studies")}>
+              <p className="text-sm text-muted-foreground mb-3">{t("Add any other degree you finished or are taking, for example a master's degree or a second bachelor's degree.")}</p>
+              <div className="space-y-3">
+                {otherDegrees.map((d, i) => {
+                  const upd = (patch: Partial<typeof d>) => setOtherDegrees((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                  return (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr_1fr_auto] gap-3 items-end rounded-xl border border-border p-3">
+                      <Field label="Degree"><input value={d.degree} onChange={(e) => upd({ degree: e.target.value })} className={input} placeholder={t('e.g. Master in Information Technology')} /></Field>
+                      <Field label="School"><input value={d.school} onChange={(e) => upd({ school: e.target.value })} className={input} /></Field>
+                      <Field label="Status">
+                        <select value={d.status} onChange={(e) => upd({ status: e.target.value as typeof d.status })} className={input}>
+                          <option value="Graduated">{t('Graduated')}</option>
+                          <option value="Ongoing">{t('Ongoing')}</option>
+                        </select>
+                      </Field>
+                      <Field label="Year">
+                        <input inputMode="numeric" value={d.year || ''} onChange={(e) => upd({ year: e.target.value.replace(/\D/g, '').slice(0, 4) })} className={input} placeholder="2024" />
+                      </Field>
+                      <button type="button" onClick={() => setOtherDegrees((list) => list.filter((_, j) => j !== i))} className="px-3 py-2 rounded-xl text-sm text-red-600 hover:bg-red-50" aria-label={t('Remove')}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOtherDegrees((list) => [...list, { degree: '', school: '', year: '', status: 'Graduated' }])}
+                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+              >
+                + {t('Add a degree')}
+              </button>
             </Group>
           )}
 
           {/* EMPLOYMENT */}
           {tab === 'employment' && (
             <>
-              <Group title="Current status">
+              <Group title={tr("Current status")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
@@ -665,7 +800,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 </div>
               </Group>
 
-              <Group title="Current job">
+              <Group title={tr("Current job")}>
                 {status === 'Unemployed' ? (
                   <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
                     {t("You're marked as unemployed, so no job details are needed.")}
@@ -691,7 +826,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               </Group>
 
               {previousJobs.length > 0 && (
-                <Group title="Previous jobs">
+                <Group title={tr("Previous jobs")}>
                   <button type="button" onClick={() => setShowPrevious((v) => !v)} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     <ChevronDown size={16} className={`transition-transform ${showPrevious ? 'rotate-180' : ''}`} />
                     {showPrevious ? t('Hide previous jobs') : t('Show previous jobs')} ({previousJobs.length})
@@ -725,18 +860,45 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {/* FEEDBACK */}
           {tab === 'feedback' && (
             <>
-              <Group title="Suggestions">
-                <Field label="Suggestions & feedback">
+              {needsSurvey && (
+                <Group title={tr("Survey")}>
+                  <PeoSurveyForm answers={survey} onChange={setSurvey} completedAt={record?.peoSurvey?.completedAt} />
+                </Group>
+              )}
+              <Group title={tr("Suggestions")}>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {t('Your suggestions go to the Alumni Affairs Office and your program chair. They use them to improve the programs, services for alumni, and this tracer study. Earlier feedback is kept, so writing new feedback does not erase the old.')}
+                </p>
+                {needsSurvey && !surveyDone && (
+                  <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2 mb-3">
+                    {t('Answer all the survey questions above first. The suggestions box opens when the survey is complete.')}
+                  </p>
+                )}
+                <Field label={tr("Suggestions & feedback")}>
                   <textarea
                     rows={4}
                     value={suggestions}
                     onChange={(e) => setSuggestions(e.target.value)}
-                    className={`${input} resize-none`}
+                    disabled={needsSurvey && !surveyDone}
+                    className={`${input} resize-none disabled:opacity-60 disabled:cursor-not-allowed`}
                     placeholder={t('How can OMSU improve its programs or this tracer study?')}
                   />
                 </Field>
+                {(record?.feedbackHistory?.length || 0) > 1 && (
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer text-primary font-medium">{t('Your earlier feedback')} ({record!.feedbackHistory!.length - 1})</summary>
+                    <ul className="mt-2 space-y-2">
+                      {record!.feedbackHistory!.slice(0, -1).reverse().map((f, i) => (
+                        <li key={i} className="rounded-lg bg-muted/50 px-3 py-2">
+                          <p className="whitespace-pre-wrap">{f.text}</p>
+                          {f.at && <p className="text-xs text-muted-foreground mt-1">{mdy(f.at)}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </Group>
-              <Group title="Privacy">
+              <Group title={tr("Privacy")}>
                 <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-border p-4">
                   <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
                   <span className="text-sm">
@@ -747,6 +909,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               </Group>
             </>
           )}
+
+          </fieldset>
 
           {/* Back / Next between steps; one Save at the end so each save is one history entry */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 pt-5 border-t border-border/60">
@@ -768,7 +932,24 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 <ChevronLeft size={16} /> {t('Back')}
               </button>
             )}
-            {tabIndex < tabs.length - 1 ? (
+            {isEditing && !mustFill && (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted"
+              >
+                {t('Cancel')}
+              </button>
+            )}
+            {!isEditing ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm"
+              >
+                <Pencil size={16} /> {t('Update profile')}
+              </button>
+            ) : tabIndex < tabs.length - 1 ? (
               <button
                 type="button"
                 onClick={() => goToTab(tabs[tabIndex + 1].id)}
@@ -846,7 +1027,7 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
           {job.position || t('Position not set')} <span className="font-normal text-muted-foreground">{t('at')} {job.company || '—'}</span>
         </p>
         <p className="text-xs text-muted-foreground truncate">
-          {[job.employmentStatus, job.employerType].filter(Boolean).join(' · ')}
+          {[job.employmentStatus, job.employerType, job.industry].filter(Boolean).join(' · ')}
           {job.startDate && job.endDate && ` · ${mdy(job.startDate)} – ${mdy(job.endDate)}`}
           {job.startDate && !job.endDate && ` · since ${mdy(job.startDate)}`}
           {!job.startDate && job.endDate && ` · until ${mdy(job.endDate)}`}
@@ -886,11 +1067,40 @@ function JobModal({
       toast.error(t('Enter the position and the company'));
       return;
     }
+    if (isNew && !draft.startDate) {
+      toast.error(t('Enter the date you started this job'));
+      return;
+    }
+    if (draft.startDate && draft.startDate > todayIso()) {
+      toast.error(t('The start date cannot be in the future'));
+      return;
+    }
+    if (draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
+      toast.error(t('The end date must be after the start date'));
+      return;
+    }
+    if (!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' && !(draft.employerAddress || '').trim()) {
+      toast.error(t('Enter the employer address'));
+      return;
+    }
+    if (isNew && !draft.industry) {
+      toast.error(t('Choose the industry of your employer'));
+      return;
+    }
+    if (isNew && !draft.relatedToCourse) {
+      toast.error(t('Answer whether this job is related to your course'));
+      return;
+    }
     if (!draft.endDate && !draft.proofPath) {
       toast.error(t('Attach a proof of employment (contract, company ID or business permit)'));
       return;
     }
-    onSave({ ...draft, position: draft.position.trim(), company: draft.company.trim() });
+    onSave({
+      ...draft,
+      position: capitalizeWords(draft.position, true),
+      company: draft.company.trim(),
+      lengthOfService: serviceLength(draft.startDate, draft.endDate) || draft.lengthOfService,
+    });
   };
 
   // Proof of employment goes to private storage; only the graduate and their staff can open it
@@ -912,7 +1122,7 @@ function JobModal({
     const { error } = await supabase.storage.from('employment-proofs').upload(path, file, { contentType: file.type });
     setUploading(false);
     if (error) {
-      toast.error(`${t('Could not upload the file')}: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not upload the file.'));
       return;
     }
     set({ proofPath: path, proofName: file.name.slice(0, 120) });
@@ -925,7 +1135,7 @@ function JobModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Job details">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={tr("Job details")}>
       <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
         <div className="flex items-start justify-between gap-3">
@@ -933,25 +1143,31 @@ function JobModal({
             <h3 className="font-semibold text-lg">{isNew ? t('Add job') : locked ? t('Job details') : t('Edit job')}</h3>
             {locked && <p className="text-xs text-muted-foreground mt-0.5">{t("Saved jobs are kept as history and can't be edited, but you can still attach the proof of employment.")}</p>}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
             <X size={18} />
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Position / job title *"><input autoFocus={!locked} disabled={locked} value={draft.position} onChange={(e) => set({ position: e.target.value })} className={input} /></Field>
-          <Field label="Company / agency *"><input disabled={locked} value={draft.company} onChange={(e) => set({ company: e.target.value })} className={input} /></Field>
-          <Field label="Employment status *">
+          <Field label={tr("Position / job title *")}><input autoFocus={!locked} disabled={locked} value={draft.position} onChange={(e) => set({ position: e.target.value })} className={input} /></Field>
+          <Field label={tr("Company / agency *")}><input disabled={locked} value={draft.company} onChange={(e) => set({ company: e.target.value })} className={input} /></Field>
+          <Field label={tr("Employment status *")}>
             <select disabled={locked} value={draft.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })} className={input}>
               {EMPLOYMENT_STATUSES.map((x) => <option key={x}>{x}</option>)}
             </select>
           </Field>
-          <Field label="Employer type *">
+          <Field label={isNew ? 'Industry *' : 'Industry'}>
+            <select disabled={locked && !!entry.industry} value={draft.industry || ''} onChange={(e) => set({ industry: e.target.value || undefined })} className={input}>
+              <option value="">{t('Choose...')}</option>
+              {INDUSTRIES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
+            </select>
+          </Field>
+          <Field label={tr("Employer type *")}>
             <select disabled={locked} value={draft.employerType} onChange={(e) => set({ employerType: e.target.value })} className={input}>
               {EMPLOYER_TYPES.map((x) => <option key={x}>{x}</option>)}
             </select>
           </Field>
-          <Field label="Employer address"><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
-          <Field label="Employer contact no.">
+          <Field label={!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' ? 'Employer address *' : 'Employer address'}><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
+          <Field label={tr("Employer contact no.")}>
             <input
               disabled={locked}
               inputMode="tel"
@@ -961,9 +1177,29 @@ function JobModal({
               placeholder={t('Phone or landline')}
             />
           </Field>
-          <Field label="Length of service"><input disabled={locked} value={draft.lengthOfService || ''} onChange={(e) => set({ lengthOfService: e.target.value })} className={input} placeholder={t('e.g. 1 year 3 months')} /></Field>
+          <Field label={isNew ? 'Date started *' : 'Date started'}>
+            <input type="date" disabled={locked} max={todayIso()} value={draft.startDate || ''} onChange={(e) => set({ startDate: e.target.value })} className={input} />
+          </Field>
+          <Field label={tr("Date ended")}>
+            <input type="date" disabled={locked} min={draft.startDate || undefined} max={todayIso()} value={draft.endDate || ''} onChange={(e) => set({ endDate: e.target.value || null })} className={input} />
+            <span className="block text-[11px] text-muted-foreground mt-1">{t('Leave empty if you still work here.')}</span>
+          </Field>
+          <Field label={tr("Length of service")}>
+            {draft.startDate ? (
+              <p className={`${input} bg-muted/40`} aria-live="polite">{t(serviceLength(draft.startDate, draft.endDate)) || '—'}</p>
+            ) : (
+              <ServiceInput disabled={locked} value={draft.lengthOfService || ''} onChange={(v) => set({ lengthOfService: v })} />
+            )}
+          </Field>
+          <Field label={isNew ? 'Is this job related to your course? *' : 'Is this job related to your course?'}>
+            <select disabled={locked && !!entry.relatedToCourse} value={draft.relatedToCourse || ''} onChange={(e) => set({ relatedToCourse: (e.target.value || undefined) as EmploymentEntry['relatedToCourse'] })} className={input}>
+              <option value="">{t('Choose...')}</option>
+              <option value="Yes">{t('Yes')}</option>
+              <option value="No">{t('No')}</option>
+            </select>
+          </Field>
           <div className="md:col-span-2">
-            <Field label="Job description">
+            <Field label={tr("Job description")}>
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
             </Field>
           </div>
@@ -999,7 +1235,7 @@ function JobModal({
             {!isNew && !entry.endDate && (
               <button
                 type="button"
-                onClick={() => onSave({ ...draft, endDate: todayIso() })}
+                onClick={() => onSave({ ...draft, endDate: todayIso(), lengthOfService: serviceLength(draft.startDate, todayIso()) || draft.lengthOfService })}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50"
               >
                 {t('I no longer work here')}
@@ -1014,6 +1250,38 @@ function JobModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Length of service for jobs without a start date: a number, and the system adds "years" or "months". */
+function ServiceInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const t = useT();
+  const parsed = value.match(/^(\d+)\s*(year|month)/i);
+  const [num, setNum] = useState(parsed ? parsed[1] : '');
+  const [unit, setUnit] = useState<'years' | 'months'>(parsed && /month/i.test(parsed[2]) ? 'months' : 'years');
+  const update = (n: string, u: 'years' | 'months') => {
+    const clean = n.replace(/\D/g, '').slice(0, 3);
+    setNum(clean);
+    setUnit(u);
+    onChange(clean ? formatMonths(u === 'years' ? Number(clean) * 12 : Number(clean)) : '');
+  };
+  return (
+    <div className="flex gap-2">
+      <input
+        inputMode="numeric"
+        pattern="[0-9]*"
+        disabled={disabled}
+        value={num}
+        onChange={(e) => update(e.target.value, unit)}
+        className={`${input} w-24`}
+        aria-label={t('Length of service (number)')}
+        placeholder="0"
+      />
+      <select disabled={disabled} value={unit} onChange={(e) => update(num, e.target.value as 'years' | 'months')} className={input} aria-label={t('Years or months')}>
+        <option value="years">{t('years')}</option>
+        <option value="months">{t('months')}</option>
+      </select>
     </div>
   );
 }

@@ -19,3 +19,32 @@ export function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/**
+ * Length of service between two dates (YYYY-MM-DD or YYYY-MM), e.g. "1 year 3 months".
+ * An empty end date means the job is current, so it counts up to today.
+ * Returns '' when the start date is missing or after the end date.
+ */
+export function serviceLength(start: string | null | undefined, end?: string | null): string {
+  const parse = (v: string) => {
+    const m = v.trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+    return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3] || 1) } : null;
+  };
+  const a = start ? parse(start) : null;
+  const b = parse(end || todayIso());
+  if (!a || !b) return '';
+  let months = (b.y - a.y) * 12 + (b.m - a.m) - (b.d < a.d ? 1 : 0);
+  if (months < 0) return '';
+  return formatMonths(months);
+}
+
+/** 15 -> "1 year 3 months", 0 -> "Less than a month" */
+export function formatMonths(total: number): string {
+  if (!Number.isFinite(total) || total < 0) return '';
+  const y = Math.floor(total / 12);
+  const m = Math.round(total % 12);
+  const parts = [];
+  if (y) parts.push(`${y} ${y === 1 ? 'year' : 'years'}`);
+  if (m) parts.push(`${m} ${m === 1 ? 'month' : 'months'}`);
+  return parts.join(' ') || 'Less than a month';
+}

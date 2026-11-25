@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
 import { mdy } from '@/lib/dates';
-import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
+import { facebookUrl, capitalizeWords, feedbackTone, FeedbackTone } from '@/lib/text';
+import { programName, PROGRAMS } from '@/lib/programs';
+import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
+import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom, patchRecord } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
   s === 'Employed'
@@ -26,9 +32,12 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
   const [filterBatch, setFilterBatch] = useState<string>('all');
   const [filterCourse, setFilterCourse] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'class-new' | 'class-old' | 'status' | 'updated'>('name');
   const [selectedRecord, setSelectedRecord] = useState<AlumniRecord | null>(null);
   const [viewTab, setViewTab] = useState<'records' | 'suggestions'>('records');
-  const { records, loading, error, reload } = useAlumniRecords();
+  const { records: everyRecord, loading, error, reload } = useAlumniRecords({ includeRemoved: true });
+  const removedRecords = everyRecord.filter((r) => r.archived);
+  const records = filterStatus === 'removed' ? removedRecords : everyRecord.filter((r) => !r.archived);
   const [showImport, setShowImport] = useState(false);
 
   const isSuperAdmin = userRole === 'admin';
@@ -64,13 +73,30 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     const matchesCourse = courseScope ? true : (filterCourse === 'all' || record.course === filterCourse);
 
     // 5. Status Filter
-    const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
+    const matchesStatus =
+      filterStatus === 'all' ||
+      filterStatus === 'removed' ||
+      (filterStatus === 'pending' ? record.verification === 'pending' : record.status === filterStatus);
 
     return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
   });
 
+  const STATUS_ORDER: Record<string, number> = { Employed: 0, 'Self-Employed': 1, Unemployed: 2, 'Not Tracked': 3 };
+  const byName = (a: AlumniRecord, b: AlumniRecord) => a.lastName.localeCompare(b.lastName) || a.givenName.localeCompare(b.givenName);
+  filteredRecords.sort((a, b) => {
+    switch (sortBy) {
+      case 'class-new': return (b.yearGraduated || 0) - (a.yearGraduated || 0) || byName(a, b);
+      case 'class-old': return (a.yearGraduated || 0) - (b.yearGraduated || 0) || byName(a, b);
+      case 'status': return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || byName(a, b);
+      case 'updated': return (b.respondedAt || '').localeCompare(a.respondedAt || '') || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
+  const pendingCount = records.filter((r) => r.verification === 'pending' && (!courseScope || r.course === courseScope)).length;
   const paged = usePaged(filteredRecords, 15);
-  const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
+  const [tone, setTone] = useState<'all' | FeedbackTone>('all');
+  const withFeedback = filteredRecords.filter((r) => r.suggestions);
+  const feedback = usePaged(withFeedback.filter((r) => tone === 'all' || feedbackTone(r.suggestions) === tone), 10);
 
   const batches = Array.from(new Set(records.map(r => r.batch))).sort().reverse();
   const courses = ['BSIT', 'BEED', 'BSBA-FM', 'BSBA-OM', 'BSOA'];
@@ -85,6 +111,43 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     a.download = `OMSU_Alumni_${scopeName}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  // Full backup (panel: back up the system): every table Alumni Affairs can read, as one JSON file.
+  // The database is also backed up daily by Supabase; this is an extra copy kept by the office.
+  const [backingUp, setBackingUp] = useState(false);
+  const handleBackup = async () => {
+    setBackingUp(true);
+    try {
+      const readAll = async (table: string, orderBy: string) => {
+        const rows: unknown[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from(table).select('*').order(orderBy).range(from, from + 999);
+          if (error) throw new Error(`${table}: ${error.message}`);
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
+      };
+      // Each table with a column that gives a stable order for paging
+      const tables: [string, string][] = [
+        ['alumni_records', 'id'], ['alumni_record_history', 'id'], ['jobs', 'id'], ['announcements', 'id'],
+        ['batch_totals', 'year_graduated'], ['site_settings', 'key'], ['profiles', 'id'],
+      ];
+      const backup: Record<string, unknown> = { createdAt: new Date().toISOString(), note: tr('OMSU Alumni Track backup. Contains personal data: store it securely.') };
+      for (const [t, orderBy] of tables) backup[t] = await readAll(t, orderBy);
+      const blob = new Blob([JSON.stringify(backup, null, 1)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OMSU_Alumni_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(tr('Backup downloaded. Keep it in a safe place: it contains personal data.'));
+    } catch (err) {
+      toast.error(friendlyError(err, 'Could not make the backup.'));
+    }
+    setBackingUp(false);
   };
 
   const generateCSV = (records: AlumniRecord[]) => {
@@ -137,10 +200,10 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">
-            {courseScope ? `${courseScope} Alumni Records` : 'Alumni Records'}
+            {courseScope ? tr('{program} Alumni Records', { program: courseScope }) : tr('Alumni Records')}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {courseScope ? `Tracer records of ${courseScope} graduates` : 'Tracer records of all OMSU graduates'}
+            {courseScope ? tr('Tracer records of {program} graduates', { program: courseScope }) : tr('Tracer records of all OMSU graduates')}
           </p>
         </div>
         
@@ -150,7 +213,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-muted/70"
           >
             <Upload size={16} />
-            Import
+            {tr("Import")}
           </button>
           <button
             onClick={handleDownload}
@@ -158,8 +221,19 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-[#001740] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={18} />
-            Export CSV
+            {tr("Export CSV")}
           </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleBackup}
+              disabled={backingUp}
+              title={tr("Download every record, job and announcement as one file to keep a copy")}
+              className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-muted/70 disabled:opacity-60"
+            >
+              <Download size={16} />
+              {backingUp ? tr('Preparing…') : tr('Full backup')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -185,7 +259,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
           }`}
         >
           <HelpCircle size={16} />
-          Suggestions & Feedback ({filteredRecords.filter(r => r.suggestions).length})
+          {tr('Suggestions & Feedback')} ({filteredRecords.filter(r => r.suggestions).length})
         </button>
       </div>
 
@@ -193,13 +267,13 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
         <>
           {/* Filters */}
           <div className="bg-card rounded-2xl p-5 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Search */}
               <div className="relative md:col-span-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <input
                   type="text"
-                  placeholder="Search name or email..."
+                  placeholder={tr("Search name or email...")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-medium"
@@ -218,7 +292,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     <option value={courseScope}>{courseScope} Department</option>
                   ) : (
                     <>
-                      <option value="all">All Programs</option>
+                      <option value="all">{tr("All Programs")}</option>
                       {courses.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -234,7 +308,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   onChange={(e) => setFilterBatch(e.target.value)}
                   className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
                 >
-                  <option value="all">All Batches</option>
+                  <option value="all">{tr("All Batches")}</option>
                   {batches.map(batch => (
                     <option key={batch} value={batch}>{batch}</option>
                   ))}
@@ -248,11 +322,29 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   onChange={(e) => setFilterStatus(e.target.value)}
                   className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="Employed">Employed</option>
-                  <option value="Self-Employed">Self-Employed</option>
-                  <option value="Unemployed">Unemployed</option>
-                  <option value="Not Tracked">Not tracked</option>
+                  <option value="all">{tr("All Statuses")}</option>
+                  <option value="Employed">{tr("Employed")}</option>
+                  <option value="Self-Employed">{tr("Self-Employed")}</option>
+                  <option value="Unemployed">{tr("Unemployed")}</option>
+                  <option value="Not Tracked">{tr("Not tracked")}</option>
+                  <option value="pending">{tr('Waiting for verification')}{pendingCount ? ` (${pendingCount})` : ''}</option>
+                  <option value="removed">{tr('Removed records')}{removedRecords.length ? ` (${removedRecords.length})` : ''}</option>
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  aria-label={tr("Sort graduates")}
+                  className="w-full px-4 py-2.5 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm font-semibold"
+                >
+                  <option value="name">{tr("Sort: Name (A–Z)")}</option>
+                  <option value="class-new">{tr("Sort: Class (newest first)")}</option>
+                  <option value="class-old">{tr("Sort: Class (oldest first)")}</option>
+                  <option value="status">{tr("Sort: Status")}</option>
+                  <option value="updated">{tr("Sort: Recently updated")}</option>
                 </select>
               </div>
             </div>
@@ -274,24 +366,24 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                         statusClass(record.status)
                       }`}
                     >
-                      {record.status}
+                      {tr(record.status)}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-xs bg-muted/40 p-3 rounded-lg border border-border/50">
                     <div>
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Program</span>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">{tr("Program")}</span>
                       <span className="font-bold text-foreground">{record.course}</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Graduated</span>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">{tr("Graduated")}</span>
                       <span className="font-bold text-foreground">{record.yearGraduated || record.batch}</span>
                     </div>
                     {isEmployed(record) && (
                       <div className="col-span-2 border-t border-border/30 pt-2 mt-1">
-                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Current Job</span>
+                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">{tr("Current Job")}</span>
                         <span className="font-semibold text-foreground text-xs block mt-0.5 leading-snug">
-                          {record.currentPosition} <span className="text-muted-foreground">at</span> {record.currentCompany}
+                          {record.currentPosition} <span className="text-muted-foreground">{tr("at")}</span> {record.currentCompany}
                         </span>
                       </div>
                     )}
@@ -301,7 +393,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     onClick={() => setSelectedRecord(record)}
                     className="w-full py-2.5 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs rounded-lg transition-all text-center border border-primary/20 hover:border-transparent"
                   >
-                    View Full Details
+                    {tr("View Full Details")}
                   </button>
                 </div>
               ))}
@@ -313,12 +405,12 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                 <table className="w-full">
                   <thead className="bg-muted/50 border-b border-border/70">
                     <tr>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Name</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Program</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">Graduated</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Current Position</th>
-                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">Action</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">{tr("Name")}</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">{tr("Program")}</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground whitespace-nowrap">{tr("Graduated")}</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">{tr("Status")}</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">{tr("Current Position")}</th>
+                      <th className="text-left px-6 py-4 font-bold text-xs uppercase tracking-wider text-muted-foreground">{tr("Action")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
@@ -338,8 +430,13 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                               statusClass(record.status)
                             }`}
                           >
-                            {record.status}
+                            {tr(record.status)}
                           </span>
+                          {record.verification === 'pending' && (
+                            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-800 border-amber-300 whitespace-nowrap">
+                              {tr("Needs verification")}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           {isEmployed(record) ? (
@@ -348,7 +445,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                               <p className="text-muted-foreground truncate max-w-[180px]">{record.currentCompany}</p>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">{record.status === 'Not Tracked' ? 'No response yet' : 'Seeking work'}</span>
+                            <span className="text-xs text-muted-foreground italic">{record.status === 'Not Tracked' ? tr('No response yet') : tr('Seeking work')}</span>
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -356,7 +453,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                             onClick={() => setSelectedRecord(record)}
                             className="px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs rounded-lg transition-all"
                           >
-                            Details
+                            {tr("Details")}
                           </button>
                         </td>
                       </tr>
@@ -371,15 +468,31 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             {filteredRecords.length === 0 && (
               <div className="bg-card rounded-2xl text-center py-16 shadow-sm">
                 <Filter className="mx-auto mb-3 text-muted-foreground/60" size={48} />
-                <h4 className="font-bold text-lg mb-0.5">No Records Found</h4>
-                <p className="text-muted-foreground text-sm max-w-sm mx-auto">Try refining your filters or query to locate alumni profiles.</p>
+                <h4 className="font-bold text-lg mb-0.5">{tr("No Records Found")}</h4>
+                <p className="text-muted-foreground text-sm max-w-sm mx-auto">{tr("Try refining your filters or query to locate alumni profiles.")}</p>
               </div>
             )}
           </div>
         </>
-      ) : (
-        /* Suggestions Tracker Board */
+      ) : ( /* Suggestions Tracker Board */
         <div className="grid grid-cols-1 gap-4">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={tr("Filter feedback")}>
+            {(['all', 'Negative', 'Neutral', 'Positive'] as const).map((k) => {
+              const n = k === 'all' ? withFeedback.length : withFeedback.filter((r) => feedbackTone(r.suggestions) === k).length;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={tone === k}
+                  onClick={() => setTone(k)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${tone === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-muted'}`}
+                >
+                  {k === 'all' ? 'All feedback' : k} ({n})
+                </button>
+              );
+            })}
+            <span className="text-xs text-muted-foreground">Sorted by words used; a guide for review, not a judgment.</span>
+          </div>
           {feedback.pageItems.map((r) => (
               <div
                 key={r.id}
@@ -394,8 +507,16 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                       <GraduationCap size={13} /> {r.course} • Batch {r.batch}
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-primary/5 text-primary border border-primary/10 rounded-lg">
-                    SUBMITTED SUGGESTION
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                      feedbackTone(r.suggestions) === 'Negative'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : feedbackTone(r.suggestions) === 'Positive'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-primary/5 text-primary border-primary/10'
+                    }`}
+                  >
+                    {feedbackTone(r.suggestions).toUpperCase()}
                   </span>
                 </div>
 
@@ -403,6 +524,18 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <p className="text-sm italic text-foreground leading-relaxed">
                     "{r.suggestions}"
                   </p>
+                  {(r.feedbackHistory?.length || 0) > 1 && (
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer text-primary font-semibold">Earlier feedback ({r.feedbackHistory!.length - 1})</summary>
+                      <ul className="mt-2 space-y-1.5">
+                        {r.feedbackHistory!.slice(0, -1).reverse().map((f, i) => (
+                          <li key={i} className="not-italic">
+                            "{f.text}" {f.at && <span className="text-muted-foreground">· {mdy(f.at)}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50 text-xs">
@@ -410,12 +543,18 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                     href={`mailto:${r.email}`}
                     className="flex items-center gap-1 font-semibold text-primary hover:underline"
                   >
-                    <Mail size={12} /> Contact Email
+                    <Mail size={12} /> {tr("Contact Email")}
                   </a>
                   {r.facebookName && (
-                    <span className="text-muted-foreground flex items-center gap-1.5">
+                    <a
+                      href={facebookUrl(r.facebookName) || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1.5"
+                      title={tr("Open on Facebook")}
+                    >
                       <Facebook size={12} /> {r.facebookName}
-                    </span>
+                    </a>
                   )}
                   <span className="text-muted-foreground ml-auto">Last updated: {r.lastUpdated}</span>
                 </div>
@@ -427,9 +566,9 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
           {filteredRecords.filter((r) => r.suggestions).length === 0 && (
             <div className="bg-card border border-border/80 rounded-2xl p-16 text-center shadow-lg">
               <ClipboardList className="mx-auto mb-4 text-muted-foreground/60" size={56} />
-              <h3 className="font-bold text-xl mb-1 text-foreground">No Feedback Submitted</h3>
+              <h3 className="font-bold text-xl mb-1 text-foreground">{tr("No Feedback Submitted")}</h3>
               <p className="text-muted-foreground text-sm">
-                Alumni from this course department have not submitted any recommendations yet.
+                {tr("Alumni from this course department have not submitted any recommendations yet.")}
               </p>
             </div>
           )}
@@ -437,19 +576,64 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
       )}
 
       {/* Detail Modal */}
-      {showImport && <CsvImport scope={courseScope as any} existing={records} onDone={reload} onClose={() => setShowImport(false)} />}
+      {showImport && <CsvImport scope={courseScope as any} existing={everyRecord} onDone={reload} onClose={() => setShowImport(false)} />}
 
       {selectedRecord && (
         <RecordDetailModal
           record={selectedRecord}
+          allRecords={everyRecord}
+          canRemove={isSuperAdmin || !!courseScope}
           onClose={() => setSelectedRecord(null)}
+          onChanged={() => {
+            setSelectedRecord(null);
+            reload();
+          }}
         />
       )}
     </div>
   );
 }
 
-function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
+function RecordDetailModal({
+  record,
+  allRecords,
+  canRemove,
+  onClose,
+  onChanged,
+}: {
+  record: AlumniRecord;
+  allRecords: AlumniRecord[];
+  canRemove: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const setRemoved = async (removed: boolean) => {
+    const ok = await confirmDialog(
+      removed
+        ? { title: tr('Remove this record?'), message: tr('Use this for a wrong or duplicate entry. It is hidden from lists and reports, and you can restore it from "Removed records".'), confirmLabel: tr('Remove'), danger: true }
+        : { title: tr('Restore this record?'), message: tr('It shows again in lists and reports.'), confirmLabel: tr('Restore') }
+    );
+    if (!ok) return;
+    setBusy(true);
+    const res = await patchRecord(record.id, { archived: removed ? true : undefined });
+    setBusy(false);
+    if (!res.ok) return toast.error(friendlyError(res.error, 'Could not save the record.'));
+    toast.success(removed ? tr('Record removed. Restore it from "Removed records".') : tr('Record restored'));
+    onChanged();
+  };
+  // Escape closes the window (or the edit form first), like the other windows in the app
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role=alertdialog]')) return;
+      if (editing) setEditing(false);
+      else onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, onClose]);
+  if (editing) return <EditRecord record={record} allRecords={allRecords} onClose={() => setEditing(false)} onSaved={onChanged} />;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
@@ -458,7 +642,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-muted-foreground hover:text-foreground p-1.5 hover:bg-muted rounded-lg transition-colors z-10"
-          aria-label="Close modal"
+          aria-label={tr("Close modal")}
         >
           <X size={20} />
         </button>
@@ -479,55 +663,83 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
               statusClass(record.status)
             }`}
           >
-            {record.status}
+            {tr(record.status)}
           </span>
         </div>
 
         <div className="space-y-6 pt-6">
+          <div className="flex flex-wrap gap-2">
+            {!record.archived && (
+              <button type="button" onClick={() => setEditing(true)} className="px-3.5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90">
+                {tr("Edit record")}
+              </button>
+            )}
+            {canRemove && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setRemoved(!record.archived)}
+                className={`px-3.5 py-2 rounded-lg text-sm font-semibold border disabled:opacity-60 ${record.archived ? 'border-border hover:bg-muted' : 'border-red-300 text-red-700 hover:bg-red-50'}`}
+              >
+                {record.archived ? tr('Restore record') : tr('Remove record')}
+              </button>
+            )}
+          </div>
+          {record.archived && (
+            <p className="rounded-xl bg-muted px-4 py-3 text-sm">{tr("This record was removed. It is hidden from lists, reports and reminders until restored.")}</p>
+          )}
+          {record.verification === 'pending' && <VerifyClaim record={record} onDone={onChanged} />}
+
           {/* PERSONAL INFRASTRUCTURE DETAILS */}
           <div className="space-y-4">
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-              <User size={16} className="text-primary" /> Personal Demographics
+              <User size={16} className="text-primary" /> {tr("Personal Demographics")}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Email Contact</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Email Contact")}</p>
                 <p className="font-bold text-foreground break-all mt-0.5">{record.email}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Mobile No.</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Mobile No.")}</p>
                 <p className="font-bold text-foreground mt-0.5">{record.mobileNo}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Facebook Profile</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Facebook Profile")}</p>
                 <div className="flex items-center gap-1 text-blue-600 font-bold mt-0.5 break-all">
                   <Facebook size={14} className="shrink-0" />
-                  <span>{record.facebookName}</span>
+                  {record.facebookName ? (
+                    <a href={facebookUrl(record.facebookName) || undefined} target="_blank" rel="noopener noreferrer" className="hover:underline" title={tr("Open on Facebook")}>
+                      {record.facebookName}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground font-normal">{tr("Not given")}</span>
+                  )}
                 </div>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Date of Birth</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Date of Birth")}</p>
                 <p className="font-bold text-foreground mt-0.5">
                   {record.dateOfBirth}
                   {ageFrom(record.dateOfBirth) != null && <span className="font-medium text-muted-foreground"> · {ageFrom(record.dateOfBirth)} yrs old</span>}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Sex</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Sex")}</p>
                 <p className="font-bold text-foreground mt-0.5">{record.sex}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Civil Status</p>
-                <p className="font-bold text-foreground mt-0.5">{record.civilStatus}</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Civil Status")}</p>
+                <p className="font-bold text-foreground mt-0.5">{record.civilStatus ? tr(record.civilStatus) : tr('Not given')}</p>
               </div>
               {(record.twitter || record.otherSocialNetwork || record.otherSocialId) && (
                 <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <p className="text-xs text-muted-foreground font-semibold">Twitter / X</p>
+                    <p className="text-xs text-muted-foreground font-semibold">{tr("Twitter / X")}</p>
                     <p className="font-bold text-foreground mt-0.5 break-all">{record.twitter || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground font-semibold">Other social network</p>
+                    <p className="text-xs text-muted-foreground font-semibold">{tr("Other social network")}</p>
                     <p className="font-bold text-foreground mt-0.5 break-all">
                       {[record.otherSocialNetwork, record.otherSocialId].filter(Boolean).join(': ') || '—'}
                     </p>
@@ -535,23 +747,23 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
                 </div>
               )}
               <div className="col-span-full border-t border-border/40 pt-3 mt-1">
-                <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Present Address</p>
+                <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> {tr("Present Address")}</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.presentAddress}</p>
               </div>
               <div className="col-span-full">
-                <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> Permanent Address</p>
+                <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1"><MapPin size={12} /> {tr("Permanent Address")}</p>
                 <p className="font-semibold text-foreground mt-0.5">{record.permanentAddress}</p>
               </div>
               <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-border/40 pt-3 mt-1">
                 <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Father's Name / Contact</p>
+                  <p className="text-xs text-muted-foreground font-semibold">{tr("Father's Name / Contact")}</p>
                   <p className="font-semibold text-foreground mt-0.5">
                     {record.fatherName || '—'}
                     {record.fatherContact && <span className="font-normal text-muted-foreground"> · {record.fatherContact}</span>}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground font-semibold">Mother's Name / Contact</p>
+                  <p className="text-xs text-muted-foreground font-semibold">{tr("Mother's Name / Contact")}</p>
                   <p className="font-semibold text-foreground mt-0.5">
                     {record.motherName || '—'}
                     {record.motherContact && <span className="font-normal text-muted-foreground"> · {record.motherContact}</span>}
@@ -564,28 +776,43 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           {/* EDUCATIONAL DETAILS */}
           <div className="space-y-4">
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-              <GraduationCap size={16} className="text-primary" /> College Background
+              <GraduationCap size={16} className="text-primary" /> {tr("College Background")}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 bg-muted/30 border border-border/50 rounded-2xl p-5 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Finished Course / Degree</p>
-                <p className="font-bold text-foreground mt-0.5">{record.course}</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Program")}</p>
+                <p className="font-bold text-foreground mt-0.5">{programName(record.course)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Academic Year Graduated</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Year Graduated (Academic Year)")}</p>
                 <p className="font-bold text-foreground mt-0.5">{record.batch}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-semibold">Campus</p>
+                <p className="text-xs text-muted-foreground font-semibold">{tr("Campus")}</p>
                 <p className="font-bold text-foreground mt-0.5">{record.campus || '—'}</p>
               </div>
+              {!!record.otherDegrees?.length && (
+                <div className="sm:col-span-3">
+                  <p className="text-xs text-muted-foreground font-semibold">{tr("Other degrees and further studies")}</p>
+                  <ul className="mt-1 space-y-1">
+                    {record.otherDegrees.map((d, i) => (
+                      <li key={i} className="font-semibold text-foreground">
+                        {d.degree || 'Degree'}
+                        <span className="font-normal text-muted-foreground">
+                          {d.school && ` · ${d.school}`} · {d.status === 'Ongoing' ? 'Ongoing' : `Graduated${d.year ? ` ${d.year}` : ''}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
           {/* EMPLOYMENT DETAILS */}
           <div className="space-y-4">
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-              <Briefcase size={16} className="text-primary" /> Career Status
+              <Briefcase size={16} className="text-primary" /> {tr("Career Status")}
             </h4>
             <EmploymentHistory record={record} />
           </div>
@@ -593,7 +820,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           {/* PAST VERSIONS */}
           <div className="space-y-4">
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-              <ClipboardList size={16} className="text-primary" /> Record history
+              <ClipboardList size={16} className="text-primary" /> {tr("Record history")}
             </h4>
             <RecordHistory recordId={record.id} />
           </div>
@@ -602,7 +829,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           {record.suggestions && (
             <div className="space-y-4">
               <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-                <HelpCircle size={16} className="text-primary" /> Suggestions for OMSU
+                <HelpCircle size={16} className="text-primary" /> {tr("Suggestions for OMSU")}
               </h4>
               <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 text-sm">
                 <p className="italic text-foreground leading-relaxed">
@@ -618,7 +845,7 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
           onClick={onClose}
           className="mt-8 w-full py-3.5 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/95 transition-all text-sm shadow-md"
         >
-          Close Profile details
+          {tr("Close Profile details")}
         </button>
       </div>
     </div>
@@ -641,13 +868,13 @@ function EmploymentHistory({ record }: { record: AlumniRecord }) {
         <HistoryList items={current} />
       ) : (
         <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
-          {record.status === 'Not Tracked' ? 'This graduate has not answered the tracer yet.' : 'Currently not employed.'}
+          {record.status === 'Not Tracked' ? tr('This graduate has not answered the tracer yet.') : tr('Currently not employed.')}
         </div>
       )}
       {previous.length > 0 && (
         <div>
           <button onClick={() => setShowPrevious((v) => !v)} className="text-sm font-medium text-primary hover:underline">
-            {showPrevious ? 'Hide' : 'Show'} previous jobs ({previous.length})
+            {showPrevious ? tr('Hide') : tr('Show')} previous jobs ({previous.length})
           </button>
           {showPrevious && <HistoryList items={previous} />}
         </div>
@@ -677,14 +904,14 @@ function RecordHistory({ recordId }: { recordId: string }) {
   return (
     <div className="space-y-3">
       <button onClick={toggle} className="text-sm font-medium text-primary hover:underline">
-        {open ? 'Hide' : 'Show'} past versions of this record
+        {tr(open ? 'Hide past versions of this record' : 'Show past versions of this record')}
       </button>
       {open && (
         <div className="space-y-2">
           {!items ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-muted-foreground">{tr("Loading...")}</p>
           ) : items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No earlier versions. This record has not been changed since it was added.</p>
+            <p className="text-sm text-muted-foreground">{tr("No earlier versions. This record has not been changed since it was added.")}</p>
           ) : (
             items.map((h) => {
               const d = h.data || {};
@@ -730,7 +957,7 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
           </div>
           <p className="text-muted-foreground">{j.company}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            {[j.employerType, j.employmentStatus, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${mdy(j.startDate)}`].filter(Boolean).join(' · ')}
+            {[j.employerType, j.employmentStatus, j.industry, j.relatedToCourse && `related to course: ${j.relatedToCourse}`, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${mdy(j.startDate)}`].filter(Boolean).join(' · ')}
           </p>
           {(j.employerAddress || j.employerContact) && (
             <p className="text-xs text-muted-foreground mt-1">{[j.employerAddress, j.employerContact && `Tel. ${j.employerContact}`].filter(Boolean).join(' · ')}</p>
@@ -757,5 +984,244 @@ function ProofLink({ path, name }: { path: string; name?: string }) {
     <button onClick={open} disabled={opening} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60">
       <FileText size={13} /> {opening ? 'Opening...' : `Proof of employment${name ? `: ${name}` : ''}`}
     </button>
+  );
+}
+
+/**
+ * An account matched this record by name only. Staff compare what the account entered with the
+ * details on file (kept hidden from the account), then approve or reject the link.
+ */
+function VerifyClaim({ record, onDone }: { record: AlumniRecord; onDone: () => void }) {
+  const [held, setHeld] = useState<Partial<AlumniRecord> | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from('alumni_link_holds')
+      .select('held_data')
+      .eq('record_id', record.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setLoadError(friendlyError(error, 'Could not load the records.'));
+        else setHeld((data?.held_data as Partial<AlumniRecord>) || {});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [record.id]);
+
+  const review = async (approve: boolean) => {
+    const ok = await confirmDialog(
+      approve
+        ? { title: tr('Approve this graduate?'), message: tr('The account gets this record, including the details saved earlier.'), confirmLabel: tr('Approve') }
+        : { title: tr('Reject this link?'), message: tr('The account is removed from this record and the earlier details are restored. The person can try again or contact the office.'), confirmLabel: tr('Reject'), danger: true }
+    );
+    if (!ok) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('review_record_link', { p_record_id: record.id, p_approve: approve });
+    setBusy(false);
+    if (error) return toast.error(friendlyError(error, 'Could not save the record.'));
+    if (data === 'not_pending') toast.info(tr('Someone already reviewed this graduate.'));
+    else toast.success(approve ? tr('Graduate verified') : tr('Link rejected'));
+    onDone();
+  };
+
+  const rows: [string, string | undefined, string | undefined][] = [
+    ['Birthday', held?.dateOfBirth, record.dateOfBirth],
+    ['Sex', held?.sex, record.sex],
+    ['Mobile no.', held?.mobileNo, record.mobileNo],
+    ['Present address', held?.presentAddress, record.presentAddress],
+    ['Email', held?.email, record.email],
+  ];
+
+  return (
+    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 space-y-4 text-amber-950">
+      <div>
+        <p className="font-bold">{tr("Waiting for verification")}</p>
+        <p className="text-sm mt-1">
+          This account matched the record by name only, because the record has no birthday or sex on file. The details saved
+          earlier stay hidden from the account until you approve. Compare them, and check the person&apos;s ID if needed.
+        </p>
+      </div>
+      {loadError ? (
+        <p className="text-sm text-red-700">Couldn't load the earlier details: {loadError}</p>
+      ) : !held ? (
+        <p className="text-sm">{tr("Loading earlier details…")}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-amber-800">
+                <th className="py-1 pr-4 font-semibold"></th>
+                <th className="py-1 pr-4 font-semibold">{tr("On file")}</th>
+                <th className="py-1 font-semibold">{tr("Entered by the account")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, a, b]) => (
+                <tr key={label} className="border-t border-amber-200">
+                  <td className="py-1.5 pr-4 font-medium whitespace-nowrap">{label}</td>
+                  <td className="py-1.5 pr-4 break-words">{a || '—'}</td>
+                  <td className="py-1.5 break-words">{b || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => review(true)}
+          className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60"
+        >
+          {tr("Approve")}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => review(false)}
+          className="px-4 py-2 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 text-sm font-semibold disabled:opacity-60"
+        >
+          {tr("Reject")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Staff edit a graduate's record (panel: Program Head can update student data, fix a wrong batch).
+ * Nothing changes until Save. Program chairs keep records in their own program; Alumni Affairs
+ * can also move a record to another program.
+ */
+function EditRecord({ record, allRecords, onClose, onSaved }: { record: AlumniRecord; allRecords: AlumniRecord[]; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState({
+    givenName: record.givenName,
+    middleName: record.middleName || '',
+    lastName: record.lastName,
+    course: record.course,
+    yearGraduated: record.yearGraduated || new Date().getFullYear(),
+    sex: record.sex || '',
+    dateOfBirth: record.dateOfBirth || '',
+    mobileNo: record.mobileNo || '',
+    email: record.email || '',
+    presentAddress: record.presentAddress || '',
+    permanentAddress: record.permanentAddress || '',
+    status: record.status,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (patch: Partial<typeof f>) => setF((v) => ({ ...v, ...patch }));
+  const years = Array.from({ length: new Date().getFullYear() - 1979 }, (_, i) => new Date().getFullYear() + 1 - i);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const givenName = capitalizeWords(f.givenName);
+    const lastName = capitalizeWords(f.lastName);
+    const middleName = capitalizeWords(f.middleName);
+    if (!givenName || !lastName) return setError(tr('Enter the first and last name.'));
+    if (f.mobileNo && !/^09\d{9}$/.test(f.mobileNo)) return setError(tr('Mobile number must be 11 digits starting with 09.'));
+    if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) return setError(tr('Enter a valid email address, or leave it empty.'));
+    const key = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+    const dup = allRecords.find(
+      (r) => r.id !== record.id && !r.archived && r.course === f.course && key(r.givenName) === key(givenName) && key(r.lastName) === key(lastName),
+    );
+    if (dup && !(await confirmDialog({ title: tr('Possible duplicate'), message: `${dup.givenName} ${dup.lastName} (${dup.course}, ${dup.batch}) is already on file. Save anyway?`, confirmLabel: tr('Save anyway') }))) return;
+
+    const data = {
+      givenName,
+      middleName,
+      lastName,
+      yearGraduated: Number(f.yearGraduated),
+      sex: f.sex,
+      dateOfBirth: f.dateOfBirth,
+      mobileNo: f.mobileNo,
+      email: f.email.trim().toLowerCase(),
+      presentAddress: f.presentAddress.trim(),
+      permanentAddress: f.permanentAddress.trim(),
+      status: f.status,
+    };
+    // Only send what changed, so untouched fields keep exactly what is stored
+    const before: Record<string, unknown> = {
+      givenName: record.givenName, middleName: record.middleName || '', lastName: record.lastName, yearGraduated: record.yearGraduated,
+      sex: record.sex || '', dateOfBirth: record.dateOfBirth || '', mobileNo: record.mobileNo || '', email: (record.email || '').toLowerCase(),
+      presentAddress: record.presentAddress || '', permanentAddress: record.permanentAddress || '', status: record.status,
+    };
+    const patch = Object.fromEntries(Object.entries(data).filter(([k, v]) => v !== before[k]));
+    const moved = f.course !== record.course || Number(f.yearGraduated) !== record.yearGraduated;
+    if (!Object.keys(patch).length && !moved) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    const res = await patchRecord(record.id, patch, {
+      course: f.course,
+      batch: `${Number(f.yearGraduated) - 1}-${f.yearGraduated}`,
+      ...('email' in patch ? { email: data.email || null } : {}),
+    });
+    setBusy(false);
+    if (!res.ok) return setError(/row-level security|policy/i.test(res.error || '') ? tr('You can only keep records in your own program.') : friendlyError(res.error, 'Could not save the record.'));
+    toast.success(tr('Record saved'));
+    onSaved();
+  };
+
+  const field = 'w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:border-primary text-sm';
+  const label = 'block text-xs font-semibold text-muted-foreground mb-1';
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-label={tr("Edit record")}>
+      <form onSubmit={save} className="bg-card rounded-2xl p-5 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-lg space-y-5 my-auto">
+        <div>
+          <h3 className="text-xl font-bold">{tr("Edit record")}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{tr("Nothing changes until you save. Every change is kept in the record history and the activity log.")}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label><span className={label}>{tr("First name *")}</span><input required value={f.givenName} onChange={(e) => set({ givenName: e.target.value })} className={field} /></label>
+          <label><span className={label}>{tr("Middle name")}</span><input value={f.middleName} onChange={(e) => set({ middleName: e.target.value })} className={field} /></label>
+          <label><span className={label}>{tr("Last name *")}</span><input required value={f.lastName} onChange={(e) => set({ lastName: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-2">
+            <span className={label}>{tr("Program")}</span>
+            <select value={f.course} onChange={(e) => set({ course: e.target.value as AlumniRecord['course'] })} className={field}>
+              {PROGRAMS.map((p) => <option key={p.code} value={p.code}>{p.code} – {p.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className={label}>{tr("Year graduated")}</span>
+            <select value={f.yearGraduated} onChange={(e) => set({ yearGraduated: Number(e.target.value) })} className={field}>
+              {years.map((y) => <option key={y} value={y}>{y - 1}-{y}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className={label}>{tr("Sex")}</span>
+            <select value={f.sex} onChange={(e) => set({ sex: e.target.value as AlumniRecord['sex'] })} className={field}>
+              <option value="">{tr("Not given")}</option><option>{tr("Male")}</option><option>{tr("Female")}</option>
+            </select>
+          </label>
+          <label><span className={label}>{tr("Date of birth")}</span><input type="date" value={f.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} className={field} /></label>
+          <label>
+            <span className={label}>{tr("Employment status")}</span>
+            <select value={f.status} onChange={(e) => set({ status: e.target.value as AlumniRecord['status'] })} className={field}>
+              <option>{tr("Employed")}</option><option>{tr("Self-Employed")}</option><option>{tr("Unemployed")}</option><option value="Not Tracked">{tr("Not tracked")}</option>
+            </select>
+          </label>
+          <label><span className={label}>{tr("Mobile no.")}</span><input inputMode="numeric" value={f.mobileNo} onChange={(e) => set({ mobileNo: e.target.value.replace(/\D/g, '').slice(0, 11) })} className={field} placeholder="09XXXXXXXXX" /></label>
+          <label className="sm:col-span-2"><span className={label}>{tr("Email")}</span><input type="email" value={f.email} onChange={(e) => set({ email: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-3"><span className={label}>{tr("Present address")}</span><input value={f.presentAddress} onChange={(e) => set({ presentAddress: e.target.value })} className={field} /></label>
+          <label className="sm:col-span-3"><span className={label}>{tr("Permanent address")}</span><input value={f.permanentAddress} onChange={(e) => set({ permanentAddress: e.target.value })} className={field} /></label>
+        </div>
+        {error && <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-sm font-medium">{tr("Cancel")}</button>
+          <button type="submit" disabled={busy} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+            {busy ? tr('Saving…') : tr('Save changes')}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

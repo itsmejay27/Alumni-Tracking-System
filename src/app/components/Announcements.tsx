@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
+import { tr } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { Req } from './RequiredMark';
 import { useT } from '@/lib/preferences';
@@ -75,7 +78,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       .select('id, title, content, category, course, author, created_at, created_by')
       .order('created_at', { ascending: false });
     if (error) {
-      setLoadError(error.message);
+      setLoadError(friendlyError(error, 'Could not load the announcements.'));
     } else {
       setLoadError(null);
       setAnnouncements(
@@ -122,7 +125,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       toast.error(
         /row-level security/i.test(error.message) && !course
           ? t('Posting to everyone is not enabled yet. Ask the admin to run the latest database update, or choose your department only.')
-          : `Could not post announcement: ${error.message}`
+          : friendlyError(error, 'Could not post the announcement.')
       );
       return;
     }
@@ -131,10 +134,10 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       const { data: mail, error: mailError } = await supabase.functions.invoke('notify-announcement', {
         body: { announcementId: created.id },
       });
-      if (mailError) toast.warning('Announcement posted, but the email could not be sent.');
-      else toast.success(t('Announcement posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
+      if (mailError) toast.warning(tr('Announcement posted, but the email could not be sent.'));
+      else toast.success(t(plural(mail?.sent ?? 0, 'Announcement posted and emailed to {n} person (including your copy).', 'Announcement posted and emailed to {n} people (including your copy).'), { n: mail?.sent ?? 0 }));
     } else {
-      toast.success('Announcement posted.');
+      toast.success(tr('Announcement posted.'));
     }
     setPosting(false);
     setTitle('');
@@ -156,7 +159,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
     if (!ok) return;
     const { data, error } = await supabase.from('announcements').delete().eq('id', ann.id).select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : t('Only Alumni Affairs can delete announcements.'));
+      toast.error(error ? friendlyError(error, 'Could not delete the announcement.') : t('Only Alumni Affairs can delete announcements.'));
       return;
     }
     setAnnouncements((list) => list.filter((a) => a.id !== ann.id));
@@ -195,7 +198,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/95 active:scale-[0.99] font-semibold transition-all"
           >
             <Plus size={18} />
-            Post Announcement
+            {tr("Post Announcement")}
           </button>
         )}
       </div>
@@ -203,7 +206,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
       {showAddForm &&
         createPortal(
           // Pop-up over the page, like Post a Job
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Post announcement">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={tr("Post announcement")}>
             <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !posting && setShowAddForm(false)} />
         <form
           onSubmit={handleAdd}
@@ -215,7 +218,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
               type="button"
               onClick={() => setShowAddForm(false)}
               className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
-              aria-label="Close"
+              aria-label={tr("Close")}
             >
               <X size={18} />
             </button>
@@ -223,28 +226,28 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Title <Req /></label>
+              <label className="text-sm font-semibold">{tr("Title")} <Req /></label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-                placeholder="e.g. 2026 Grand Alumni Homecoming"
+                placeholder={tr("e.g. 2026 Grand Alumni Homecoming")}
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Category <Req /></label>
+              <label className="text-sm font-semibold">{tr("Category")} <Req /></label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
                 className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
               >
-                <option value="General">General Notice</option>
-                <option value="Event">Event</option>
-                <option value="Job Seminar">Job Seminar</option>
-                <option value="Homecoming">Homecoming</option>
+                <option value="General">{tr("General Notice")}</option>
+                <option value="Event">{tr("Event")}</option>
+                <option value="Job Seminar">{tr("Job Seminar")}</option>
+                <option value="Homecoming">{tr("Homecoming")}</option>
               </select>
             </div>
 
@@ -255,32 +258,32 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             )}
             {userRole === 'admin' && (
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-sm font-semibold">Target Audience (Course Scope)</label>
+                <label className="text-sm font-semibold">{tr("Target Audience (Course Scope)")}</label>
                 <select
                   value={targetCourse}
                   onChange={(e) => setTargetCourse(e.target.value)}
                   className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-medium"
                 >
-                  <option value="all">Everyone (all alumni, chairs and Alumni Affairs)</option>
-                  <option value="BSIT">BSIT Only</option>
-                  <option value="BEED">BEED Only</option>
-                  <option value="BSBA-FM">BSBA Major in Financial Management Only</option>
-                  <option value="BSBA-OM">BSBA Major in Operation Management Only</option>
-                  <option value="BSOA">BSOA Only</option>
+                  <option value="all">{tr("Everyone (all alumni, chairs and Alumni Affairs)")}</option>
+                  <option value="BSIT">{tr("BSIT Only")}</option>
+                  <option value="BEED">{tr("BEED Only")}</option>
+                  <option value="BSBA-FM">{tr("BSBA Major in Financial Management Only")}</option>
+                  <option value="BSBA-OM">{tr("BSBA Major in Operation Management Only")}</option>
+                  <option value="BSOA">{tr("BSOA Only")}</option>
                 </select>
               </div>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Announcement Content <Req /></label>
+            <label className="text-sm font-semibold">{tr("Announcement Content")} <Req /></label>
             <textarea
               required
               rows={4}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="w-full px-4 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:border-primary text-sm"
-              placeholder="Write the details here..."
+              placeholder={tr("Write the details here...")}
             />
           </div>
 
@@ -299,7 +302,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
             disabled={posting}
             className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-sm disabled:opacity-60"
           >
-            {posting ? 'Posting...' : 'Post Notice'}
+            {posting ? tr('Posting...') : tr('Post Notice')}
           </button>
         </form>
           </div>,
@@ -368,7 +371,7 @@ export function Announcements({ userRole, authorName }: AnnouncementsProps) {
           </div>
         ))}
 
-        <Pagination {...paged} label={t('announcements')} />
+        <Pagination {...paged} label="announcements" />
 
         {(hidden.length > 0 || showHidden) && (
           <div className="text-center">

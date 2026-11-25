@@ -1,26 +1,29 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { LoginPage, AuthMode } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
-import { AccountsManager } from './components/AccountsManager';
-import { ActivityLogs } from './components/ActivityLogs';
 import { LinkAlumniRecord } from './components/LinkAlumniRecord';
-import { AlumniRecords } from './components/AlumniRecords';
-import { Analytics } from './components/Analytics';
-import { JobBoard } from './components/JobBoard';
-import { AlumniProfile } from './components/AlumniProfile';
-import { CollegeOfficialsDirectory } from './components/CollegeOfficialsDirectory';
-import { Announcements } from './components/Announcements';
+import { NotificationBell } from './components/NotificationBell';
 import { Home as HomeView } from './components/Home';
-import { Contact as ContactView } from './components/Contact';
-import { Settings as SettingsView } from './components/Settings';
+
+// Pages load when first opened, so the first screen downloads much less (panel: slow loading)
+const AccountsManager = lazy(() => import('./components/AccountsManager').then((m) => ({ default: m.AccountsManager })));
+const ActivityLogs = lazy(() => import('./components/ActivityLogs').then((m) => ({ default: m.ActivityLogs })));
+const AlumniRecords = lazy(() => import('./components/AlumniRecords').then((m) => ({ default: m.AlumniRecords })));
+const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })));
+const JobBoard = lazy(() => import('./components/JobBoard').then((m) => ({ default: m.JobBoard })));
+const AlumniProfile = lazy(() => import('./components/AlumniProfile').then((m) => ({ default: m.AlumniProfile })));
+const CollegeOfficialsDirectory = lazy(() => import('./components/CollegeOfficialsDirectory').then((m) => ({ default: m.CollegeOfficialsDirectory })));
+const Announcements = lazy(() => import('./components/Announcements').then((m) => ({ default: m.Announcements })));
+const ContactView = lazy(() => import('./components/Contact').then((m) => ({ default: m.Contact })));
+const SettingsView = lazy(() => import('./components/Settings').then((m) => ({ default: m.Settings })));
 import { toast } from 'sonner';
 import { AppToaster } from './components/AppToaster';
 import { ConfirmHost } from './components/ConfirmDialog';
 import { roleLabel } from '@/lib/programs';
-import { PreferencesProvider, useApplyPreferences, useT } from '@/lib/preferences';
+import { PreferencesProvider, tr, useApplyPreferences, useT } from '@/lib/preferences';
 import { MfaChallenge, EmailChallenge } from './components/MfaChallenge';
 import { supabase } from '@/lib/supabase';
 import { fetchMyRecord, missingProfileFields } from '@/lib/alumni';
@@ -55,9 +58,9 @@ export interface CurrentUser {
   mobileNo: string;
   presentAddress: string;
   permanentAddress: string;
-  sex: 'Female' | 'Male';
+  sex: '' | 'Female' | 'Male';
   dateOfBirth: string;
-  civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
+  civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
   facebookName: string;
   avatarUrl?: string;
   title?: string;
@@ -177,7 +180,7 @@ function AppInner() {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {
-          toast.error('Could not load your profile. Please sign in again.');
+          toast.error(tr('Could not load your profile. Please sign in again.'));
           supabase.auth.signOut();
           return;
         }
@@ -350,7 +353,7 @@ function AppInner() {
     { id: 'records', label: t('Alumni Records'), icon: <Users size={18} /> },
     { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
     { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
-    { id: 'officials', label: t('Directory'), icon: <Contact2 size={18} /> },
+    { id: 'officials', label: t('Officials'), icon: <Contact2 size={18} /> },
     ...(userRole === 'admin' ? [{ id: 'contact', label: t('Contact Info'), icon: <PhoneCall size={18} /> }] : []),
     ...(userRole === 'admin' ? [{ id: 'accounts', label: t('Accounts'), icon: <UserCog size={18} /> }] : []),
     { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
@@ -359,7 +362,7 @@ function AppInner() {
   const alumniMenuItems = [
     { id: 'home', label: t('Home'), icon: <HomeIcon size={18} /> },
     { id: 'profile', label: t('My Alumni Profile'), icon: <UserCircle size={18} /> },
-    { id: 'officials', label: t('Directory'), icon: <Users size={18} /> },
+    { id: 'officials', label: t('Officials'), icon: <Users size={18} /> },
     { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
     { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
     { id: 'contact', label: t('Contact Us'), icon: <PhoneCall size={18} /> },
@@ -476,12 +479,15 @@ function AppInner() {
               <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Track')}</p>
             </div>
           </div>
-          <button 
-            onClick={() => setMobileMenuOpen(true)}
-            className="p-1.5 border border-white/20 rounded-lg hover:bg-white/10"
-          >
-            <Menu size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUser && !isSuper && <NotificationBell userId={currentUser.id} onOpenTab={goTab} tone="dark" />}
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-1.5 border border-white/20 rounded-lg hover:bg-white/10"
+            >
+              <Menu size={20} />
+            </button>
+          </div>
         </header>
 
         {/* Mobile Navigation Drawer Overlay */}
@@ -563,7 +569,14 @@ function AppInner() {
 
         {/* 3. UNIFIED CONTENT VIEWPORT */}
         <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
+          {/* Notification bell (desktop); on phones it sits in the top bar */}
+          {currentUser && !isSuper && (
+            <div className="hidden md:flex justify-end px-8 pt-5 -mb-4 relative z-30">
+              <NotificationBell userId={currentUser.id} onOpenTab={goTab} />
+            </div>
+          )}
           <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
+          <Suspense fallback={<LoadingState />}>
           {isSuper ? (
             <>
               {activeTab === 'accounts' && <AccountsManager currentUserId={currentUser.id} mode="super" />}
@@ -594,6 +607,7 @@ function AppInner() {
               {activeTab === 'settings' && <SettingsView currentUser={currentUser} onUpdateProfile={handleUpdateProfile} onOpenProfile={() => setActiveTab('profile')} />}
             </>
           )}
+          </Suspense>
           </div>
           {/* Page buttons of the open list are shown here, always at the bottom edge of the screen */}
           <div id="page-footer" className="sticky bottom-0 z-20 bg-background border-t border-border px-6 md:px-8 empty:hidden" />

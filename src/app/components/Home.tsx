@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { useT } from '@/lib/preferences';
 import logo from '@/assets/logo.png';
 import { FileText, ShieldCheck, GraduationCap, CheckCircle2, ArrowRight, ClipboardCheck, AlertCircle } from 'lucide-react';
@@ -36,7 +37,7 @@ export function Home({ onStartSurvey, userId, firstName }: HomeProps) {
         <div className="relative flex flex-col md:flex-row items-center gap-6 md:gap-10 p-6 sm:p-10">
           <img src={logo} alt="OMSU seal" className="w-24 h-24 sm:w-32 sm:h-32 object-contain shrink-0 drop-shadow-xl" />
           <div className="flex-1 text-center md:text-left space-y-2">
-            <p className="text-sm font-semibold text-[#f5c400]">Occidental Mindoro State University</p>
+            <p className="text-sm font-semibold text-[#f5c400]">{tr("Occidental Mindoro State University")}</p>
             <h2 className="text-2xl sm:text-3xl font-extrabold">
               {t('Welcome')}{firstName ? `, ${titleCase(firstName)}` : ''}!
             </h2>

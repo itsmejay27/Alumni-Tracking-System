@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import {
   ShieldCheck,
@@ -14,7 +16,6 @@ import {
   Clock,
   Megaphone,
   Briefcase,
-  UserX,
   Palette,
   Sun,
   Moon,
@@ -30,6 +31,8 @@ import {
 import { toast } from 'sonner';
 import { CurrentUser } from '../App';
 import { supabase, passwordUpdateError, verifyPassword } from '@/lib/supabase';
+import { captchaEnabled } from '@/lib/captcha';
+import { BotCheck } from './BotCheck';
 import { emailTwoStep } from '@/lib/emailTwoStep';
 import { PasswordStrength } from './PasswordStrength';
 import { passwordStrength, roleLabel } from '@/lib/programs';
@@ -82,7 +85,7 @@ export function Settings({ currentUser, onUpdateProfile, onOpenProfile }: Settin
       await onUpdateProfile({ ...currentUser, avatarUrl });
       toast.success(avatarUrl ? t('Photo updated.') : t('Photo removed.'));
     } catch (err: any) {
-      toast.error(`${t('Could not save')}: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your settings.'));
     }
     setSavingPhoto(false);
   };
@@ -246,7 +249,7 @@ function AccountPanel({ currentUser, onUpdateProfile }: { currentUser: CurrentUs
       });
       toast.success(t('Your account details have been saved.'));
     } catch (err: any) {
-      toast.error(`${t('Could not save')}: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save your settings.'));
     }
     setSaving(false);
   };
@@ -314,13 +317,18 @@ function PasswordCard({ email }: { email: string }) {
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (captchaEnabled && !captchaToken) return toast.error(t('Please finish the bot check below first.'));
     if (next.length < 8 || passwordStrength(next).label === 'Weak') return toast.error(t('Please choose a stronger password (at least 8 characters).'));
     if (next !== confirm) return toast.error(t('New passwords do not match.'));
     setBusy(true);
-    if (!(await verifyPassword(email, current))) {
+    const ok = await verifyPassword(email, current, captchaToken);
+    setCaptchaKey((k) => k + 1); // a token works once
+    if (!ok) {
       setBusy(false);
       return toast.error(t('Current password is incorrect.'));
     }
@@ -343,6 +351,9 @@ function PasswordCard({ email }: { email: string }) {
             <PasswordStrength password={next} />
           </div>
           <PasswordField label={`${t('Confirm new password')} *`} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+        </div>
+        <div>
+          <BotCheck onToken={setCaptchaToken} resetKey={captchaKey} />
         </div>
         {confirm && next !== confirm && <p className="text-xs text-red-600">{t("Passwords don't match yet.")}</p>}
         <div className="flex justify-end mt-auto pt-2">
@@ -407,7 +418,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
     for (const f of list?.all || []) if (f.status !== 'verified') await supabase.auth.mfa.unenroll({ factorId: f.id });
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)}` });
     setBusy(false);
-    if (error || !data) return toast.error(`${t('Could not start setup')}: ${error?.message}`);
+    if (error || !data) return toast.error(friendlyError(error || 'No setup data', 'Could not start the two-step verification setup.'));
     setEnroll({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
   };
 
@@ -446,7 +457,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
       const { error } = await supabase.auth.mfa.unenroll({ factorId: f.id });
       if (error) {
         setBusy(false);
-        return toast.error(`${t('Could not turn off')}: ${error.message}`);
+        return toast.error(friendlyError(error, 'Could not turn off two-step verification.'));
       }
     }
     setBusy(false);
@@ -521,7 +532,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
                 >
-                  Google Authenticator · Android
+                  {tr("Google Authenticator · Android")}
                 </a>
                 <a
                   href="https://apps.apple.com/app/google-authenticator/id388497605"
@@ -529,7 +540,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
                 >
-                  Google Authenticator · iPhone
+                  {tr("Google Authenticator · iPhone")}
                 </a>
               </div>
               <p className="text-xs text-muted-foreground">{t('Already have Microsoft Authenticator or Authy? You can use that instead.')}</p>
@@ -709,7 +720,7 @@ function SignInActivityCard() {
     setBusy(true);
     const { error } = await supabase.auth.signOut({ scope: 'others' });
     setBusy(false);
-    if (error) toast.error(`${t('Could not sign out other devices')}: ${error.message}`);
+    if (error) toast.error(friendlyError(error, 'Could not sign out your other devices.'));
     else toast.success(t('Other devices have been signed out'));
   };
 
@@ -737,7 +748,7 @@ function SignInActivityCard() {
 // ---------------- Notifications ----------------
 
 const JOB_TYPES = ['full-time', 'part-time', 'contract', 'internship'] as const;
-const JOB_TYPE_LABEL: Record<string, string> = { 'full-time': 'Full-time', 'part-time': 'Part-time', contract: 'Contract', internship: 'Internship' };
+const JOB_TYPE_LABEL: Record<string, string> = { 'full-time': 'Full-time', 'part-time': 'Part-time', contract: 'Contract', internship: 'Trainee' };
 
 interface NotifyPrefs {
   email_jobs: boolean;
@@ -781,11 +792,30 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
     if (error) {
       setPrefs(prefs);
-      toast.error(`${t('Could not save')}: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not save your settings.'));
     } else {
       setSaved((s) => (s ? { ...s, [key]: value } : s));
       toast.success(value ? t('Emails turned on') : t('Emails turned off'));
     }
+  };
+
+  // In-app notifications (the bell) on or off
+  const [inApp, setInApp] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('profiles').select('app_notifications').eq('id', userId).single().then(({ data }) => setInApp(data?.app_notifications ?? true));
+  }, [userId]);
+  const toggleInApp = async () => {
+    if (inApp == null || !userId) return;
+    const value = !inApp;
+    setInApp(value);
+    const { error } = await supabase.from('profiles').update({ app_notifications: value }).eq('id', userId);
+    if (error) {
+      setInApp(!value);
+      return toast.error(friendlyError(error, 'Could not save your settings.'));
+    }
+    window.dispatchEvent(new Event('omsu-notifications-changed'));
+    toast.success(value ? t('Notifications in the system turned on') : t('Notifications in the system turned off'));
   };
 
   const filtersDirty =
@@ -805,7 +835,7 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     };
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
     setBusy(false);
-    if (error) return toast.error(`${t('Could not save')}: ${error.message}`);
+    if (error) return toast.error(friendlyError(error, 'Could not save your settings.'));
     setSaved({ ...prefs, ...patch });
     toast.success(t('Job alert filters saved'));
   };
@@ -824,6 +854,17 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+      <Card icon={<Bell size={18} />} title={t('Notifications in the system')} sub={t('The bell at the top shows new jobs, announcements and decisions on your job posts.')}>
+        <div className="py-2 flex items-start gap-4">
+          <span className="w-9 h-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0"><Bell size={18} /></span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">{t('Show the notification bell')}</p>
+            <p className="text-sm text-muted-foreground">{t('Turn off to hide the bell. Emails are set separately below.')}</p>
+          </div>
+          {inApp != null && <Switch on={inApp} onClick={toggleInApp} label={t('Show the notification bell')} />}
+        </div>
+      </Card>
+
       <Card icon={<Bell size={18} />} title={t('Email notifications')} sub={t('Choose which emails the OMSU Alumni Track sends you.')}>
         <div className="divide-y divide-border/70 -my-2">
           {rows.map((r) => (
@@ -917,8 +958,8 @@ function AppearancePanel() {
     { id: 'system', icon: <Monitor size={16} />, label: t('System'), preview: 'bg-gradient-to-r from-[#f8f9fa] from-50% to-[#0b1221] to-50%' },
   ];
   const langs: { id: Lang; label: string; sample: string }[] = [
-    { id: 'en', label: 'English', sample: 'Welcome back! Update your tracer record.' },
-    { id: 'fil', label: 'Filipino', sample: 'Maligayang pagbabalik! I-update ang iyong tracer record.' },
+    { id: 'en', label: tr('English'), sample: 'Welcome back! Update your tracer record.' },
+    { id: 'fil', label: tr('Filipino'), sample: 'Maligayang pagbabalik! I-update ang iyong tracer record.' },
   ];
 
   return (
@@ -974,19 +1015,16 @@ function AppearancePanel() {
 
 function PrivacyPanel({ currentUser, isAlumni, onOpenProfile }: { currentUser: CurrentUser | null; isAlumni: boolean; onOpenProfile?: () => void }) {
   const t = useT();
-  const contact = useContactInfo();
   const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null);
-  const deletionMail = `mailto:${contact.email}?subject=${encodeURIComponent('Request to delete my OMSU Alumni Track account')}&body=${encodeURIComponent(
-    `Hello Alumni Affairs,\n\nI would like my OMSU Alumni Track account and personal data deleted.\n\nName: ${`${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim()}\nAccount email: ${currentUser?.email || ''}\n\nThank you.`,
-  )}`;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+    <div className="grid grid-cols-1 gap-6 items-stretch max-w-3xl">
       <Card icon={<FileText size={18} />} title={t('Your privacy')} sub={t('Your rights under the Data Privacy Act of 2012 (RA 10173).')}>
         <ul className="text-sm space-y-2 list-disc pl-5 text-muted-foreground mb-5">
           <li>{t('Only Alumni Affairs and your program chair can see your tracer record.')}</li>
           <li>{t('Results are published in summary form only.')}</li>
           <li>{t('You can correct your details any time in My Alumni Profile.')}</li>
+          <li>{t('To have your data removed, contact the Alumni Affairs Office.')}</li>
         </ul>
         <div className="flex flex-wrap gap-2 mt-auto">
           <button type="button" onClick={() => setLegal('privacy')} className={btnSoft}>
@@ -1000,16 +1038,6 @@ function PrivacyPanel({ currentUser, isAlumni, onOpenProfile }: { currentUser: C
               {t('My Alumni Profile')} <ArrowRight size={15} />
             </button>
           )}
-        </div>
-      </Card>
-      <Card icon={<UserX size={18} />} title={t('Delete my account')} sub={t('Send a request to the Alumni Affairs Office. They will confirm before anything is removed.')}>
-        <p className="text-sm text-muted-foreground mb-5">
-          {t('Deleting your account removes your sign-in. Alumni Affairs may keep summary statistics that do not identify you.')}
-        </p>
-        <div className="flex justify-end mt-auto">
-          <a href={deletionMail} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100">
-            <Mail size={16} /> {t('Request deletion')}
-          </a>
         </div>
       </Card>
       {legal && <LegalModal doc={legal} onClose={() => setLegal(null)} />}

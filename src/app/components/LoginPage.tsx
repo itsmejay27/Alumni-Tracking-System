@@ -1,4 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { plural } from '@/lib/text';
+import { friendlyError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
+import { captchaEnabled, withCaptcha } from '@/lib/captcha';
+import { BotCheck } from './BotCheck';
 import { Req } from './RequiredMark';
 import { User, Lock, X, Mail, KeyRound, ArrowLeft, Calendar, Loader2, Clock, AlertTriangle } from 'lucide-react';
 import { useContactInfo } from '@/lib/settings';
@@ -67,15 +72,29 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
   const cleanEmail = email.toLowerCase().trim();
 
+  // Bot check: one token per attempt; a new widget is shown after each try
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const freshCaptcha = () => setCaptchaKey((k) => k + 1);
+  const needCaptcha = () => {
+    if (captchaEnabled && !captchaToken) {
+      setError(tr('Please finish the bot check below first.'));
+      return true;
+    }
+    return false;
+  };
+
   const resendCode = async () => {
     setError('');
+    if (needCaptcha()) return;
     const { error } =
       step === 'verify'
-        ? await supabase.auth.resend({ type: 'signup', email: cleanEmail })
-        : await supabase.auth.resetPasswordForEmail(cleanEmail);
-    if (error) setError(error.message);
+        ? await supabase.auth.resend({ type: 'signup', email: cleanEmail, options: withCaptcha({}, captchaToken) })
+        : await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
+    freshCaptcha();
+    if (error) setError(friendlyError(error, 'Could not send a new code.'));
     else {
-      setNotice('A new code has been sent.');
+      setNotice(tr('A new code has been sent.'));
       setCooldown(60);
     }
   };
@@ -89,17 +108,17 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       p_sex: sex,
     });
     if (error) {
-      setError(error.message);
+      setError(friendlyError(error, 'Could not check your graduate record.'));
       return false;
     }
     if (data === 'not_found') {
       setError(
-        "We couldn't find a graduate with this name, birthday and sex. Type your first and last name exactly as in your school records, check your birthday, or contact your program chair or the Alumni Affairs Office."
+        tr("We couldn't find a graduate with this name, birthday and sex. Type your first and last name exactly as in your school records, check your birthday, or contact your program chair or the Alumni Affairs Office.")
       );
       return false;
     }
     if (data === 'taken') {
-      setError('An account already exists for this graduate. Sign in instead, or use "Forgot password?".');
+      setError(tr('An account already exists for this graduate. Sign in instead, or use "Forgot password?".'));
       return false;
     }
     return true;
@@ -110,42 +129,44 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
     setError('');
     setNotice('');
     if (!isSupabaseConfigured) {
-      setError('The app is not connected to the database yet. Please contact the administrator.');
+      setError(tr('The app is not connected to the database yet. Please contact the administrator.'));
       return;
     }
+    if ((step === 'signin' || step === 'signup' || step === 'reset') && needCaptcha()) return;
     setBusy(true);
 
     if (step === 'signin') {
       // 3 wrong passwords lock the email for 30 minutes
       const lockedText = (until: string) =>
-        `Too many wrong passwords. This account is locked until ${new Date(until).toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
-        })}. You can wait, or use "Forgot password?" to reset it.`;
+        tr('Too many wrong passwords. This account is locked until {time}. You can wait, or use "Forgot password?" to reset it.', {
+          time: new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        });
       const { data: lockedUntil } = await supabase.rpc('login_lock_status', { p_email: cleanEmail });
       if (lockedUntil) {
         setError(lockedText(lockedUntil as string));
         setBusy(false);
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password, options: withCaptcha({}, captchaToken) });
+      freshCaptcha();
       if (error) {
         if (error.message === 'Email not confirmed') {
           // Send a fresh code and ask for it
-          await supabase.auth.resend({ type: 'signup', email: cleanEmail });
+          // The bot-check token was used by the sign-in; the new code can be requested with "Send again"
           go('verify');
-          setNotice('Your email is not verified yet. We sent you a new code.');
-          setCooldown(60);
+          setNotice(tr('Your email is not verified yet. Press "Resend code", then enter the code from your email.'));
         } else if (/invalid login credentials/i.test(error.message)) {
           const { data: tally } = await supabase.rpc('login_failed', { p_email: cleanEmail });
           const t = (tally || {}) as { attemptsLeft?: number; lockedUntil?: string | null };
           if (t.lockedUntil) setError(lockedText(t.lockedUntil));
           else if (typeof t.attemptsLeft === 'number')
-            setError(`Incorrect email or password. ${t.attemptsLeft} attempt${t.attemptsLeft === 1 ? '' : 's'} left before the account is locked for 30 minutes.`);
-          else setError('Incorrect email or password.');
+            setError(tr(plural(t.attemptsLeft, 'Incorrect email or password. {n} try left before the account is locked for 30 minutes.', 'Incorrect email or password. {n} tries left before the account is locked for 30 minutes.'), { n: t.attemptsLeft }));
+          else setError(tr('Incorrect email or password.'));
+        } else if (/captcha/i.test(error.message)) {
+          setError(tr('The bot check expired. Please do it again, then sign in.'));
         } else if (/banned/i.test(error.message) || (error as any).code === 'user_banned') {
-          setError('This account has been deactivated. Please contact the OMSU Alumni Affairs Office.');
-        } else setError(error.message);
+          setError(tr('This account has been deactivated. Please contact the OMSU Alumni Affairs Office.'));
+        } else setError(friendlyError(error, 'Could not sign in.'));
       } else {
         // Correct password: start counting from zero again
         await supabase.rpc('login_succeeded');
@@ -153,13 +174,13 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       // On success, App picks up the new session automatically.
     } else if (step === 'signup') {
       if (passwordStrength(password).label === 'Weak' || password.length < 8) {
-        setError('Please choose a stronger password (at least 8 characters).');
+        setError(tr('Please choose a stronger password (at least 8 characters).'));
       } else if (password !== confirmPassword) {
-        setError('Passwords do not match.');
+        setError(tr('Passwords do not match.'));
       } else if (!agreed) {
-        setError('Please agree to the Terms of Use and Privacy Policy.');
+        setError(tr('Please agree to the Terms of Use and Privacy Policy.'));
       } else if (!birthDate || !sex) {
-        setError('Please enter your birthday and sex.');
+        setError(tr('Please enter your birthday and sex.'));
       } else if (!(await alumniRecordOk())) {
         // message already set
       } else {
@@ -167,24 +188,27 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
           email: cleanEmail,
           password,
           options: {
+            ...withCaptcha({}, captchaToken),
             emailRedirectTo: window.location.origin,
             data: { given_name: givenName.trim(), last_name: lastName.trim(), birth_date: birthDate, sex },
           },
         });
-        if (error) setError(/database error|alumni_record/i.test(error.message) ? 'Your name, birthday and sex do not match our graduate records.' : error.message);
-        else if (data.user && data.user.identities?.length === 0) setError('An account with this email already exists. Try signing in.');
+        freshCaptcha();
+        if (error) setError(/database error|alumni_record/i.test(error.message) ? tr('Your name, birthday and sex do not match our graduate records.') : friendlyError(error, 'Could not create your account.'));
+        else if (data.user && data.user.identities?.length === 0) setError(tr('An account with this email already exists. Try signing in.'));
         else if (!data.session) {
           go('verify');
           setCooldown(60);
-        } else toast.success('Welcome to the OMSU Alumni Track!');
+        } else toast.success(tr('Welcome to the OMSU Alumni Track!'));
       }
     } else if (step === 'verify') {
       const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'email' });
-      if (error) setError('That code is wrong or has expired. Check the latest email or send a new code.');
-      else toast.success('Email verified. Welcome to the OMSU Alumni Track!');
+      if (error) setError(tr('That code is wrong or has expired. Check the latest email or send a new code.'));
+      else toast.success(tr('Email verified. Welcome to the OMSU Alumni Track!'));
     } else if (step === 'reset') {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
-      if (error) setError(error.message);
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, withCaptcha({}, captchaToken));
+      freshCaptcha();
+      if (error) setError(friendlyError(error, 'Could not send the reset code.'));
       else {
         go('resetCode');
         setCooldown(60);
@@ -194,7 +218,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
       const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'recovery' });
       if (error) {
         onPasswordRecovery(false);
-        setError('That code is wrong or has expired. Check the latest email or send a new code.');
+        setError(tr('That code is wrong or has expired. Check the latest email or send a new code.'));
       }
     }
 
@@ -207,15 +231,15 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
   const codeStep = step === 'verify' || step === 'resetCode';
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={copy.title}>
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={tr(copy.title)}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={onClose} />
       <div className="relative h-full w-full sm:max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <img src={logo} alt="OMSU Logo" className="w-9 h-9 object-contain" />
-            <span className="text-sm font-bold text-[#002060]">OMSU Alumni Track</span>
+            <span className="text-sm font-bold text-[#002060]">{tr("OMSU Alumni Track")}</span>
           </div>
-          <button onClick={onClose} aria-label="Close" className="p-2 rounded-full text-slate-500 hover:bg-slate-100">
+          <button onClick={onClose} aria-label={tr("Close")} className="p-2 rounded-full text-slate-500 hover:bg-slate-100">
             <X size={18} />
           </button>
         </div>
@@ -224,19 +248,19 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
         <div className="flex-1 flex flex-col justify-center px-6 sm:px-8 py-8">
           {(step === 'reset' || codeStep) && (
             <button onClick={() => go(step === 'verify' ? 'signup' : 'signin')} className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-[#002060]">
-              <ArrowLeft size={15} /> Back
+              <ArrowLeft size={15} /> {tr("Back")}
             </button>
           )}
 
           <div className="mb-7">
-            <h1 className="text-2xl font-extrabold text-slate-900">{copy.title}</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900">{tr(copy.title)}</h1>
             <p className="text-sm text-slate-500 mt-1">
               {codeStep ? (
                 <>
-                  We sent a verification code to <span className="font-semibold text-slate-700">{cleanEmail}</span>. Enter it below.
+                  {tr("We sent a verification code to")} <span className="font-semibold text-slate-700">{cleanEmail}</span>{tr(". Enter it below.")}
                 </>
               ) : (
-                copy.sub
+                tr(copy.sub)
               )}
             </p>
           </div>
@@ -245,17 +269,17 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>First Name <Req /></label>
+                  <label className={labelClass}>{tr("First Name")} <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputClass} placeholder="Juan" />
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Last Name <Req /></label>
+                  <label className={labelClass}>{tr("Last Name")} <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} placeholder="Dela Cruz" />
+                    <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} placeholder={tr("Dela Cruz")} />
                   </div>
                 </div>
               </div>
@@ -264,7 +288,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {step === 'signup' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Birthday <Req /></label>
+                  <label className={labelClass}>{tr("Birthday")} <Req /></label>
                   <div className="relative">
                     <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -278,27 +302,27 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Sex <Req /></label>
+                  <label className={labelClass}>{tr("Sex")} <Req /></label>
                   <div className="relative">
                     <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select required value={sex} onChange={(e) => setSex(e.target.value)} className={`${inputClass} appearance-none`}>
                       <option value="" disabled>
-                        Select
+                        {tr("Select")}
                       </option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
+                      <option value="Male">{tr("Male")}</option>
+                      <option value="Female">{tr("Female")}</option>
                     </select>
                   </div>
                 </div>
                 <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">
-                  Use the name, birthday and sex in your OMSU school records. We use them to find your graduate record.
+                  {tr("Use the name, birthday and sex in your OMSU school records. We use them to find your graduate record.")}
                 </p>
               </div>
             )}
 
             {!codeStep && (
               <div>
-                <label className={labelClass}>Email Address <Req /></label>
+                <label className={labelClass}>{tr("Email Address")} <Req /></label>
                 <div className="relative">
                   <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -308,7 +332,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={inputClass}
-                    placeholder="you@example.com"
+                    placeholder={tr("you@example.com")}
                   />
                 </div>
               </div>
@@ -317,10 +341,10 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             {(step === 'signin' || step === 'signup') && (
               <div>
                 <div className="flex items-center justify-between">
-                  <label className={labelClass}>Password <Req /></label>
+                  <label className={labelClass}>{tr("Password")} <Req /></label>
                   {step === 'signin' && (
                     <button type="button" onClick={() => go('reset')} className="text-xs font-semibold text-[#002060] hover:underline mb-1.5">
-                      Forgot password?
+                      {tr("Forgot password?")}
                     </button>
                   )}
                 </div>
@@ -341,7 +365,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 </div>
                 {capsLock && (
                   <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-slate-600">
-                    <AlertTriangle size={13} /> Caps Lock is on
+                    <AlertTriangle size={13} /> {tr("Caps Lock is on")}
                   </p>
                 )}
                 {step === 'signup' && <PasswordStrength password={password} />}
@@ -350,7 +374,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
 
             {step === 'signup' && (
               <div>
-                <label className={labelClass}>Confirm Password <Req /></label>
+                <label className={labelClass}>{tr("Confirm Password")} <Req /></label>
                 <div className="relative">
                   <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -377,17 +401,16 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                 />
                 <span>
                   I agree to the{' '}
-                  <button type="button" onClick={() => setLegal('terms')} className="font-semibold text-[#002060] hover:underline">Terms of Use</button>{' '}
+                  <button type="button" onClick={() => setLegal('terms')} className="font-semibold text-[#002060] hover:underline">{tr("Terms of Use")}</button>{' '}
                   and{' '}
-                  <button type="button" onClick={() => setLegal('privacy')} className="font-semibold text-[#002060] hover:underline">Privacy Policy</button>, and I
-                  consent to OMSU processing my data for the Graduate Tracer Study.
+                  <button type="button" onClick={() => setLegal('privacy')} className="font-semibold text-[#002060] hover:underline">{tr("Privacy Policy")}</button>{tr(", and I consent to OMSU processing my data for the Graduate Tracer Study.")}
                 </span>
               </label>
             )}
 
             {codeStep && (
               <div>
-                <label className={labelClass}>Verification code <Req /></label>
+                <label className={labelClass}>{tr("Verification code")} <Req /></label>
                 <div className="relative">
                   <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -402,13 +425,15 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
                   />
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
-                  <span>Check your spam folder if you don't see it.</span>
+                  <span>{tr("Check your spam folder if you don't see it.")}</span>
                   <button type="button" disabled={cooldown > 0} onClick={resendCode} className="font-semibold text-[#002060] disabled:text-slate-400 hover:underline">
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                    {cooldown > 0 ? tr('Resend in {n}s', { n: cooldown }) : tr('Resend code')}
                   </button>
                 </div>
               </div>
             )}
+
+            <BotCheck onToken={setCaptchaToken} resetKey={captchaKey} theme="light" />
 
             {error && (
               <div className="bg-red-50 rounded-xl px-4 py-3">
@@ -427,7 +452,7 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
               className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-xl font-semibold transition-colors text-sm disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={16} className="animate-spin" />}
-              {busy ? 'Please wait...' : copy.button}
+              {busy ? tr('Please wait...') : tr(copy.button)}
             </button>
           </form>
 
@@ -436,25 +461,25 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
               <p className="text-slate-600">
                 New here?{' '}
                 <button onClick={() => go('signup')} className="font-bold text-[#002060] hover:underline">
-                  Create an alumni account
+                  {tr("Create an alumni account")}
                 </button>
               </p>
             ) : (
               <p className="text-slate-600">
                 Already have an account?{' '}
                 <button onClick={() => go('signin')} className="font-bold text-[#002060] hover:underline">
-                  Sign in
+                  {tr("Sign in")}
                 </button>
               </p>
             )}
             <p className="text-xs text-slate-400 pt-1">
-              Alumni Affairs and program chair accounts are created by the OMSU Alumni Affairs Office.
+              {tr("Alumni Affairs and program chair accounts are created by the OMSU Alumni Affairs Office.")}
             </p>
           </div>
         </div>
 
         <div className="px-6 sm:px-8 py-5 border-t border-slate-100 bg-slate-50 text-xs text-slate-500 space-y-2">
-          <p className="font-semibold text-slate-700">Need help signing in?</p>
+          <p className="font-semibold text-slate-700">{tr("Need help signing in?")}</p>
           <p className="flex items-start gap-2">
             <Mail size={14} className="mt-0.5 shrink-0" />
             <a href={`mailto:${contact.email}`} className="hover:text-[#002060] hover:underline break-all">
@@ -466,9 +491,9 @@ export function LoginPage({ initialMode = 'signin', onClose, onPasswordRecovery 
             <span>{contact.officeHours}</span>
           </p>
           <p className="pt-1">
-            <button type="button" onClick={() => setLegal('terms')} className="text-xs hover:text-[#002060] hover:underline">Terms of Use</button>
+            <button type="button" onClick={() => setLegal('terms')} className="text-xs hover:text-[#002060] hover:underline">{tr("Terms of Use")}</button>
             <span className="mx-2">·</span>
-            <button type="button" onClick={() => setLegal('privacy')} className="text-xs hover:text-[#002060] hover:underline">Privacy Policy</button>
+            <button type="button" onClick={() => setLegal('privacy')} className="text-xs hover:text-[#002060] hover:underline">{tr("Privacy Policy")}</button>
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { ShieldCheck, LogOut, Loader2 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { supabase } from '@/lib/supabase';
@@ -14,7 +15,7 @@ export function MfaChallenge({ onVerified }: { onVerified: () => void }) {
     e.preventDefault();
     setError('');
     if (code.length !== 6) {
-      setError('Enter the 6-digit code from your authenticator app.');
+      setError(tr('Enter the 6-digit code from your authenticator app.'));
       return;
     }
     setBusy(true);
@@ -22,13 +23,13 @@ export function MfaChallenge({ onVerified }: { onVerified: () => void }) {
     const factor = factors?.totp?.find((f) => f.status === 'verified');
     if (listError || !factor) {
       setBusy(false);
-      setError('Could not find your authenticator. Please sign in again.');
+      setError(tr('Could not find your authenticator. Please sign in again.'));
       return;
     }
     const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
     setBusy(false);
     if (verifyError) {
-      setError('That code is not correct or has expired. Try the newest code in your app.');
+      setError(tr('That code is not correct or has expired. Try the newest code in your app.'));
       setCode('');
       return;
     }
@@ -40,13 +41,13 @@ export function MfaChallenge({ onVerified }: { onVerified: () => void }) {
       <form onSubmit={verify} className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-7 space-y-5">
         <div className="flex items-center gap-3">
           <img src={logo} alt="" className="w-10 h-10 object-contain" />
-          <p className="font-bold text-[#002060]">OMSU Alumni Track</p>
+          <p className="font-bold text-[#002060]">{tr("OMSU Alumni Track")}</p>
         </div>
         <div className="space-y-1.5">
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="text-[#002060]" size={22} /> Two-step verification
+            <ShieldCheck className="text-[#002060]" size={22} /> {tr("Two-step verification")}
           </h1>
-          <p className="text-sm text-slate-600">Open your authenticator app and enter the 6-digit code for OMSU Alumni Track.</p>
+          <p className="text-sm text-slate-600">{tr("Open your authenticator app and enter the 6-digit code for OMSU Alumni Track.")}</p>
         </div>
         <input
           autoFocus
@@ -62,9 +63,9 @@ export function MfaChallenge({ onVerified }: { onVerified: () => void }) {
           {busy && <Loader2 size={16} className="animate-spin" />} Verify
         </button>
         <div className="text-center space-y-2">
-          <p className="text-xs text-slate-500">Lost your phone? Contact the Alumni Affairs Office to turn off two-step verification for your account.</p>
+          <p className="text-xs text-slate-500">{tr("Lost your phone? Contact the Alumni Affairs Office to turn off two-step verification for your account.")}</p>
           <button type="button" onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-[#002060]">
-            <LogOut size={15} /> Sign out
+            <LogOut size={15} /> {tr("Sign out")}
           </button>
         </div>
       </form>
@@ -109,7 +110,7 @@ export function EmailChallenge({ onVerified }: { onVerified: () => void }) {
   const verify = async (value = code) => {
     setError('');
     if (value.length !== 6) {
-      setError('Enter the 6-digit code from your email.');
+      setError(tr('Enter the 6-digit code from your email.'));
       return;
     }
     setBusy(true);
@@ -134,11 +135,11 @@ export function EmailChallenge({ onVerified }: { onVerified: () => void }) {
       >
         <div className="flex items-center gap-3">
           <img src={logo} alt="" className="w-10 h-10 object-contain" />
-          <p className="font-bold text-[#002060]">OMSU Alumni Track</p>
+          <p className="font-bold text-[#002060]">{tr("OMSU Alumni Track")}</p>
         </div>
         <div className="space-y-1.5">
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="text-[#002060]" size={22} /> Check your email
+            <ShieldCheck className="text-[#002060]" size={22} /> {tr("Check your email")}
           </h1>
           <p className="text-sm text-slate-600">
             {sentTo ? `We sent a 6-digit code to ${sentTo}.` : 'Sending a 6-digit code to your email...'} Type it below to finish signing in.
@@ -165,9 +166,9 @@ export function EmailChallenge({ onVerified }: { onVerified: () => void }) {
           <button type="button" onClick={send} disabled={wait > 0} className="text-sm font-semibold text-[#002060] hover:underline disabled:text-slate-400 disabled:no-underline">
             {wait > 0 ? `Send a new code in ${wait}s` : 'Send a new code'}
           </button>
-          <p className="text-xs text-slate-500">Not in your inbox? Check Spam or Promotions. The code expires in 10 minutes.</p>
+          <p className="text-xs text-slate-500">{tr("Not in your inbox? Check Spam or Promotions. The code expires in 10 minutes.")}</p>
           <button type="button" onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-[#002060]">
-            <LogOut size={15} /> Sign out
+            <LogOut size={15} /> {tr("Sign out")}
           </button>
         </div>
       </form>

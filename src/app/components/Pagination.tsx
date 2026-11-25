@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { useT } from '@/lib/preferences';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /** Splits a list into pages. Jumps back to page 1 when the list's length changes (e.g. a filter). */
+/** One of each list's labels, for "Showing 1–1 of 1 record" */
+const SINGULAR: Record<string, string> = {
+  items: 'item', records: 'record', graduates: 'graduate', announcements: 'announcement', jobs: 'job',
+  accounts: 'account', people: 'person', entries: 'entry', officials: 'official', alumni: 'alumnus', responses: 'response',
+};
+
 export function usePaged<T>(items: T[], pageSize = 10) {
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(items.length / pageSize));
@@ -56,7 +63,7 @@ export function Pagination({
   const bar = (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-3 text-sm">
       <p className="text-muted-foreground">
-        {t('Showing {from}–{to} of {total}', { from, to, total })} {label}
+        {t('Showing {from}–{to} of {total}', { from, to, total })} {t(total === 1 ? SINGULAR[label] || label : label)}
       </p>
       {(pages > 1 || alwaysShowControls) && (
         <div className="flex items-center gap-1">
@@ -64,7 +71,7 @@ export function Pagination({
             onClick={() => setPage(page - 1)}
             disabled={page <= 1}
             className="p-2 rounded-lg hover:bg-muted disabled:opacity-40"
-            aria-label="Previous page"
+            aria-label={tr("Previous page")}
           >
             <ChevronLeft size={16} />
           </button>
@@ -84,7 +91,7 @@ export function Pagination({
             onClick={() => setPage(page + 1)}
             disabled={page >= pages}
             className="p-2 rounded-lg hover:bg-muted disabled:opacity-40"
-            aria-label="Next page"
+            aria-label={tr("Next page")}
           >
             <ChevronRight size={16} />
           </button>

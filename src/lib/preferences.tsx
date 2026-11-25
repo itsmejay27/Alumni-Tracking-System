@@ -61,6 +61,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     write(LANG_KEY, l);
   }, []);
 
+  currentLang = lang;
   const t = useCallback(
     (text: string, vars?: Record<string, string | number>) => {
       let out = (lang === 'fil' && FIL[text]) || text;
@@ -72,6 +73,19 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
 
   const value = useMemo(() => ({ theme, setTheme, resolvedTheme, lang, setLang, t }), [theme, setTheme, resolvedTheme, lang, setLang, t]);
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
+}
+
+// The language in use, for tr() below. The app re-renders every page when it changes.
+let currentLang: Lang = 'en';
+
+/**
+ * Translate outside of hooks (lists, tables, helpers). Same as useT()'s t, using the language
+ * chosen in Settings. Missing translations fall back to the English text.
+ */
+export function tr(text: string, vars?: Record<string, string | number>): string {
+  let out = (currentLang === 'fil' && FIL[text]) || text;
+  if (vars) for (const [k, v] of Object.entries(vars)) out = out.split(`{${k}}`).join(String(v));
+  return out;
 }
 
 const fallback: Prefs = {

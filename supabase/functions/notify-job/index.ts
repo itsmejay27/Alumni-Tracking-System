@@ -1,4 +1,4 @@
-// Emails a new Job Board posting to everyone, or only the job's program (its alumni and chair),
+// Emails a new Job Board posting to everyone, or only the job's programs (their alumni and chairs),
 // as the poster chose. Called by the poster (Alumni Affairs posts go live at once) or by Alumni
 // Affairs when approving someone else's job. Each job is emailed once, only after approval, and
 // people who turned off job emails in Settings are skipped.
@@ -37,12 +37,13 @@ export function monthlyPhp(salary: string | null | undefined): number | null {
 const isRemote = (location: string) => /remote|work from home|wfh|home[- ]based|online|anywhere/i.test(location || '');
 
 /**
- * Accounts to email. With a program: that program's alumni plus its program chair.
- * Without one: every account (all alumni, program chairs and Alumni Affairs).
+ * Accounts to email. With programs: those programs' alumni plus their program chairs.
+ * Without: every account (all alumni, program chairs and Alumni Affairs).
+ * Records that staff removed (wrong entries) are skipped.
  */
-async function recipientIds(admin: any, program: string | null): Promise<string[]> {
+async function recipientIds(admin: any, programs: string[]): Promise<string[]> {
   const ids = new Set<string>();
-  if (!program) {
+  if (!programs.length) {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await admin.from('profiles').select('id').range(from, from + 999);
       if (error) throw error;
@@ -51,10 +52,14 @@ async function recipientIds(admin: any, program: string | null): Promise<string[
     }
     return [...ids];
   }
-  const { data: recs, error } = await admin.from('alumni_records').select('user_id').not('user_id', 'is', null).eq('course', program);
+  const { data: recs, error } = await admin
+    .from('alumni_records')
+    .select('user_id, archived:data->archived')
+    .not('user_id', 'is', null)
+    .in('course', programs);
   if (error) throw error;
-  (recs || []).forEach((r: { user_id: string }) => ids.add(r.user_id));
-  const { data: chairs } = await admin.from('profiles').select('id').eq('role', `admin.${program.toLowerCase()}`);
+  (recs || []).filter((r: { archived?: unknown }) => r.archived !== true).forEach((r: { user_id: string }) => ids.add(r.user_id));
+  const { data: chairs } = await admin.from('profiles').select('id').in('role', programs.map((p) => `admin.${p.toLowerCase()}`));
   (chairs || []).forEach((p: { id: string }) => ids.add(p.id));
   return [...ids];
 }
@@ -98,10 +103,12 @@ Deno.serve(async (req) => {
 
   // Recipients: everyone, or only the job's program (its alumni and chair), as the poster chose
   const wanted = job.email_audience || audience;
-  const department = wanted === 'department' && job.program ? job.program : null;
+  const jobPrograms: string[] = Array.isArray(job.programs) && job.programs.length ? job.programs : job.program ? [job.program] : [];
+  const departments = wanted === 'department' ? jobPrograms : [];
+  const department = departments.length ? departments.join(', ') : null;
   let ids: string[];
   try {
-    ids = (await recipientIds(admin, department)).filter((id) => id !== caller.user.id);
+    ids = (await recipientIds(admin, departments)).filter((id) => id !== caller.user.id);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
       <td style="padding-right:12px"><img src="${escapeHtml(logo)}" width="44" height="44" alt="OMSU" style="display:block;border:0" /></td>
       <td style="color:#fff"><div style="font-size:16px;font-weight:bold">New job on the OMSU Job Board</div>
-      <div style="font-size:12px;color:#f5c400">${department ? `For the ${escapeHtml(department)} department` : 'For everyone at OMSU Alumni Track'}</div></td>
+      <div style="font-size:12px;color:#f5c400">${department ? `For the ${escapeHtml(department)} ${departments.length > 1 ? 'departments' : 'department'}` : 'For everyone at OMSU Alumni Track'}</div></td>
     </tr></table>
   </td></tr>
   <tr><td style="padding:24px;font-size:14px;color:#222;line-height:1.6">

@@ -113,3 +113,18 @@ Secrets (Supabase Dashboard → Edge Functions → Secrets):
 
 Each person can make 20 AI requests per 24 hours (`ai_usage` table). Links that point to
 private or internal addresses are refused.
+
+## Bot check on sign-in (Cloudflare Turnstile)
+
+The sign-in, sign-up, forgot-password and change-password forms show a bot check when
+`VITE_TURNSTILE_SITE_KEY` is set. To turn it on for the live site:
+
+1. Create a free Turnstile widget at https://dash.cloudflare.com → Turnstile → Add widget,
+   with your site's domain. You get a **site key** and a **secret key**.
+2. In Vercel → Project → Settings → Environment Variables, set `VITE_TURNSTILE_SITE_KEY`
+   to the **site key** for Production, then redeploy.
+3. Only after that deploy is live: in Supabase → Authentication → Attack Protection, turn on
+   CAPTCHA protection, choose Turnstile, and paste the **secret key**.
+
+Do step 3 last: if Supabase asks for a bot check before the site shows one, nobody can sign in.
+The preview branch uses Cloudflare's public test key `1x00000000000000000000AA`, which always passes.

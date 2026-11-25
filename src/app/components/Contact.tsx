@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
 import { useT } from '@/lib/preferences';
 import { Mail, Phone, MapPin, Globe, Clock, Pencil, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,9 +37,9 @@ export function Contact({ editable = false }: { editable?: boolean }) {
       await saveContactInfo(draft);
       setCurrent(draft);
       setEditing(false);
-      toast.success('Contact details updated');
+      toast.success(tr('Contact details updated'));
     } catch (err: any) {
-      toast.error(`Could not save: ${err.message}`);
+      toast.error(friendlyError(err, 'Could not save the contact details.'));
     }
     setSaving(false);
   };
@@ -51,7 +53,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
           <h2 className="text-2xl font-bold tracking-tight text-foreground">{editable ? t('Contact Info') : t('Contact Us')}</h2>
           <p className="text-muted-foreground mt-1 text-sm">
             {editable
-              ? 'Contact details and the Vision, Mission and Core Values shown on the landing page.'
+              ? tr('Contact details and the Vision, Mission and Core Values shown on the landing page.')
               : t('Get in touch with the OMSU Alumni Affairs Office')}
           </p>
         </div>
@@ -60,7 +62,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
             onClick={() => setEditing(true)}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
           >
-            <Pencil size={16} /> Edit details
+            <Pencil size={16} /> {tr("Edit details")}
           </button>
         )}
       </div>
@@ -70,7 +72,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
           <div className="grid gap-4 md:grid-cols-2">
             {FIELDS.map((f) => (
               <label key={f.key} className={`space-y-1.5 ${f.multiline ? 'md:col-span-2' : ''}`}>
-                <span className="text-sm font-medium text-foreground">{f.label}</span>
+                <span className="text-sm font-medium text-foreground">{tr(f.label)}</span>
                 {f.multiline ? (
                   <textarea
                     rows={2}
@@ -94,7 +96,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
               disabled={saving}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
             >
-              <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
+              <Save size={16} /> {saving ? tr('Saving...') : tr('Save changes')}
             </button>
             <button
               onClick={() => {
@@ -103,7 +105,7 @@ export function Contact({ editable = false }: { editable?: boolean }) {
               }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-muted text-foreground text-sm font-semibold"
             >
-              <X size={16} /> Cancel
+              <X size={16} /> {tr("Cancel")}
             </button>
           </div>
         </div>
@@ -125,8 +127,8 @@ export function Contact({ editable = false }: { editable?: boolean }) {
           </div>
           <div className="bg-card rounded-2xl p-6 space-y-5 shadow-sm">
             <h3 className="font-semibold text-foreground">{t('Visit us')}</h3>
-            <InfoRow icon={<MapPin size={18} />} label="Office location" value={current.location} />
-            <InfoRow icon={<Clock size={18} />} label="Office hours" value={current.officeDays} note={current.officeHours} />
+            <InfoRow icon={<MapPin size={18} />} label={tr("Office location")} value={current.location} />
+            <InfoRow icon={<Clock size={18} />} label={tr("Office hours")} value={current.officeDays} note={current.officeHours} />
           </div>
         </div>
       )}

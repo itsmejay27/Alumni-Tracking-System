@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import {
   ClipboardList,
   Briefcase,
@@ -158,8 +159,8 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           <a href="#top" onClick={link('top')} className="flex items-center gap-3 min-w-0">
             <img src={logo} alt="OMSU Logo" className="w-10 h-10 object-contain shrink-0" />
             <div className="min-w-0">
-              <p className="font-extrabold text-sm text-[#002060] leading-tight truncate">OMSU Alumni Track</p>
-              <p className="text-[11px] text-slate-500 truncate">Occidental Mindoro State University</p>
+              <p className="font-extrabold text-sm text-[#002060] leading-tight truncate">{tr("OMSU Alumni Track")}</p>
+              <p className="text-[11px] text-slate-500 truncate">{tr("Occidental Mindoro State University")}</p>
             </div>
           </a>
           <nav className="hidden lg:flex items-center gap-1 text-[15px] font-semibold">
@@ -172,7 +173,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
                   active === n.id ? 'text-[#002060]' : 'text-slate-600 hover:text-[#002060]'
                 }`}
               >
-                {n.label}
+                {tr(n.label)}
                 <span
                   className={`absolute left-3 right-3 -bottom-0.5 h-0.5 rounded-full bg-[#f5c400] origin-left transition-transform duration-300 ease-out ${
                     active === n.id ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
@@ -183,13 +184,13 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           </nav>
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={onSignIn} className="px-3 sm:px-4 py-2 text-sm font-semibold text-[#002060] hover:bg-slate-100 rounded-full">
-              Log in
+              {tr("Log in")}
             </button>
             <button
               onClick={onSignUp}
               className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-white bg-[#002060] hover:bg-[#001740] rounded-full"
             >
-              Get Started
+              {tr("Get Started")}
             </button>
           </div>
         </div>
@@ -203,26 +204,26 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid md:grid-cols-[1.25fr_1fr] gap-12 items-center">
           <div className="space-y-6">
             <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-              <ShieldCheck size={14} /> Official Graduate Tracer Study
+              <ShieldCheck size={14} /> {tr("Official Graduate Tracer Study")}
             </p>
             <h1 className="text-4xl sm:text-5xl font-black leading-[1.1] tracking-tight">
-              Where has your OMSU degree taken you?
+              {tr("Where has your OMSU degree taken you?")}
             </h1>
             <p className="text-lg sm:text-xl text-white/85 max-w-xl leading-relaxed">
-              Share your career journey, find opportunities from fellow alumni, and help shape the programs that shaped you.
+              {tr("Share your career journey, find opportunities from fellow alumni, and help shape the programs that shaped you.")}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-1">
               <button
                 onClick={onSignUp}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#f5c400] text-[#002060] font-bold rounded-full hover:brightness-95"
               >
-                Get Started <ArrowRight size={18} />
+                {tr("Get Started")} <ArrowRight size={18} />
               </button>
               <button
                 onClick={onSignIn}
                 className="inline-flex items-center justify-center px-6 py-3 bg-white/10 text-white font-semibold rounded-full hover:bg-white/15"
               >
-                I already have an account
+                {tr("I already have an account")}
               </button>
             </div>
           </div>
@@ -235,10 +236,10 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       {/* Features */}
       <section id="features" className="bg-[#eef2fa]"><div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="max-w-2xl mb-12">
-          <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">What you can do</p>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">One home for every OMSU graduate</h2>
+          <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">{tr("What you can do")}</p>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">{tr("One home for every OMSU graduate")}</h2>
           <p className="text-lg text-slate-700 mt-3">
-            Individual answers stay confidential and are reported only in summary form for planning and accreditation.
+            {tr("Individual answers stay confidential and are reported only in summary form for planning and accreditation.")}
           </p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -247,8 +248,8 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
               <div className="w-12 h-12 rounded-xl bg-[#002060] text-[#f5c400] flex items-center justify-center mb-5">
                 {f.icon}
               </div>
-              <h3 className="text-lg font-bold text-[#002060]">{f.title}</h3>
-              <p className="text-[15px] text-slate-700 mt-2 leading-relaxed">{f.text}</p>
+              <h3 className="text-lg font-bold text-[#002060]">{tr(f.title)}</h3>
+              <p className="text-[15px] text-slate-700 mt-2 leading-relaxed">{tr(f.text)}</p>
             </div>
           ))}
         </div>
@@ -257,25 +258,24 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       {/* About OMSU: Vision, Mission, Core Values */}
       <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
         <div className="max-w-2xl mb-10">
-          <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">About OMSU</p>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">Vision, Mission, Goals and Core Values</h2>
+          <p className="text-sm font-bold uppercase tracking-wider text-[#b38f00] mb-2">{tr("About OMSU")}</p>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">{tr("Vision, Mission, Goals and Core Values")}</h2>
           <p className="text-lg text-slate-700 mt-3">
-            Formerly Occidental Mindoro State College, OMSU was converted into a state university under Republic Act No. 11587 and
-            serves the province through instruction, research, extension and production.
+            {tr("Formerly Occidental Mindoro State College, OMSU was converted into a state university under Republic Act No. 11587 and serves the province through instruction, research, extension and production.")}
           </p>
         </div>
         <div className="grid md:grid-cols-2 gap-5">
           <div className="rounded-2xl bg-[#002060] text-white p-7 transition-transform duration-300 hover:-translate-y-1">
             <div className="flex items-center gap-3 mb-3">
               <span className="w-10 h-10 rounded-xl bg-[#f5c400] text-[#002060] flex items-center justify-center"><Eye size={20} /></span>
-              <h3 className="text-xl font-bold">Vision</h3>
+              <h3 className="text-xl font-bold">{tr("Vision")}</h3>
             </div>
             <p className="text-[15px] leading-relaxed text-white/90 whitespace-pre-line">{about.vision}</p>
           </div>
           <div className="rounded-2xl bg-white ring-1 ring-[#002060]/15 p-7 shadow-sm transition-transform duration-300 hover:-translate-y-1">
             <div className="flex items-center gap-3 mb-3">
               <span className="w-10 h-10 rounded-xl bg-[#002060] text-[#f5c400] flex items-center justify-center"><Target size={20} /></span>
-              <h3 className="text-xl font-bold text-[#002060]">Mission</h3>
+              <h3 className="text-xl font-bold text-[#002060]">{tr("Mission")}</h3>
             </div>
             <p className="text-[15px] leading-relaxed text-slate-700 whitespace-pre-line">{about.mission}</p>
           </div>
@@ -284,7 +284,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           <div className="mt-5 rounded-2xl bg-white ring-1 ring-[#002060]/15 p-7 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <span className="w-10 h-10 rounded-xl bg-[#f5c400] text-[#002060] flex items-center justify-center"><Flag size={20} /></span>
-              <h3 className="text-xl font-bold text-[#002060]">Goals and Objectives</h3>
+              <h3 className="text-xl font-bold text-[#002060]">{tr("Goals and Objectives")}</h3>
             </div>
             <ol className="grid md:grid-cols-2 gap-x-8 gap-y-3">
               {about.goals.map((g, i) => (
@@ -299,7 +299,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
         {about.coreValues.length > 0 && (
           <div className="mt-8">
             <h3 className="flex items-center gap-2 text-lg font-bold text-[#002060] mb-4">
-              <Heart size={18} className="text-[#b38f00]" /> Core Values
+              <Heart size={18} className="text-[#b38f00]" /> {tr("Core Values")}
               <span className="text-sm font-semibold text-slate-500">· {about.coreValues.map((v) => v.title.charAt(0)).join('')}</span>
             </h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -322,7 +322,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       {/* How it works */}
       <section id="how" className="bg-[#002060] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-12">How it works</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-12">{tr("How it works")}</h2>
           <ol className="grid md:grid-cols-3 gap-8">
             {steps.map((s, i) => (
               <li key={s.title} className="flex gap-4">
@@ -330,19 +330,19 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
                   {i + 1}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold">{s.title}</h3>
-                  <p className="text-[15px] text-white/80 mt-1">{s.text}</p>
+                  <h3 className="text-lg font-bold">{tr(s.title)}</h3>
+                  <p className="text-[15px] text-white/80 mt-1">{tr(s.text)}</p>
                 </div>
               </li>
             ))}
           </ol>
           <div className="mt-14 pt-10 border-t border-white/10">
-            <h3 className="text-xl font-bold mb-6">Why your answer matters</h3>
+            <h3 className="text-xl font-bold mb-6">{tr("Why your answer matters")}</h3>
             <div className="grid md:grid-cols-3 gap-5">
               {reasons.map((r) => (
                 <div key={r.title} className="rounded-2xl bg-white/5 ring-1 ring-white/10 p-5">
-                  <div className="flex items-center gap-2 font-bold text-[#f5c400]">{r.icon} {r.title}</div>
-                  <p className="text-[15px] text-white/80 mt-2">{r.text}</p>
+                  <div className="flex items-center gap-2 font-bold text-[#f5c400]">{r.icon} {tr(r.title)}</div>
+                  <p className="text-[15px] text-white/80 mt-2">{tr(r.text)}</p>
                 </div>
               ))}
             </div>
@@ -352,8 +352,8 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
 
       {/* Programs */}
       <section id="programs" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">Programs we trace</h2>
-        <p className="text-lg text-slate-700 mt-3 mb-10">Each program chair reviews the results for their own graduates.</p>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight">{tr("Programs we trace")}</h2>
+        <p className="text-lg text-slate-700 mt-3 mb-10">{tr("Each program chair reviews the results for their own graduates.")}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {PROGRAMS.map((p) => (
             <div key={p.code} className="flex items-center gap-4 rounded-2xl bg-white px-5 py-5 ring-1 ring-slate-200 shadow-sm">
@@ -372,7 +372,7 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       {/* FAQ */}
       <section id="faq" className="bg-[#eef2fa]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight mb-8 text-center">Frequently asked questions</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#002060] tracking-tight mb-8 text-center">{tr("Frequently asked questions")}</h2>
           <div className="space-y-3">
             {faqs.map((f, i) => {
               const open = openFaq === i;
@@ -383,12 +383,12 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
                     aria-expanded={open}
                     className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-[#002060]"
                   >
-                    {f.q}
+                    {tr(f.q)}
                     <ChevronDown size={18} className={`shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
                   </button>
                   <div className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
-                      <p className="px-5 pb-4 text-[15px] text-slate-700 leading-relaxed">{f.a}</p>
+                      <p className="px-5 pb-4 text-[15px] text-slate-700 leading-relaxed">{tr(f.a)}</p>
                     </div>
                   </div>
                 </div>
@@ -402,14 +402,14 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
         <div className="rounded-3xl bg-[#002060] text-white p-8 sm:p-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold">Ready to be counted?</h2>
-            <p className="text-white/75 mt-2">It takes about five minutes, and it helps future OMSU students.</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold">{tr("Ready to be counted?")}</h2>
+            <p className="text-white/75 mt-2">{tr("It takes about five minutes, and it helps future OMSU students.")}</p>
           </div>
           <button
             onClick={onSignUp}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#f5c400] text-[#002060] font-bold rounded-full hover:brightness-95 shrink-0"
           >
-            Get Started <ArrowRight size={18} />
+            {tr("Get Started")} <ArrowRight size={18} />
           </button>
         </div>
       </section>
@@ -420,8 +420,8 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           <div className="flex items-center gap-3">
             <img src={logo} alt="" className="w-9 h-9 object-contain shrink-0" />
             <div>
-              <p className="font-bold text-white leading-tight">Alumni Affairs Office</p>
-              <p className="text-xs text-white/60">Occidental Mindoro State University</p>
+              <p className="font-bold text-white leading-tight">{tr("Alumni Affairs Office")}</p>
+              <p className="text-xs text-white/60">{tr("Occidental Mindoro State University")}</p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -435,8 +435,8 @@ export function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
             <p className="flex items-center gap-2"><Phone size={14} className="shrink-0 text-[#f5c400]" /> {contact.phone}</p>
           </div>
           <div className="flex lg:flex-col gap-4 lg:gap-1.5 lg:items-end">
-            <button onClick={() => setLegal('terms')} className="text-sm text-white/80 hover:text-white transition-colors">Terms of Use</button>
-            <button onClick={() => setLegal('privacy')} className="text-sm text-white/80 hover:text-white transition-colors">Privacy Policy</button>
+            <button onClick={() => setLegal('terms')} className="text-sm text-white/80 hover:text-white transition-colors">{tr("Terms of Use")}</button>
+            <button onClick={() => setLegal('privacy')} className="text-sm text-white/80 hover:text-white transition-colors">{tr("Privacy Policy")}</button>
           </div>
         </div>
         <div className="border-t border-white/10">

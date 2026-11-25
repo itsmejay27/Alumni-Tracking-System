@@ -7,11 +7,11 @@ import type { Course } from './alumni';
  * depends on color alone.
  */
 export const PROGRAMS: { code: Course; name: string; short: string; color: string; dash?: string }[] = [
-  { code: 'BSIT', name: 'BS Information Technology', short: 'BSIT', color: '#6250d6' },
+  { code: 'BSIT', name: 'BS in Information Technology', short: 'BSIT', color: '#6250d6' },
   { code: 'BSBA-FM', name: 'BSBA Major in Financial Management', short: 'BSBA-FM', color: '#eda100', dash: '6 4' },
   { code: 'BEED', name: 'Bachelor of Elementary Education (CTE)', short: 'BEED', color: '#2a78d6', dash: '2 4' },
   { code: 'BSBA-OM', name: 'BSBA Major in Operations Management', short: 'BSBA-OM', color: '#eb6834', dash: '10 4 2 4' },
-  { code: 'BSOA', name: 'BS Office Administration', short: 'BSOA', color: '#1baf7a', dash: '1 3' },
+  { code: 'BSOA', name: 'BS in Office Administration', short: 'BSOA', color: '#1baf7a', dash: '1 3' },
 ];
 
 export const programName = (code: string) => PROGRAMS.find((p) => p.code === code)?.name || code;
@@ -41,6 +41,24 @@ export const jobLevelLabel = (level: string) => {
   const help = JOB_LEVEL_HELP[level];
   return help ? `${level} — ${help}` : level;
 };
+/** Industry of the employer (panel: report how many work in each sector, compared by batch). */
+export const INDUSTRIES = [
+  'Information Technology / Software',
+  'BPO / Call Center',
+  'Education',
+  'Government / Public Service',
+  'Banking / Finance / Microfinance',
+  'Retail / Sales',
+  'Manufacturing / Production',
+  'Health Care',
+  'Hospitality / Tourism / Food',
+  'Agriculture / Fisheries',
+  'Construction / Engineering',
+  'Transportation / Logistics',
+  'Telecommunications',
+  'Media / Arts / Creative',
+  'Other',
+] as const;
 export const EMPLOYER_TYPES = ['Private', 'Government', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business'] as const;
 
 /** Simple password strength rating used on every password form. */

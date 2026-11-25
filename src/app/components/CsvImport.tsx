@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
+import { tr } from '@/lib/preferences';
 import { Upload, X, FileSpreadsheet, Download, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -201,7 +204,8 @@ export function CsvImport({
             id: crypto.randomUUID(),
             position: r.position,
             company: r.company,
-            employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Private',
+            // The sheet may not say; don't guess "Private"
+            employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Not specified',
             employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
             employerAddress: r.employerAddress || undefined,
             employerContact: r.employerContact || undefined,
@@ -255,7 +259,7 @@ export function CsvImport({
       const chunk = payload.slice(i, i + 200);
       const { error } = await supabase.from('alumni_records').insert(chunk);
       if (error) {
-        toast.error(`Stopped after ${done} records: ${error.message}`);
+        toast.error(`${tr(plural(done, 'Stopped after {n} record.', 'Stopped after {n} records.'), { n: done })} ${friendlyError(error)}`);
         setImporting(false);
         if (done) onDone();
         return;
@@ -263,7 +267,7 @@ export function CsvImport({
       done += chunk.length;
     }
     setImporting(false);
-    toast.success(`Imported ${done} graduates`);
+    toast.success(tr(plural(done, 'Imported {n} graduate.', 'Imported {n} graduates.'), { n: done }));
     onDone();
     onClose();
   };
@@ -283,13 +287,13 @@ export function CsvImport({
       <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-lg">Import graduates</h3>
+            <h3 className="font-semibold text-lg">{tr("Import graduates")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Upload one or more official Graduate Tracer Excel sheets (.xlsx), or Google Forms / spreadsheet exports (.csv).
               {scope && ` Only ${scope} graduates are accepted.`}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
             <X size={18} />
           </button>
         </div>
@@ -318,9 +322,9 @@ export function CsvImport({
           />
           {reading ? <Loader2 className="text-primary animate-spin" size={28} /> : <Upload className="text-muted-foreground" size={28} />}
           <span className="text-sm font-medium text-center">
-            {reading ? 'Reading files...' : files.length ? 'Add more files' : 'Choose or drop Excel (.xlsx) or CSV files'}
+            {reading ? 'Reading files...' : files.length ? tr('Add more files') : tr('Choose or drop Excel (.xlsx) or CSV files')}
           </span>
-          <span className="text-xs text-muted-foreground">You can pick several files at once.</span>
+          <span className="text-xs text-muted-foreground">{tr("You can pick several files at once.")}</span>
         </label>
 
         {files.length > 0 && (
@@ -351,9 +355,9 @@ export function CsvImport({
                 {!f.problem && (
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-xs font-medium">Year graduated</span>
+                      <span className="text-xs font-medium">{tr("Year graduated")}</span>
                       {f.hasYearColumn ? (
-                        <p className="mt-1 text-sm text-muted-foreground">Taken from the file</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{tr("Taken from the file")}</p>
                       ) : (
                         <select value={f.year} onChange={(e) => update(f.id, { year: Number(e.target.value) })} className="mt-1 w-full filter-select">
                           {Array.from({ length: THIS_YEAR - 1999 }, (_, i) => THIS_YEAR - i).map((y) => (
@@ -365,7 +369,7 @@ export function CsvImport({
                       )}
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium">Program</span>
+                      <span className="text-xs font-medium">{tr("Program")}</span>
                       {scope || f.rows.every((r) => r.course) ? (
                         <p className="mt-1 text-sm text-muted-foreground">{scope || [...new Set(f.rows.map((r) => r.course))].join(', ')}</p>
                       ) : (
@@ -386,8 +390,8 @@ export function CsvImport({
             {toImport.length > 0 && (
               <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1">
                 <p className="font-semibold">
-                  {toImport.length} graduates ready to import from {perFile.filter((p) => p.ready.length).length} file
-                  {perFile.filter((p) => p.ready.length).length === 1 ? '' : 's'}
+                  {tr(plural(toImport.length, '{n} graduate ready to import', '{n} graduates ready to import'), { n: toImport.length })}{' '}
+                  {tr(plural(perFile.filter((p) => p.ready.length).length, 'from {n} file', 'from {n} files'), { n: perFile.filter((p) => p.ready.length).length })}
                 </p>
                 <p className="text-muted-foreground">
                   {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
@@ -404,11 +408,11 @@ export function CsvImport({
         )}
 
         <button onClick={downloadTemplate} className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
-          <Download size={15} /> Download a CSV template
+          <Download size={15} /> {tr("Download a CSV template")}
         </button>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">{tr("Cancel")}</button>
           <button
             onClick={runImport}
             disabled={!toImport.length || importing}

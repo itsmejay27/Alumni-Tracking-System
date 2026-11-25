@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError, functionError } from '@/lib/errors';
+import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { UserPlus, Copy, Mail, X, Search, Trash2, RefreshCw, Ban, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,7 +26,7 @@ const isTop = (role: string) => TOP_ROLES.includes(role);
 const CHAIR_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value.startsWith('admin.'));
 // Filter choices for Alumni Affairs: program chairs and Alumni Affairs (the Super Admin is not listed)
 const STAFF_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'alumni' && o.value !== 'superadmin');
-const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
+const roleLabel = (r: string) => tr(ROLE_OPTIONS.find((o) => o.value === r)?.label || r);
 
 interface Account {
   id: string;
@@ -79,7 +81,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       .from('profiles')
       .select('id, email, role, given_name, last_name, title, must_change_password, created_at, deactivated_at')
       .order('created_at', { ascending: false });
-    if (error) setLoadError(error.message);
+    if (error) setLoadError(friendlyError(error, 'Could not load the accounts.'));
     else {
       setLoadError(null);
       setAccounts(data as Account[]);
@@ -108,20 +110,13 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     setSending(false);
 
     if (error) {
-      // The function puts a readable message in the response body
-      let message = error.message;
-      try {
-        const body = await (error as any).context?.json();
-        if (body?.error) message = body.error;
-      } catch {
-        /* keep default message */
-      }
+      const message = await functionError(error);
       setFormError(message);
       toast.error(message);
       return;
     }
 
-    if (data.emailSent) toast.success(`Invitation sent to ${email}`);
+    if (data.emailSent) toast.success(tr('Invitation sent to {email}.', { email }));
     // Only when the email could not be sent do we show the password, so it can be shared another way
     else setResult({ email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
     setGivenName('');
@@ -134,7 +129,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
 
   const handleRoleChange = async (acc: Account, newRole: string) => {
     if (acc.id === currentUserId) {
-      toast.error("You can't change your own role.");
+      toast.error(tr("You can't change your own role."));
       return;
     }
     const { error } = await supabase
@@ -142,22 +137,11 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       .update({ role: newRole, title: roleLabel(newRole) })
       .eq('id', acc.id);
     if (error) {
-      toast.error(`Could not change role: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not change the role.'));
       return;
     }
-    toast.success(`${acc.email} is now ${roleLabel(newRole)}. They need to sign in again to see the change.`);
+    toast.success(tr('{email} is now {role}. They need to sign in again to see the change.', { email: acc.email, role: tr(roleLabel(newRole)) }));
     load();
-  };
-
-  const invokeError = async (error: any) => {
-    let message = error.message;
-    try {
-      const body = await error.context?.json();
-      if (body?.error) message = body.error;
-    } catch {
-      /* keep default message */
-    }
-    return message as string;
   };
 
   const [resending, setResending] = useState<string | null>(null);
@@ -168,15 +152,15 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     });
     setResending(null);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     const until = data.expiresAt ? new Date(data.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
     if (data.emailSent)
       toast.success(
         data.samePassword
-          ? `Invitation sent again to ${acc.email} with the same temporary password (it stays the same until ${until}).`
-          : `Invitation sent to ${acc.email} with a new temporary password${until ? ` (resending before ${until} keeps the same one)` : ''}.`
+          ? tr('Invitation sent again to {email} with the same temporary password (it stays the same until {until}).', { email: acc.email, until })
+          : until ? tr('Invitation sent to {email} with a new temporary password (resending before {until} keeps the same one).', { email: acc.email, until }) : tr('Invitation sent to {email} with a new temporary password.', { email: acc.email })
       );
     else setResult({ email: acc.email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
   };
@@ -189,12 +173,12 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     const ok = await confirmDialog(
       deactivate
         ? {
-            title: `Deactivate ${name}'s account?`,
-            message: "They won't be able to sign in until you activate the account again. Their data is kept.",
-            confirmLabel: 'Deactivate',
+            title: tr("Deactivate {name}'s account?", { name }),
+            message: tr("They won't be able to sign in until you activate the account again. Their data is kept."),
+            confirmLabel: tr('Deactivate'),
             danger: true,
           }
-        : { title: `Activate ${name}'s account?`, message: 'They will be able to sign in again.', confirmLabel: 'Activate' }
+        : { title: tr("Activate {name}'s account?", { name }), message: tr('They will be able to sign in again.'), confirmLabel: tr('Activate') }
     );
     if (!ok) return;
     setToggling(acc.id);
@@ -203,11 +187,11 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     });
     setToggling(null);
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
     setAccounts((list) => list.map((x) => (x.id === acc.id ? { ...x, deactivated_at: deactivate ? new Date().toISOString() : null } : x)));
-    toast.success(deactivate ? `${name}'s account is deactivated` : `${name}'s account is active again`);
+    toast.success(deactivate ? tr("{name}'s account is deactivated.", { name }) : tr("{name}'s account is active again.", { name }));
   };
 
   const handleRemove = async (acc: Account) => {
@@ -216,26 +200,26 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     const ok = await confirmDialog(
       pending
         ? {
-            title: `Cancel the invitation for ${name}?`,
-            message: 'Their account will be deleted and the temporary password will stop working.',
-            confirmLabel: 'Cancel invitation',
-            cancelLabel: 'Keep',
+            title: tr('Cancel the invitation for {name}?', { name }),
+            message: tr('Their account will be deleted and the temporary password will stop working.'),
+            confirmLabel: tr('Cancel invitation'),
+            cancelLabel: tr('Keep'),
             danger: true,
           }
         : {
-            title: `Remove ${name}'s account?`,
-            message: 'They will no longer be able to sign in. Their tracer record, if any, is kept.',
-            confirmLabel: 'Remove account',
+            title: tr("Remove {name}'s account?", { name }),
+            message: tr('They will no longer be able to sign in. Their tracer record, if any, is kept.'),
+            confirmLabel: tr('Remove account'),
             danger: true,
           }
     );
     if (!ok) return;
     const { error } = await supabase.functions.invoke('invite-account', { body: { action: 'delete', userId: acc.id } });
     if (error) {
-      toast.error(await invokeError(error));
+      toast.error(await functionError(error));
       return;
     }
-    toast.success(pending ? 'Invitation cancelled' : 'Account removed');
+    toast.success(pending ? tr('Invitation cancelled') : tr('Account removed'));
     setAccounts((list) => list.filter((a) => a.id !== acc.id));
   };
 
@@ -260,16 +244,16 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
   const paged = usePaged(visible, 10);
   const filtersOn = roleFilter !== 'staff' || statusFilter !== 'all' || !!search;
 
-  if (loading) return <LoadingState label="Loading accounts..." />;
+  if (loading) return <LoadingState label={tr("Loading accounts...")} />;
   if (loadError) return <ErrorState message={loadError} />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">{isSuper ? 'Alumni Affairs Accounts' : 'Manage Accounts'}</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{isSuper ? tr('Alumni Affairs Accounts') : tr('Manage Accounts')}</h2>
           <p className="text-muted-foreground mt-1">
-            {isSuper ? 'Create and manage the accounts of the Alumni Affairs Office' : 'Create accounts for program chairs and assign their programs'}
+            {isSuper ? tr('Create and manage the accounts of the Alumni Affairs Office') : tr('Create accounts for program chairs and assign their programs')}
           </p>
         </div>
         <button
@@ -280,7 +264,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/95"
         >
           <UserPlus size={18} />
-          {isSuper ? 'Create Alumni Affairs Account' : 'Create Account'}
+          {isSuper ? tr('Create Alumni Affairs Account') : tr('Create Account')}
         </button>
       </div>
 
@@ -290,12 +274,12 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
           <div className="relative w-full max-w-md bg-card rounded-2xl shadow-2xl p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-semibold">The invitation email could not be sent</h3>
+                <h3 className="font-semibold">{tr("The invitation email could not be sent")}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   The account for {result.email} is ready. Share this temporary password with them directly. ({result.emailError})
                 </p>
               </div>
-              <button onClick={() => setResult(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+              <button onClick={() => setResult(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label={tr("Close")}>
                 <X size={18} />
               </button>
             </div>
@@ -304,20 +288,20 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(result.tempPassword);
-                  toast.success('Copied');
+                  toast.success(tr('Copied'));
                 }}
                 className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-primary"
               >
-                <Copy size={14} /> Copy
+                <Copy size={14} /> {tr("Copy")}
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">This is shown only once. They will choose their own password on first sign-in.</p>
+            <p className="text-xs text-muted-foreground">{tr("This is shown only once. They will choose their own password on first sign-in.")}</p>
           </div>
         </div>
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Create account">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={tr("Create account")}>
           <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-150" onClick={() => !sending && setShowForm(false)} />
         <form onSubmit={handleInvite} className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-4 animate-in zoom-in-95 fade-in duration-150">
           <div className="flex items-start justify-between gap-3">
@@ -326,40 +310,40 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
                 <Mail size={18} />
               </div>
               <div>
-                <h3 className="font-semibold">Create account</h3>
-                <p className="text-xs text-muted-foreground">They'll get an email with a temporary password.</p>
+                <h3 className="font-semibold">{tr("Create account")}</h3>
+                <p className="text-xs text-muted-foreground">{tr("They'll get an email with a temporary password.")}</p>
               </div>
             </div>
-            <button type="button" onClick={() => setShowForm(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+            <button type="button" onClick={() => setShowForm(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
               <X size={18} />
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">First Name <Req /></label>
+              <label className="text-sm font-semibold">{tr("First Name")} <Req /></label>
               <input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputClass} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Last Name <Req /></label>
+              <label className="text-sm font-semibold">{tr("Last Name")} <Req /></label>
               <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Email Address <Req /></label>
+              <label className="text-sm font-semibold">{tr("Email Address")} <Req /></label>
               <input
                 required
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={inputClass}
-                placeholder="name@example.com"
+                placeholder={tr("name@example.com")}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Role / Department <Req /></label>
+              <label className="text-sm font-semibold">{tr("Role / Department")} <Req /></label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
                 {createOptions.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {tr(o.label)}
                   </option>
                 ))}
               </select>
@@ -370,7 +354,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
               </p>
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <label className="text-sm font-semibold">Position Title (optional)</label>
+              <label className="text-sm font-semibold">{tr("Position Title (optional)")}</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -380,19 +364,19 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            They will be asked to change the temporary password the first time they sign in.
+            {tr("They will be asked to change the temporary password the first time they sign in.")}
           </p>
           {formError && <p className="rounded-lg border border-border bg-muted px-3 py-2 text-sm">{formError}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-muted">
-              Cancel
+              {tr("Cancel")}
             </button>
             <button
               type="submit"
               disabled={sending}
               className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm disabled:opacity-60"
             >
-              {sending ? 'Creating...' : 'Create & send invitation'}
+              {sending ? tr('Creating...') : tr('Create & send invitation')}
             </button>
           </div>
         </form>
@@ -406,27 +390,27 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name or email..."
+              placeholder={tr("Search name or email...")}
               className="w-full pl-9 pr-3 py-2 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
 {!isSuper && (
-          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="filter-select sm:w-52" aria-label="Filter by role">
-            <option value="staff">All staff</option>
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="filter-select sm:w-52" aria-label={tr("Filter by role")}>
+            <option value="staff">{tr("All staff")}</option>
             {STAFF_ROLE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
-                {o.label}
+                {tr(o.label)}
               </option>
             ))}
-            <option value="alumni">Alumni members</option>
-            <option value="all">Everyone</option>
+            <option value="alumni">{tr("Alumni members")}</option>
+            <option value="all">{tr("Everyone")}</option>
           </select>
           )}
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select sm:w-44" aria-label="Filter by status">
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="pending">Invitation pending</option>
-            <option value="deactivated">Deactivated</option>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select sm:w-44" aria-label={tr("Filter by status")}>
+            <option value="all">{tr("All statuses")}</option>
+            <option value="active">{tr("Active")}</option>
+            <option value="pending">{tr("Invitation pending")}</option>
+            <option value="deactivated">{tr("Deactivated")}</option>
           </select>
           {filtersOn && (
             <button
@@ -437,7 +421,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
               }}
               className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
             >
-              Clear filters
+              {tr("Clear filters")}
             </button>
           )}
         </div>
@@ -447,15 +431,15 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
             <div key={a.id} className="p-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold truncate">
-                  {`${a.given_name} ${a.last_name}`.trim() || '(no name)'}
-                  {a.id === currentUserId && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}
+                  {`${a.given_name} ${a.last_name}`.trim() || tr('(no name)')}
+                  {a.id === currentUserId && <span className="ml-2 text-xs text-muted-foreground">{tr("(you)")}</span>}
                 </p>
                 <p className="text-sm text-muted-foreground truncate">{a.email}</p>
                 {a.must_change_password && (
-                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">Invitation pending</span>
+                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">{tr("Invitation pending")}</span>
                 )}
                 {a.deactivated_at && (
-                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">Deactivated</span>
+                  <span className="inline-block mt-1 text-[11px] font-medium border border-border text-muted-foreground rounded-full px-2 py-0.5">{tr("Deactivated")}</span>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
@@ -470,7 +454,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
                   >
                     {ROLE_OPTIONS.filter((o) => !isTop(o.value)).map((o) => (
                       <option key={o.value} value={o.value}>
-                        {o.label}
+                        {tr(o.label)}
                       </option>
                     ))}
                   </select>
@@ -481,24 +465,24 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
                     <button
                       onClick={() => handleToggleActive(a)}
                       disabled={toggling === a.id}
-                      title={a.deactivated_at ? 'Let this person sign in again' : 'Stop this person from signing in'}
+                      title={a.deactivated_at ? tr('Let this person sign in again') : tr('Stop this person from signing in')}
                       className={
                         actionBtn
                       }
                     >
                       {a.deactivated_at ? <CheckCircle2 size={14} /> : <Ban size={14} />}
-                      {toggling === a.id ? '...' : a.deactivated_at ? 'Activate' : 'Deactivate'}
+                      {toggling === a.id ? '...' : a.deactivated_at ? tr('Activate') : tr('Deactivate')}
                     </button>
                   )}
                   {a.must_change_password && canManage(a) && (
                     <button
                       onClick={() => handleResend(a)}
                       disabled={resending === a.id}
-                      title="Send a new invitation with a new temporary password"
+                      title={tr("Send a new invitation with a new temporary password")}
                       className={actionBtn}
                     >
                       <RefreshCw size={14} className={resending === a.id ? 'animate-spin' : ''} />
-                      {resending === a.id ? 'Sending' : 'Resend'}
+                      {resending === a.id ? tr('Sending') : tr('Resend')}
                     </button>
                   )}
                 </div>
@@ -506,18 +490,18 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
                   {a.id !== currentUserId && canManage(a) && (
                     <button
                       onClick={() => handleRemove(a)}
-                      title={a.must_change_password ? 'Cancel invitation' : 'Remove account'}
+                      title={a.must_change_password ? tr('Cancel invitation') : tr('Remove account')}
                       className={actionBtn + ' hover:text-red-500'}
                     >
                       {a.must_change_password ? <X size={14} /> : <Trash2 size={14} />}
-                      {a.must_change_password ? 'Cancel' : 'Remove'}
+                      {a.must_change_password ? tr('Cancel') : tr('Remove')}
                     </button>
                   )}
                 </div>
               </div>
             </div>
           ))}
-          {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No accounts found.</p>}
+          {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">{tr("No accounts found.")}</p>}
         </div>
         <Pagination {...paged} label="accounts" />
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 import { useT } from '@/lib/preferences';
 import { Mail, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +29,7 @@ export function CollegeOfficialsDirectory() {
 
   useEffect(() => {
     supabase.rpc('staff_directory').then(({ data, error }) => {
-      if (error) setError(error.message);
+      if (error) setError(friendlyError(error, 'Could not load the officials.'));
       else setStaff((data as Staff[]) || []);
       setLoading(false);
     });
@@ -42,7 +43,7 @@ export function CollegeOfficialsDirectory() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t('Directory')}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t('Officials')}</h2>
         <p className="text-muted-foreground mt-1 text-sm">{t('Alumni Affairs and your program chair')}</p>
       </div>
 
@@ -86,7 +87,7 @@ export function CollegeOfficialsDirectory() {
             );
           })}
         </div>
-        <Pagination {...paged} label={t('people')} />
+        <Pagination {...paged} label="people" />
         </div>
       )}
     </div>

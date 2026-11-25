@@ -18,6 +18,10 @@ export interface EmploymentEntry {
   /** Proof of employment in the private 'employment-proofs' storage (contract, company ID, permit) */
   proofPath?: string;
   proofName?: string;
+  /** Industry of the employer, one of INDUSTRIES */
+  industry?: string;
+  /** Answer to "Is this job related to your course?" */
+  relatedToCourse?: 'Yes' | 'No';
   startDate?: string; // YYYY-MM
   endDate?: string | null; // YYYY-MM, empty = current job
   recordedAt: string; // ISO date the entry was added
@@ -34,7 +38,7 @@ export interface AlumniRecord {
   yearGraduated: number;
   sex: 'Female' | 'Male' | '';
   dateOfBirth: string;
-  civilStatus: 'Single' | 'Married' | 'Separated' | 'Widowed';
+  civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
   mobileNo: string;
   facebookName: string;
   twitter?: string;
@@ -61,7 +65,20 @@ export interface AlumniRecord {
   respondedAt?: string;
   /** Read-only: the record is linked to an alumni account. Not saved in the record data. */
   accountLinked?: boolean;
+  /**
+   * 'pending' while Alumni Affairs or the program chair checks an account that matched this
+   * record by name only. The database keeps the earlier details hidden until then.
+   */
+  verification?: 'pending';
+  /** Removed by staff (wrong entry). Hidden from lists and reports; staff can restore it. */
+  archived?: boolean;
   suggestions?: string;
+  /** Other degrees or further studies (e.g. a master's), besides the OMSU program on file. */
+  otherDegrees?: { degree: string; school: string; year?: string; status: 'Graduated' | 'Ongoing' }[];
+  /** BSIT PEO survey answers (see lib/survey.ts) */
+  peoSurvey?: import('./survey').PeoSurvey;
+  /** Every piece of feedback the graduate has sent, oldest first (new feedback never replaces old). */
+  feedbackHistory?: { text: string; at: string }[];
   isPublic?: boolean;
 
   jobLevel?: string;
@@ -91,13 +108,16 @@ const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACT
 /** The alumnus's current job, from the newest history entry or the older single-job fields. */
 export function currentJob(r: AlumniRecord): EmploymentEntry | null {
   const current = (r.employmentHistory || []).filter((e) => !e.endDate);
+  // Two or more current jobs: reports count the permanent one (panel), else the newest
+  const permanent = current.filter((e) => e.employmentStatus === 'Permanent');
+  if (permanent.length) return permanent[permanent.length - 1];
   if (current.length) return current[current.length - 1];
   if (isEmployed(r) && (r.currentPosition || r.currentCompany)) {
     return {
       id: 'legacy',
       position: r.currentPosition || '',
       company: r.currentCompany || '',
-      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Private',
+      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Not specified',
       employmentStatus: r.status === 'Self-Employed' ? 'Self-Employed' : LEGACY_STATUS[r.employmentStatus || ''] || r.employmentStatus || '',
       jobLevel: r.jobLevel || (r.employmentStatus === 'DAILY WAGE' ? 'Job Order' : 'Rank and File'),
       employerAddress: r.employerAddress,
@@ -127,9 +147,9 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
   const lastName = d.lastName || '';
   return {
     middleName: '',
-    sex: 'Male',
+    sex: '', // unknown stays unknown (913 imported records have no sex on file)
     dateOfBirth: '',
-    civilStatus: 'Single',
+    civilStatus: '', // unknown stays unknown (the import used to fill in "Single")
     mobileNo: '',
     facebookName: '',
     presentAddress: '',
@@ -150,7 +170,7 @@ export function rowToRecord(row: AlumniRow): AlumniRecord {
 }
 
 /** Loads every tracer record the signed-in user is allowed to see (row level security does the scoping). */
-export function useAlumniRecords() {
+export function useAlumniRecords(options: { includeRemoved?: boolean } = {}) {
   const [records, setRecords] = useState<AlumniRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,10 +198,11 @@ export function useAlumniRecords() {
       setError(failed);
     } else {
       setError(null);
-      setRecords(all.map(rowToRecord));
+      const recs = all.map(rowToRecord);
+      setRecords(options.includeRemoved ? recs : recs.filter((r) => !r.archived));
     }
     setLoading(false);
-  }, []);
+  }, [options.includeRemoved]);
 
   useEffect(() => {
     reload();
@@ -258,4 +279,32 @@ export function missingProfileFields(r: AlumniRecord | null): string[] {
     else if ((r.employmentHistory || []).some((h) => !h.endDate && !h.proofPath)) missing.push('Proof of employment');
   }
   return missing;
+}
+
+/**
+ * Staff change only the given fields of a record's data (and optionally its program/batch/email).
+ * Reads the stored data first so display defaults are never written back. A field set to
+ * undefined is removed. Resolves false when the database refused the change.
+ */
+export async function patchRecord(
+  id: string,
+  patch: Partial<Record<keyof AlumniRecord, unknown>>,
+  columns: { course?: Course; batch?: string; email?: string | null } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: row, error: readError } = await supabase.from('alumni_records').select('data').eq('id', id).maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!row) return { ok: false, error: "You can't change this record." };
+  const data: Record<string, unknown> = { ...(row.data as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete data[k];
+    else data[k] = v;
+  }
+  const { data: saved, error } = await supabase
+    .from('alumni_records')
+    .update({ ...columns, data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  if (!saved?.length) return { ok: false, error: "You can't change this record." };
+  return { ok: true };
 }

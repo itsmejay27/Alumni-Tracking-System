@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/text';
+import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { salaryInPesos } from '@/lib/money';
 import { useT } from '@/lib/preferences';
@@ -72,7 +75,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) {
-      setLoadError(error.message);
+      setLoadError(friendlyError(error, 'Could not load the job posts.'));
     } else {
       setLoadError(null);
       setJobs(
@@ -89,7 +92,8 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
           postedDate: new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           contactEmail: j.contact_email,
           createdBy: j.created_by,
-          program: j.program,
+          // Several programs are shown as "BSIT, BSOA"
+          program: j.programs?.length ? j.programs.join(', ') : j.program,
           createdAt: j.created_at,
           // Before the approval update is installed every job counts as approved
           status: j.status || 'approved',
@@ -109,10 +113,11 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
     if (!(await confirmDialog({ title: t('Remove this job posting?'), message: t('It will be removed for everyone.'), confirmLabel: t('Remove'), danger: true }))) return;
     const { data, error } = await supabase.from('jobs').delete().eq('id', id).select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not delete: ${error.message}` : 'You can only remove your own postings.');
+      toast.error(error ? friendlyError(error, 'Could not delete the job post.') : tr('You can only remove your own job posts.'));
       return;
     }
     setJobs((list) => list.filter((j) => j.id !== id));
+    toast.success(t('Job post removed.'));
   };
 
   const handleApprove = async (job: JobPosting) => {
@@ -122,7 +127,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .eq('id', job.id)
       .select('id');
     if (error || !data?.length) {
-      toast.error(error ? `Could not approve: ${error.message}` : t('Could not approve this job.'));
+      toast.error(error ? friendlyError(error, 'Could not approve the job post.') : t('Could not approve this job.'));
       return;
     }
     // Send the email the poster asked for, now that the job is live
@@ -131,7 +136,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         body: { jobId: job.id, audience: job.emailAudience },
       });
       if (mailError) toast.warning(t('Job approved, but the email could not be sent.'));
-      else toast.success(t('Job approved and emailed to {n} people.', { n: mail?.sent ?? 0 }));
+      else toast.success(t(plural(mail?.sent ?? 0, 'Job approved and emailed to {n} person.', 'Job approved and emailed to {n} people.'), { n: mail?.sent ?? 0 }));
     } else {
       toast.success(t('Job approved. It is now on the Job Board.'));
     }
@@ -145,7 +150,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       .update({ status: 'rejected', reviewed_by: userId, reviewed_at: new Date().toISOString() })
       .eq('id', job.id);
     if (error) {
-      toast.error(`Could not reject: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not reject the job post.'));
       return;
     }
     toast.success(t('Job rejected.'));
@@ -159,7 +164,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
 
   const shown = isAffairs && view === 'review' ? pendingJobs : liveJobs;
   const typeFiltered = filterType === 'all' ? shown : shown.filter((job) => job.type === filterType);
-  const matchScore = (j: JobPosting) => (myProgram && j.program === myProgram ? 2 : j.program ? 0 : 1);
+  const matchScore = (j: JobPosting) => (myProgram && splitPrograms(j.program).includes(myProgram) ? 2 : j.program ? 0 : 1);
   const filteredJobs = [...typeFiltered].sort((a, b) =>
     sortBy === 'match' && myProgram
       ? matchScore(b) - matchScore(a) || b.createdAt.localeCompare(a.createdAt)
@@ -177,7 +182,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{t('Job Board')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {t('{n} job opportunities', { n: filteredJobs.length })}{myProgram ? ` · ${t('{program} jobs shown first', { program: myProgram })}` : ''}
+            {t(plural(filteredJobs.length, '{n} job opportunity', '{n} job opportunities'), { n: filteredJobs.length })}{myProgram ? ` · ${t('{program} jobs shown first', { program: myProgram })}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -223,7 +228,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       {showPostForm && (
         <JobPostingForm
           posterName={posterName}
-          needsApproval={!isAffairs}
+          needsApproval={userRole === 'alumni'}
           defaultProgram={courseScopeForRole(userRole) || myProgram || ''}
           initial={postPrefill}
           onClose={() => { setShowPostForm(false); setPostPrefill(undefined); }}
@@ -338,7 +343,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            {t('Internship')}
+            {t('Trainee')}
           </button>
         </div>
       </div>
@@ -355,7 +360,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
             onExplain={() => setAssistant(jobToText(job))}
           />
         ))}
-        <Pagination {...paged} label={t('jobs')} />
+        <Pagination {...paged} label="jobs" />
         {filteredJobs.length === 0 && (
           <div className="bg-card rounded-2xl shadow-sm p-12 text-center">
             <Briefcase className="mx-auto mb-3 text-muted-foreground/60" size={40} />
@@ -511,7 +516,7 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <JobTypeBadge type={job.type} />
-            <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
               <X size={18} />
             </button>
           </div>
@@ -612,14 +617,13 @@ function AssistantModal({
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="AI Job Assistant">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={tr("AI Job Assistant")}>
       <div className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-200" onClick={onClose} />
       <div className="relative w-full max-w-6xl max-h-[96vh] overflow-y-auto rounded-2xl bg-background shadow-2xl p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center gap-2 mb-4 pr-10">
           {(
             [
-              ['explain', t('Explain a job'), <Sparkles key="s" size={15} />],
-              ['search', t('Find jobs online'), <Globe key="g" size={15} />],
+              ['explain', t('Explain a job'), <Sparkles key="s" size={15} />], ['search', t('Find jobs online'), <Globe key="g" size={15} />],
             ] as const
           ).map(([value, label, icon]) => (
             <button
@@ -638,7 +642,7 @@ function AssistantModal({
           <JobAssistant key={explainText} userId={userId} initialText={explainText || undefined} onClose={onClose} onPost={onPost} />
         ) : (
           <>
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 sm:right-5 sm:top-5 p-2 rounded-lg text-muted-foreground hover:bg-muted">
+            <button onClick={onClose} aria-label={tr("Close")} className="absolute right-3 top-3 sm:right-5 sm:top-5 p-2 rounded-lg text-muted-foreground hover:bg-muted">
               <X size={18} />
             </button>
             <JobSearch
@@ -671,7 +675,7 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
     'full-time': 'Full-time',
     'part-time': 'Part-time',
     'contract': 'Contract',
-    'internship': 'Internship',
+    'internship': 'Trainee',
   };
 
   return (
@@ -743,21 +747,22 @@ function JobPostingForm({
       requirements: formData.requirements.split('\n').map((r) => r.trim()).filter(Boolean),
       contact_email: formData.contactEmail.trim(),
       posted_by: posterName,
-      program: formData.program || null,
+      program: splitPrograms(formData.program)[0] || null,
       created_by: user?.id,
     };
+    const programs = splitPrograms(formData.program);
     let { data: created, error } = await supabase
       .from('jobs')
-      .insert({ ...row, email_audience: emailAudience })
+      .insert({ ...row, programs, email_audience: emailAudience })
       .select('id, status')
       .single();
     // Database without the approval update yet: post the old way
-    if (error && /email_audience|status/.test(error.message)) {
+    if (error && /email_audience|status|programs/.test(error.message)) {
       ({ data: created, error } = await supabase.from('jobs').insert(row).select('id').single() as any);
     }
     if (error) {
       setSubmitting(false);
-      toast.error(`Could not post job: ${error.message}`);
+      toast.error(friendlyError(error, 'Could not post the job.'));
       return;
     }
     const live = !created?.status || created.status === 'approved';
@@ -777,7 +782,7 @@ function JobPostingForm({
         }
         toast.warning(message);
       } else {
-        toast.success(t('Job posted and emailed to {n} people (including your copy).', { n: mail?.sent ?? 0 }));
+        toast.success(t(plural(mail?.sent ?? 0, 'Job posted and emailed to {n} person (including your copy).', 'Job posted and emailed to {n} people (including your copy).'), { n: mail?.sent ?? 0 }));
       }
     } else {
       toast.success(t('Job posted!'));
@@ -794,197 +799,239 @@ function JobPostingForm({
   }, [onClose, submitting]);
 
   // Rendered on <body> so the backdrop covers the whole screen
+  const field = 'w-full px-3.5 py-2.5 bg-input-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring text-sm';
+  const label = 'block text-sm font-medium mb-1.5';
+  const TYPES: [string, string][] = [['full-time', 'Full-time'], ['part-time', 'Part-time'], ['contract', 'Contract'], ['internship', 'Trainee']];
+  const reqs = formData.requirements.split('\n').map((r) => r.trim()).filter(Boolean);
+  const chosen = splitPrograms(formData.program);
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Post a job">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={tr("Post a job")}>
       <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !submitting && onClose()} />
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div>
-          <h3 className="font-semibold text-lg">{t('Post a Job Opportunity')}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : <>{t('Fields marked')} <Req /> {t('are required.')}</>}
-          </p>
-          {needsApproval && (
-            <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium rounded-lg bg-amber-500/10 text-amber-700 px-2.5 py-1.5">
-              <Hourglass size={13} /> {t('Alumni Affairs reviews every job before it goes live. Any email is sent after approval.')}
-            </p>
-          )}
-        </div>
-        <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
-          <X size={18} />
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm mb-1.5">{t('Job Title')} <Req /></label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. Software Engineer"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Company')} <Req /></label>
-            <input
-              type="text"
-              required
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. TechHub Philippines"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Location')} <Req /></label>
-            <input
-              type="text"
-              required
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. Manila, Philippines"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Job Type')} <Req /></label>
-            <select
-              required
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="full-time">{t('Full-time')}</option>
-              <option value="part-time">{t('Part-time')}</option>
-              <option value="contract">{t('Contract')}</option>
-              <option value="internship">{t('Internship')}</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Salary Range (Optional)')}</label>
-            <input
-              type="text"
-              value={formData.salary}
-              onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. ₱25,000 - ₱35,000/month"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Related Program')}</label>
-            <select
-              value={formData.program}
-              onChange={(e) => setFormData({ ...formData, program: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">{t('Any program')}</option>
-              {PROGRAMS.map((p) => (
-                <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1.5">{t('Contact Email (Optional)')}</label>
-            <input
-              type="email"
-              value={formData.contactEmail}
-              onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-              className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. hr@company.com"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1.5">{t('Job Description')} <Req /></label>
-          <textarea
-            required
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={4}
-            className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            placeholder={t('Describe the job role and responsibilities...')}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1.5">{t('Requirements')} <Req /></label>
-          <textarea
-            required
-            value={formData.requirements}
-            onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-            rows={4}
-            className="w-full px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            placeholder={t('List requirements (one per line)')}
-          />
-          <p className="text-xs text-muted-foreground mt-1">{t('Enter each requirement on a new line')}</p>
-        </div>
-
-        <div className="rounded-xl bg-muted/50 p-3.5 text-sm space-y-3">
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
-            <span>
-              <span className="font-medium">{t('Email this job')}</span>
-              <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off job emails are skipped.')}</span>
+      <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden bg-card rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+        {/* Header band */}
+        <div className="flex items-start justify-between gap-3 px-6 py-5 bg-[#002060] text-white">
+          <div className="flex items-start gap-3">
+            <span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <Briefcase size={20} className="text-[#f5c400]" />
             </span>
-          </label>
-          {emailAlumni && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
-              {(
-                [
-                  ['everyone', t('Everyone'), t('All alumni, program chairs and Alumni Affairs')],
-                  ['department', formData.program ? t('{program} department only', { program: formData.program }) : t('My department only'), formData.program ? t('{program} alumni and the {program} chair', { program: formData.program }) : t('Choose a Related Program above first')],
-                ] as const
-              ).map(([value, title, sub]) => {
-                const disabled = value === 'department' && !formData.program;
-                const selected = (formData.program ? audience : 'everyone') === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setAudience(value)}
-                    className={`rounded-xl p-3 text-left ring-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                      selected ? 'ring-primary bg-card' : 'ring-transparent bg-card/60 hover:ring-border'
-                    }`}
-                  >
-                    <span className="block font-semibold text-sm">{title}</span>
-                    <span className="block text-xs text-muted-foreground">{sub}</span>
-                  </button>
-                );
-              })}
+            <div>
+              <h3 className="font-semibold text-lg leading-tight">{t('Post a Job Opportunity')}</h3>
+              <p className="text-xs text-white/75 mt-0.5">
+                {initial ? t('Filled in by the AI Assistant. Check every field before posting.') : <>{t('Fields marked')} <Req /> {t('are required.')}</>}
+              </p>
+              {needsApproval && (
+                <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium rounded-lg bg-white/10 text-[#f5c400] px-2.5 py-1.5">
+                  <Hourglass size={13} /> {t('Alumni Affairs reviews every job before it goes live. Any email is sent after approval.')}
+                </p>
+              )}
             </div>
-          )}
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-white/80 hover:bg-white/10" aria-label={tr("Close")}>
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="flex flex-row-reverse gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
-          >
-            {submitting ? t('Posting...') : t('Post Job')}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-          >
-            {t('Cancel')}
-          </button>
-        </div>
-      </form>
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:grid-cols-[1fr_340px]">
+            {/* Form */}
+            <div className="p-6 space-y-7 min-w-0">
+              <Section n={1} title={t('The job')}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={label} htmlFor="job-title">{t('Job Title')} <Req /></label>
+                    <input id="job-title" type="text" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className={field} placeholder={tr("e.g. Software Engineer")} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="job-company">{t('Company')} <Req /></label>
+                    <input id="job-company" type="text" required value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} className={field} placeholder={tr("e.g. TechHub Philippines")} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="job-location">{t('Location')} <Req /></label>
+                    <input id="job-location" type="text" required value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className={field} placeholder={tr("e.g. Mamburao, Occidental Mindoro")} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="job-salary">{t('Salary Range (Optional)')}</label>
+                    <input id="job-salary" type="text" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: e.target.value })} className={field} placeholder={tr("e.g. ₱25,000 - ₱35,000/month")} />
+                  </div>
+                </div>
+                <div>
+                  <span className={label}>{t('Job Type')} <Req /></span>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('Job Type')}>
+                    {TYPES.map(([value, name]) => (
+                      <label
+                        key={value}
+                        className={`px-4 py-2 rounded-xl border text-sm cursor-pointer select-none transition-colors ${formData.type === value ? 'bg-primary text-primary-foreground border-primary font-semibold' : 'bg-input-background border-border hover:bg-muted'}`}
+                      >
+                        <input type="radio" name="job-type" value={value} className="sr-only" checked={formData.type === value} onChange={() => setFormData({ ...formData, type: value })} />
+                        {t(name)}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </Section>
+
+              <Section n={2} title={t('Who it is for')} sub={t('Choose one or more, or none for any program.')}>
+                <div className="flex flex-wrap gap-2" role="group" aria-label={t('Related Programs')}>
+                  {PROGRAMS.map((p) => {
+                    const on = chosen.includes(p.code);
+                    return (
+                      <label
+                        key={p.code}
+                        title={p.name}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-sm cursor-pointer select-none transition-colors ${on ? 'bg-primary text-primary-foreground border-primary font-semibold' : 'bg-input-background border-border hover:bg-muted'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={on}
+                          onChange={() =>
+                            setFormData({ ...formData, program: (on ? chosen.filter((c) => c !== p.code) : PROGRAMS.map((x) => x.code).filter((c) => c === p.code || chosen.includes(c))).join(', ') })
+                          }
+                        />
+                        {on && <CheckCircle2 size={14} />}
+                        {p.code}
+                      </label>
+                    );
+                  })}
+                </div>
+              </Section>
+
+              <Section n={3} title={t('Details')}>
+                <div>
+                  <label className={label} htmlFor="job-desc">{t('Job Description')} <Req /></label>
+                  <textarea id="job-desc" required value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={4} className={`${field} resize-y`} placeholder={t('Describe the job role and responsibilities...')} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="job-reqs">{t('Requirements')} <Req /></label>
+                  <textarea id="job-reqs" required value={formData.requirements} onChange={(e) => setFormData({ ...formData, requirements: e.target.value })} rows={4} className={`${field} resize-y`} placeholder={t('List requirements (one per line)')} />
+                  <p className="text-xs text-muted-foreground mt-1">{t('Enter each requirement on a new line')}</p>
+                </div>
+                <div>
+                  <label className={label} htmlFor="job-email">{t('Contact Email (Optional)')}</label>
+                  <input id="job-email" type="email" value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} className={field} placeholder={tr("e.g. hr@company.com")} />
+                </div>
+              </Section>
+
+              <Section n={4} title={t('Share it')}>
+                <div className="rounded-xl bg-muted/50 p-3.5 text-sm space-y-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={emailAlumni} onChange={(e) => setEmailAlumni(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#002060]" />
+                    <span>
+                      <span className="font-medium">{t('Email this job')}</span>
+                      <span className="block text-xs text-muted-foreground">{t('You also get a copy. People who turned off job emails are skipped.')}</span>
+                    </span>
+                  </label>
+                  {emailAlumni && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
+                      {(
+                        [
+                          ['everyone', t('Everyone'), t('All alumni, program chairs and Alumni Affairs')],
+                          [
+                            'department',
+                            !formData.program
+                              ? t('My department only')
+                              : chosen.length > 1
+                                ? t('{program} departments only', { program: formData.program })
+                                : t('{program} department only', { program: formData.program }),
+                            !formData.program
+                              ? t('Choose a Related Program above first')
+                              : chosen.length > 1
+                                ? t('Alumni and program chairs of {program}', { program: formData.program })
+                                : t('{program} alumni and the {program} chair', { program: formData.program }),
+                          ],
+                        ] as const
+                      ).map(([value, title, sub]) => {
+                        const disabled = value === 'department' && !formData.program;
+                        const selected = (formData.program ? audience : 'everyone') === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setAudience(value)}
+                            className={`rounded-xl p-3 text-left ring-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${selected ? 'ring-primary bg-card' : 'ring-transparent bg-card/60 hover:ring-border'}`}
+                          >
+                            <span className="block font-semibold text-sm">{title}</span>
+                            <span className="block text-xs text-muted-foreground">{sub}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Section>
+            </div>
+
+            {/* Live preview */}
+            <aside className="border-t lg:border-t-0 lg:border-l border-border bg-muted/30 p-6 min-w-0">
+              <div className="lg:sticky lg:top-0 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('Preview')}</p>
+                <div className="rounded-2xl bg-card border border-border shadow-sm p-5 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <Briefcase size={18} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className={`font-semibold leading-tight break-words ${formData.title ? '' : 'text-muted-foreground'}`}>{formData.title || t('Job title')}</p>
+                      <p className="text-sm text-muted-foreground break-words">{formData.company || t('Company')}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    <span className="rounded-full bg-primary/10 text-primary px-2.5 py-1 font-semibold">{t(TYPES.find(([v]) => v === formData.type)?.[1] || 'Full-time')}</span>
+                    {formData.location && <span className="rounded-full bg-muted px-2.5 py-1 inline-flex items-center gap-1"><MapPin size={12} /> {formData.location}</span>}
+                    {formData.salary && <span className="rounded-full bg-emerald-50 text-emerald-800 px-2.5 py-1 inline-flex items-center gap-1"><Banknote size={12} /> {formData.salary}</span>}
+                    {chosen.map((c) => (
+                      <span key={c} className="rounded-full bg-[#f5c400]/20 text-[#6b5400] px-2.5 py-1 font-semibold">{c}</span>
+                    ))}
+                  </div>
+                  {formData.description && <p className="text-sm text-foreground/90 whitespace-pre-wrap line-clamp-6 break-words">{formData.description}</p>}
+                  {!!reqs.length && (
+                    <ul className="text-sm list-disc pl-5 space-y-0.5">
+                      {reqs.slice(0, 5).map((r, i) => <li key={i} className="break-words">{r}</li>)}
+                      {reqs.length > 5 && <li className="list-none text-muted-foreground">+{reqs.length - 5} {t('more')}</li>}
+                    </ul>
+                  )}
+                  <p className="text-xs text-muted-foreground border-t border-border pt-2">{t('Posted by')} {posterName}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{t('This is how alumni will see your post on the Job Board.')}</p>
+              </div>
+            </aside>
+          </div>
+
+          {/* Footer */}
+          <div className="flex flex-row-reverse gap-3 px-6 py-4 border-t border-border bg-card">
+            <button type="submit" disabled={submitting} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
+              {submitting ? t('Posting...') : t('Post Job')}
+            </button>
+            <button type="button" onClick={onClose} className="px-6 py-2.5 bg-secondary text-secondary-foreground rounded-xl hover:bg-secondary/80 transition-colors">
+              {t('Cancel')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>,
     document.body
   );
+}
+
+/** A numbered step of the job form. Kept outside the form so typing never remounts its fields. */
+function Section({ n, title, sub, children }: { n: number; title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shrink-0">{n}</span>
+        <div>
+          <h4 className="font-semibold text-sm leading-tight">{title}</h4>
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+        </div>
+      </div>
+      <div className="pl-8 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+/** "BSIT, BSOA" (or a single code) -> ['BSIT', 'BSOA'] */
+function splitPrograms(value: string | null | undefined): string[] {
+  return (value || '').split(',').map((v) => v.trim()).filter(Boolean);
 }
