@@ -7,7 +7,7 @@ import { confirmDialog } from './ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { mdy } from '@/lib/dates';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
-import { PROGRAMS } from '@/lib/programs';
+import { PROGRAMS, INDUSTRIES } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
 import { SurveyResults } from './SurveyResults';
 
@@ -148,6 +148,8 @@ export function Analytics({ userRole }: AnalyticsProps) {
       <ResponsesPanel records={filtered} />
 
       <Breakdown records={filtered} subtitle={`${scopeText} · ${year === 'all' ? 'all batches' : `class of ${year}`}`} />
+
+      <IndustryPanel records={filtered} />
 
       <SurveyResults records={filtered} />
 
@@ -824,6 +826,72 @@ function SliceList({ chart, slice, onClose }: { chart: string; slice: Slice; onC
         </ul>
         <Pagination {...paged} label="graduates" />
       </div>
+    </div>
+  );
+}
+
+// ---------------- Industry by batch (panel: how many work in each sector, compared by batch) ----------------
+
+function IndustryPanel({ records }: { records: AlumniRecord[] }) {
+  const [open, setOpen] = useState<Slice | null>(null);
+  const employed = records.filter((r) => isEmployed(r) && currentJob(r));
+  const industryOf = (r: AlumniRecord) => currentJob(r)?.industry || 'Not specified';
+  const years = Array.from(new Set(employed.map((r) => r.yearGraduated).filter(Boolean))).sort((a, b) => a - b);
+  const names = [...INDUSTRIES, 'Not specified'].filter((n) => employed.some((r) => industryOf(r) === n));
+  const max = Math.max(1, ...names.map((n) => employed.filter((r) => industryOf(r) === n).length));
+  const answered = employed.filter((r) => currentJob(r)?.industry).length;
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
+      <h3 className="font-semibold">Employed graduates by industry</h3>
+      <p className="text-xs text-muted-foreground mt-0.5 mb-4">
+        Current job, compared by batch. {answered} of {employed.length} employed graduates have given their industry; the rest show as Not specified until they update. Click a row to see who.
+      </p>
+      {!employed.length ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">No employed graduates in this selection.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Industry</th>
+                {years.map((y) => (
+                  <th key={y} className="py-2 px-2 font-medium text-right whitespace-nowrap">Class of {y}</th>
+                ))}
+                <th className="py-2 px-2 font-medium text-right">Total</th>
+                <th className="py-2 pl-2 font-medium w-[22%]"><span className="sr-only">Share</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {names.map((n) => {
+                const people = employed.filter((r) => industryOf(r) === n);
+                return (
+                  <tr
+                    key={n}
+                    className="border-t border-border/60 cursor-pointer hover:bg-muted/50"
+                    onClick={() => setOpen({ name: n, value: people.length, color: '', people })}
+                  >
+                    <td className={`py-2 pr-3 ${n === 'Not specified' ? 'text-muted-foreground' : 'font-medium'}`}>{n}</td>
+                    {years.map((y) => {
+                      const c = people.filter((r) => r.yearGraduated === y).length;
+                      return (
+                        <td key={y} className={`py-2 px-2 text-right tabular-nums ${c ? '' : 'text-muted-foreground'}`}>{c || '–'}</td>
+                      );
+                    })}
+                    <td className="py-2 px-2 text-right tabular-nums font-semibold">{people.length}</td>
+                    <td className="py-2 pl-2">
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${(people.length / max) * 100}%`, background: n === 'Not specified' ? '#94a3b8' : 'var(--primary)' }} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {open && <SliceList chart="Employed graduates by industry" slice={open} onClose={() => setOpen(null)} />}
     </div>
   );
 }

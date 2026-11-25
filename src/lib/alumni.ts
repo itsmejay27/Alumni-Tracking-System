@@ -18,6 +18,8 @@ export interface EmploymentEntry {
   /** Proof of employment in the private 'employment-proofs' storage (contract, company ID, permit) */
   proofPath?: string;
   proofName?: string;
+  /** Industry of the employer, one of INDUSTRIES */
+  industry?: string;
   /** Answer to "Is this job related to your course?" */
   relatedToCourse?: 'Yes' | 'No';
   startDate?: string; // YYYY-MM

@@ -956,7 +956,7 @@ function HistoryList({ items }: { items: NonNullable<ReturnType<typeof currentJo
           </div>
           <p className="text-muted-foreground">{j.company}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            {[j.employerType, j.employmentStatus, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${mdy(j.startDate)}`].filter(Boolean).join(' · ')}
+            {[j.employerType, j.employmentStatus, j.industry, j.relatedToCourse && `related to course: ${j.relatedToCourse}`, j.lengthOfService && `service: ${j.lengthOfService}`, j.startDate && `since ${mdy(j.startDate)}`].filter(Boolean).join(' · ')}
           </p>
           {(j.employerAddress || j.employerContact) && (
             <p className="text-xs text-muted-foreground mt-1">{[j.employerAddress, j.employerContact && `Tel. ${j.employerContact}`].filter(Boolean).join(' · ')}</p>

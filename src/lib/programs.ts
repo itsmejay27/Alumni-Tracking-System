@@ -41,6 +41,24 @@ export const jobLevelLabel = (level: string) => {
   const help = JOB_LEVEL_HELP[level];
   return help ? `${level} — ${help}` : level;
 };
+/** Industry of the employer (panel: report how many work in each sector, compared by batch). */
+export const INDUSTRIES = [
+  'Information Technology / Software',
+  'BPO / Call Center',
+  'Education',
+  'Government / Public Service',
+  'Banking / Finance / Microfinance',
+  'Retail / Sales',
+  'Manufacturing / Production',
+  'Health Care',
+  'Hospitality / Tourism / Food',
+  'Agriculture / Fisheries',
+  'Construction / Engineering',
+  'Transportation / Logistics',
+  'Telecommunications',
+  'Media / Arts / Creative',
+  'Other',
+] as const;
 export const EMPLOYER_TYPES = ['Private', 'Government', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business'] as const;
 
 /** Simple password strength rating used on every password form. */

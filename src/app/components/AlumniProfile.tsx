@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase';
 
 import { CurrentUser } from '../App';
 import { AlumniRecord, Course, EmploymentEntry, fetchMyRecord, saveMyRecord, currentJob, ageFrom } from '@/lib/alumni';
-import { PROGRAMS, EMPLOYMENT_STATUSES, EMPLOYER_TYPES, programName } from '@/lib/programs';
+import { PROGRAMS, EMPLOYMENT_STATUSES, EMPLOYER_TYPES, INDUSTRIES, programName } from '@/lib/programs';
 import { LoadingState } from './DataState';
 import { PhoneInput, isValidMobile } from './PhoneInput';
 
@@ -962,7 +962,7 @@ function JobRow({ job, onOpen }: { job: EmploymentEntry; onOpen: () => void }) {
           {job.position || t('Position not set')} <span className="font-normal text-muted-foreground">{t('at')} {job.company || '—'}</span>
         </p>
         <p className="text-xs text-muted-foreground truncate">
-          {[job.employmentStatus, job.employerType].filter(Boolean).join(' · ')}
+          {[job.employmentStatus, job.employerType, job.industry].filter(Boolean).join(' · ')}
           {job.startDate && job.endDate && ` · ${mdy(job.startDate)} – ${mdy(job.endDate)}`}
           {job.startDate && !job.endDate && ` · since ${mdy(job.startDate)}`}
           {!job.startDate && job.endDate && ` · until ${mdy(job.endDate)}`}
@@ -1016,6 +1016,10 @@ function JobModal({
     }
     if (!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' && !(draft.employerAddress || '').trim()) {
       toast.error(t('Enter the employer address'));
+      return;
+    }
+    if (isNew && !draft.industry) {
+      toast.error(t('Choose the industry of your employer'));
       return;
     }
     if (isNew && !draft.relatedToCourse) {
@@ -1084,6 +1088,12 @@ function JobModal({
           <Field label="Employment status *">
             <select disabled={locked} value={draft.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })} className={input}>
               {EMPLOYMENT_STATUSES.map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label={isNew ? 'Industry *' : 'Industry'}>
+            <select disabled={locked && !!entry.industry} value={draft.industry || ''} onChange={(e) => set({ industry: e.target.value || undefined })} className={input}>
+              <option value="">{t('Choose...')}</option>
+              {INDUSTRIES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
             </select>
           </Field>
           <Field label="Employer type *">
