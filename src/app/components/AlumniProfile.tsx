@@ -984,6 +984,10 @@ function JobModal({
       toast.error(t('The end date must be after the start date'));
       return;
     }
+    if (!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' && !(draft.employerAddress || '').trim()) {
+      toast.error(t('Enter the employer address'));
+      return;
+    }
     if (isNew && !draft.relatedToCourse) {
       toast.error(t('Answer whether this job is related to your course'));
       return;
@@ -1057,7 +1061,7 @@ function JobModal({
               {EMPLOYER_TYPES.map((x) => <option key={x}>{x}</option>)}
             </select>
           </Field>
-          <Field label="Employer address"><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
+          <Field label={!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' ? 'Employer address *' : 'Employer address'}><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
           <Field label="Employer contact no.">
             <input
               disabled={locked}

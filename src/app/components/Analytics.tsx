@@ -399,6 +399,25 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
   const paged = usePaged(list, 8);
   const when = (iso?: string) =>
     mdy(iso);
+  // Download the list shown (panel: the names of those who have not updated yet)
+  const downloadList = () => {
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Last Name', 'Given Name', 'Middle Name', 'Program', 'Year Graduated', 'Email', 'Account', view === 'responded' ? 'Updated On' : 'Status'],
+      ...list.map((r) => [
+        r.lastName, r.givenName, r.middleName, r.course, r.yearGraduated || r.batch, r.email,
+        r.respondedAt ? 'Updated' : r.accountLinked ? 'Signed up, not updated' : 'No account yet',
+        view === 'responded' ? mdy(r.respondedAt) : r.status,
+      ]),
+    ];
+    const blob = new Blob([rows.map((r) => r.map(cell).join(',')).join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OMSU_${view === 'responded' ? 'Updated' : 'Not_Yet_Updated'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
@@ -409,9 +428,19 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
             A graduate counts once they sign in and <b>save</b> their own record (signing in alone does not count). The goal is 100%: every graduate on file has updated.
           </p>
         </div>
-        <p className="text-sm font-semibold tabular-nums shrink-0">
-          {done.length} / {records.length} updated · {pct}%
-        </p>
+        <div className="flex items-center gap-3 shrink-0">
+          <p className="text-sm font-semibold tabular-nums">
+            {done.length} / {records.length} updated · {pct}%
+          </p>
+          <button
+            type="button"
+            onClick={downloadList}
+            disabled={!list.length}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted disabled:opacity-50"
+          >
+            Download list (CSV)
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <input
