@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, passwordUpdateError } from '@/lib/supabase';
@@ -16,15 +17,15 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 8) {
-      toast.error('Password must be at least 8 characters.');
+      toast.error(tr('Password must be at least 8 characters.'));
       return;
     }
     if (passwordStrength(password).label === 'Weak') {
-      toast.error('Please choose a stronger password.');
+      toast.error(tr('Please choose a stronger password.'));
       return;
     }
     if (password !== confirm) {
-      toast.error('Passwords do not match.');
+      toast.error(tr('Passwords do not match.'));
       return;
     }
     setBusy(true);
@@ -36,16 +37,16 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
     }
     // A new password also lifts a sign-in lock from too many wrong passwords
     await supabase.rpc('login_succeeded');
-    toast.success('Password updated.');
+    toast.success(tr('Password updated.'));
     await onDone();
   };
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-8 shadow-md space-y-5">
-        <h1 className="text-xl font-black text-[#002060]">Set a new password</h1>
+        <h1 className="text-xl font-black text-[#002060]">{tr("Set a new password")}</h1>
         {message && <p className="text-sm text-slate-600">{message}</p>}
-        {[{ v: password, set: setPassword, label: 'New Password' }, { v: confirm, set: setConfirm, label: 'Confirm Password' }].map((f) => (
+        {[{ v: password, set: setPassword, label: tr('New Password') }, { v: confirm, set: setConfirm, label: tr('Confirm Password') }].map((f) => (
           <div key={f.label}>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{f.label}</label>
             <div className="relative">
@@ -68,7 +69,7 @@ export function SetNewPassword({ onDone, message }: { onDone: () => void | Promi
           disabled={busy}
           className="w-full py-3 bg-[#002060] hover:bg-[#001740] text-white rounded-lg font-bold text-sm disabled:opacity-60"
         >
-          {busy ? 'Saving...' : 'Save Password'}
+          {busy ? tr('Saving...') : tr('Save Password')}
         </button>
       </form>
     </div>

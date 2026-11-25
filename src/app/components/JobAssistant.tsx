@@ -1,4 +1,5 @@
 import { usePrefs } from '@/lib/preferences';
+import { tr } from '@/lib/preferences';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
@@ -197,11 +198,11 @@ export function JobAssistant({
   const pickFile = (f: File | undefined) => {
     if (!f) return;
     if (!/^image\/|application\/pdf/.test(f.type)) {
-      toast.error('Choose an image (PNG, JPG, WEBP) or a PDF');
+      toast.error(tr('Choose an image (PNG, JPG, WEBP) or a PDF'));
       return;
     }
     if (f.size > MAX_FILE) {
-      toast.error('File is too large (8 MB max)');
+      toast.error(tr('File is too large (8 MB max)'));
       return;
     }
     setFile(f);
@@ -210,13 +211,13 @@ export function JobAssistant({
   const analyze = async () => {
     const body: Record<string, unknown> = { action: 'analyze', language: lang, profile: skills };
     if (mode === 'url') {
-      if (!/^https?:\/\/\S+\.\S+/.test(url.trim())) return toast.error('Paste the full job link, starting with https://');
+      if (!/^https?:\/\/\S+\.\S+/.test(url.trim())) return toast.error(tr('Paste the full job link, starting with https://'));
       body.url = url.trim();
     } else if (mode === 'text') {
-      if (text.trim().length < 40) return toast.error('Paste the full job description');
+      if (text.trim().length < 40) return toast.error(tr('Paste the full job description'));
       body.text = text;
     } else {
-      if (!file) return toast.error('Choose a screenshot or PDF of the job posting');
+      if (!file) return toast.error(tr('Choose a screenshot or PDF of the job posting'));
       body.file = { mimeType: file.type, data: await fileToBase64(file) };
     }
     setBusy(true);
@@ -278,12 +279,11 @@ export function JobAssistant({
         <div className="relative flex flex-col md:flex-row md:items-center gap-4 justify-between">
           <div className="space-y-1.5 max-w-2xl">
             <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#f5c400]">
-              <Sparkles size={14} /> AI Job Assistant
+              <Sparkles size={14} /> {tr("AI Job Assistant")}
             </p>
-            <h2 className="text-xl sm:text-2xl font-extrabold">Understand any job posting</h2>
+            <h2 className="text-xl sm:text-2xl font-extrabold">{tr("Understand any job posting")}</h2>
             <p className="text-white/80 text-sm">
-              Paste a link, the job text, or a screenshot. Get a simple explanation, the pay per hour, week and month, a skills check, and
-              help with your application.
+              {tr("Paste a link, the job text, or a screenshot. Get a simple explanation, the pay per hour, week and month, a skills check, and help with your application.")}
             </p>
           </div>
           <div className="flex items-center gap-2 self-start md:self-center">
@@ -300,7 +300,7 @@ export function JobAssistant({
               ))}
             </div>
             {onClose && (
-              <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-lg text-white/80 hover:bg-white/10 hover:text-white">
+              <button type="button" onClick={onClose} aria-label={tr("Close")} className="p-2 rounded-lg text-white/80 hover:bg-white/10 hover:text-white">
                 <X size={20} />
               </button>
             )}
@@ -319,9 +319,9 @@ export function JobAssistant({
 
           {mode === 'url' && (
             <div className="space-y-2">
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.onlinejobs.ph/jobseekers/job/..." className={field} inputMode="url" />
+              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={tr("https://www.onlinejobs.ph/jobseekers/job/...")} className={field} inputMode="url" />
               <p className="text-xs text-muted-foreground">
-                Works best with public job pages. If a site needs a login (e.g. Facebook, LinkedIn), paste the text or upload a screenshot instead.
+                {tr("Works best with public job pages. If a site needs a login (e.g. Facebook, LinkedIn), paste the text or upload a screenshot instead.")}
               </p>
             </div>
           )}
@@ -330,7 +330,7 @@ export function JobAssistant({
               rows={9}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Paste the whole job description here: title, duties, requirements, salary..."
+              placeholder={tr("Paste the whole job description here: title, duties, requirements, salary...")}
               className={`${field} resize-y`}
             />
           )}
@@ -350,8 +350,8 @@ export function JobAssistant({
                 <p className="text-sm font-semibold">{file.name}</p>
               ) : (
                 <>
-                  <p className="text-sm font-semibold">Click or drop a screenshot or PDF</p>
-                  <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WEBP or PDF, up to 8 MB</p>
+                  <p className="text-sm font-semibold">{tr("Click or drop a screenshot or PDF")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{tr("PNG, JPG, WEBP or PDF, up to 8 MB")}</p>
                 </>
               )}
             </div>
@@ -364,25 +364,25 @@ export function JobAssistant({
             className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-60"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-            {busy ? 'Reading the job... this can take up to a minute' : 'Explain this job'}
+            {busy ? tr('Reading the job... this can take up to a minute') : tr('Explain this job')}
           </button>
           {remaining != null && <p className="text-xs text-center text-muted-foreground">{remaining} AI requests left today</p>}
         </section>
 
         <section className={`${card} space-y-3`}>
           <div>
-            <h3 className="font-semibold">Your skills and experience</h3>
-            <p className="text-xs text-muted-foreground">Used for the skills check and your cover letter. Saved on this device only.</p>
+            <h3 className="font-semibold">{tr("Your skills and experience")}</h3>
+            <p className="text-xs text-muted-foreground">{tr("Used for the skills check and your cover letter. Saved on this device only.")}</p>
           </div>
           <textarea
             rows={7}
             value={skills}
             onChange={(e) => saveSkills(e.target.value)}
-            placeholder="e.g. BSIT graduate 2024. Skills: MS Excel, customer service, basic HTML. 6 months as office assistant."
+            placeholder={tr("e.g. BSIT graduate 2024. Skills: MS Excel, customer service, basic HTML. 6 months as office assistant.")}
             className={`${field} resize-y`}
           />
           <p className="text-[11px] text-muted-foreground">
-            The AI can make mistakes. Always read the original posting, and never pay to apply for a job.
+            {tr("The AI can make mistakes. Always read the original posting, and never pay to apply for a job.")}
           </p>
         </section>
       </div>
@@ -394,7 +394,7 @@ export function JobAssistant({
             <section className={`${card} flex items-start gap-3`}>
               <AlertTriangle className="text-amber-600 shrink-0" />
               <div>
-                <p className="font-semibold">This doesn't look like a job posting</p>
+                <p className="font-semibold">{tr("This doesn't look like a job posting")}</p>
                 <p className="text-sm text-muted-foreground mt-1">{analysis.summary}</p>
               </div>
             </section>
@@ -417,13 +417,13 @@ export function JobAssistant({
                 <p className="mt-4 text-[15px] leading-relaxed">{analysis.summary}</p>
                 {onPost && (
                   <div className="mt-5 pt-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">Want fellow alumni to see this opening? Share it on the Job Board.</p>
+                    <p className="text-sm text-muted-foreground">{tr("Want fellow alumni to see this opening? Share it on the Job Board.")}</p>
                     <button
                       type="button"
                       onClick={() => onPost(toPrefill(analysis))}
                       className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shrink-0"
                     >
-                      <Send size={16} /> Post to Job Board
+                      <Send size={16} /> {tr("Post to Job Board")}
                     </button>
                   </div>
                 )}
@@ -432,7 +432,7 @@ export function JobAssistant({
               {analysis.warnings.length > 0 && (
                 <section className="rounded-2xl bg-red-50 p-5 space-y-2">
                   <p className="flex items-center gap-2 font-semibold text-red-800">
-                    <AlertTriangle size={18} /> Be careful
+                    <AlertTriangle size={18} /> {tr("Be careful")}
                   </p>
                   <ul className="list-disc pl-5 text-sm text-red-800 space-y-1">
                     {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -441,7 +441,7 @@ export function JobAssistant({
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Block icon={<ListChecks size={18} />} title="What you'd do every day">
+                <Block icon={<ListChecks size={18} />} title={tr("What you'd do every day")}>
                   <ul className="space-y-2">
                     {analysis.dailyTasks.map((t, i) => (
                       <li key={i} className="flex gap-2.5 text-sm">
@@ -452,8 +452,8 @@ export function JobAssistant({
                   </ul>
                 </Block>
 
-                <Block icon={<Wallet size={18} />} title="Pay breakdown">
-                  <p className="text-sm text-muted-foreground mb-3">As posted: <span className="font-semibold text-foreground">{analysis.salary.stated}</span></p>
+                <Block icon={<Wallet size={18} />} title={tr("Pay breakdown")}>
+                  <p className="text-sm text-muted-foreground mb-3">{tr("As posted:")} <span className="font-semibold text-foreground">{analysis.salary.stated}</span></p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       ['Per hour', analysis.salary.hourly],
@@ -472,7 +472,7 @@ export function JobAssistant({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Block icon={<GraduationCap size={18} />} title="Skills the job needs">
+                <Block icon={<GraduationCap size={18} />} title={tr("Skills the job needs")}>
                   <ul className="space-y-2.5">
                     {analysis.requiredSkills.map((s, i) => {
                       const has = analysis.fit.matchedSkills.some((m) => m.toLowerCase().includes(s.skill.toLowerCase()) || s.skill.toLowerCase().includes(m.toLowerCase()));
@@ -489,7 +489,7 @@ export function JobAssistant({
                   </ul>
                   {analysis.qualifications.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-border/60">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Qualifications</p>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">{tr("Qualifications")}</p>
                       <ul className="list-disc pl-5 text-sm space-y-1">
                         {analysis.qualifications.map((q, i) => <li key={i}>{q}</li>)}
                       </ul>
@@ -497,11 +497,11 @@ export function JobAssistant({
                   )}
                 </Block>
 
-                <Block icon={<CheckCircle2 size={18} />} title="Do you qualify?">
+                <Block icon={<CheckCircle2 size={18} />} title={tr("Do you qualify?")}>
                   <div className="space-y-4 text-sm">
                     {analysis.fit.matchedSkills.length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-emerald-700 mb-1.5">You already have</p>
+                        <p className="text-xs font-semibold text-emerald-700 mb-1.5">{tr("You already have")}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {analysis.fit.matchedSkills.map((s, i) => <span key={i} className="rounded-full bg-emerald-50 text-emerald-800 px-2.5 py-1 text-xs">{s}</span>)}
                         </div>
@@ -509,7 +509,7 @@ export function JobAssistant({
                     )}
                     {analysis.fit.missingSkills.length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-red-700 mb-1.5">Still to learn</p>
+                        <p className="text-xs font-semibold text-red-700 mb-1.5">{tr("Still to learn")}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {analysis.fit.missingSkills.map((s, i) => (
                             <span key={i} className="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-700 px-2.5 py-1 text-xs">
@@ -520,7 +520,7 @@ export function JobAssistant({
                       </div>
                     )}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Advice</p>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">{tr("Advice")}</p>
                       <ul className="space-y-1.5">
                         {analysis.fit.advice.map((a, i) => (
                           <li key={i} className="flex gap-2"><Lightbulb size={15} className="text-amber-500 shrink-0 mt-0.5" /> {a}</li>
@@ -532,7 +532,7 @@ export function JobAssistant({
               </div>
 
               {analysis.glossary.length > 0 && (
-                <Block icon={<BookOpen size={18} />} title="Words you might not know">
+                <Block icon={<BookOpen size={18} />} title={tr("Words you might not know")}>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {analysis.glossary.map((g, i) => (
                       <div key={i} className="rounded-xl bg-muted/50 p-4">
@@ -545,27 +545,27 @@ export function JobAssistant({
                 </Block>
               )}
 
-              <Block icon={<MailPlus size={18} />} title="Application assistant">
+              <Block icon={<MailPlus size={18} />} title={tr("Application assistant")}>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <AssistButton busy={assistBusy === 'cover_letter'} onClick={() => runAssist('cover_letter')} icon={<MailPlus size={16} />} label="Draft a cover letter" />
-                  <AssistButton busy={assistBusy === 'interview'} onClick={() => runAssist('interview')} icon={<MessagesSquare size={16} />} label="Practice interview questions" />
+                  <AssistButton busy={assistBusy === 'cover_letter'} onClick={() => runAssist('cover_letter')} icon={<MailPlus size={16} />} label={tr("Draft a cover letter")} />
+                  <AssistButton busy={assistBusy === 'interview'} onClick={() => runAssist('interview')} icon={<MessagesSquare size={16} />} label={tr("Practice interview questions")} />
                 </div>
                 {assist && (
                   <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-sm font-semibold">{assist.kind === 'cover_letter' ? 'Cover letter draft' : 'Interview practice'}</p>
+                      <p className="text-sm font-semibold">{assist.kind === 'cover_letter' ? tr('Cover letter draft') : tr('Interview practice')}</p>
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(assist.text).then(() => toast.success('Copied'));
+                          navigator.clipboard.writeText(assist.text).then(() => toast.success(tr('Copied')));
                         }}
                         className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                       >
-                        <Copy size={14} /> Copy
+                        <Copy size={14} /> {tr("Copy")}
                       </button>
                     </div>
                     <div className="text-sm leading-relaxed whitespace-pre-wrap">{renderLight(assist.text)}</div>
-                    <p className="text-[11px] text-muted-foreground mt-3">Fill in the [brackets] and check every detail before sending.</p>
+                    <p className="text-[11px] text-muted-foreground mt-3">{tr("Fill in the [brackets] and check every detail before sending.")}</p>
                   </div>
                 )}
               </Block>
@@ -574,7 +574,7 @@ export function JobAssistant({
 
           <div className="flex justify-center">
             <button type="button" onClick={reset} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-muted text-sm font-medium">
-              <RotateCcw size={15} /> Check another job
+              <RotateCcw size={15} /> {tr("Check another job")}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { Download } from 'lucide-react';
 import type { AlumniRecord } from '@/lib/alumni';
 import { ALL_QUESTIONS, LIKERT, SATISFACTION, SURVEY_SECTIONS, surveyApplies } from '@/lib/survey';
@@ -39,39 +40,39 @@ export function SurveyResults({ records }: { records: AlumniRecord[] }) {
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
-          <h3 className="font-semibold">BSIT PEO survey results</h3>
+          <h3 className="font-semibold">{tr("BSIT PEO survey results")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {done.length} of {eligible.length} BSIT graduates answered ({pct(done.length, eligible.length)}). Scores: 1 = Strongly Disagree … 5 = Strongly Agree.
+            {tr('{a} of {b} BSIT graduates answered ({pct}). Scores: 1 = Strongly Disagree … 5 = Strongly Agree.', { a: done.length, b: eligible.length, pct: pct(done.length, eligible.length) })}
           </p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => setOpen((v) => !v)} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">
-            {open ? 'Hide details' : 'Show all answers'}
+            {open ? tr('Hide details') : tr('Show all answers')}
           </button>
           <button type="button" onClick={download} disabled={!done.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground disabled:opacity-50">
-            <Download size={14} /> Download answers (CSV)
+            <Download size={14} /> {tr("Download answers (CSV)")}
           </button>
         </div>
       </div>
 
       {!done.length ? (
-        <p className="text-sm text-muted-foreground">No completed surveys yet. BSIT alumni answer it in My Alumni Profile → Survey &amp; feedback.</p>
+        <p className="text-sm text-muted-foreground">{tr("No completed surveys yet. BSIT alumni answer it in My Alumni Profile → Survey & feedback.")}</p>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Tile label="Responses" value={String(done.length)} />
-            <Tile label="Satisfaction (1–5)" value={fmt(satisfaction)} />
-            <Tile label="Months to first job (avg)" value={months == null ? '–' : months.toFixed(1)} />
-            <Tile label="Job relevant to IT" value={pct(done.filter((r) => a(r, 'jobRelevantToIT') === 'Yes').length, done.filter((r) => a(r, 'jobRelevantToIT')).length)} />
+            <Tile label={tr("Satisfaction (1–5)")} value={fmt(satisfaction)} />
+            <Tile label={tr("Months to first job (avg)")} value={months == null ? '–' : months.toFixed(1)} />
+            <Tile label={tr("Job relevant to IT")} value={pct(done.filter((r) => a(r, 'jobRelevantToIT') === 'Yes').length, done.filter((r) => a(r, 'jobRelevantToIT')).length)} />
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Program Educational Objective</th>
-                  <th className="py-2 px-2 font-medium text-right">Average</th>
-                  <th className="py-2 pl-2 font-medium w-[38%]">Answers (Strongly Disagree → Strongly Agree)</th>
+                  <th className="py-2 pr-3 font-medium">{tr("Program Educational Objective")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Average")}</th>
+                  <th className="py-2 pl-2 font-medium w-[38%]">{tr("Answers (Strongly Disagree → Strongly Agree)")}</th>
                 </tr>
               </thead>
               <tbody>

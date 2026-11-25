@@ -353,7 +353,7 @@ function AppInner() {
     { id: 'records', label: t('Alumni Records'), icon: <Users size={18} /> },
     { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
     { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
-    { id: 'officials', label: t('Directory'), icon: <Contact2 size={18} /> },
+    { id: 'officials', label: t('Officials'), icon: <Contact2 size={18} /> },
     ...(userRole === 'admin' ? [{ id: 'contact', label: t('Contact Info'), icon: <PhoneCall size={18} /> }] : []),
     ...(userRole === 'admin' ? [{ id: 'accounts', label: t('Accounts'), icon: <UserCog size={18} /> }] : []),
     { id: 'settings', label: t('Settings'), icon: <SettingsIcon size={18} /> },
@@ -362,7 +362,7 @@ function AppInner() {
   const alumniMenuItems = [
     { id: 'home', label: t('Home'), icon: <HomeIcon size={18} /> },
     { id: 'profile', label: t('My Alumni Profile'), icon: <UserCircle size={18} /> },
-    { id: 'officials', label: t('Directory'), icon: <Users size={18} /> },
+    { id: 'officials', label: t('Officials'), icon: <Users size={18} /> },
     { id: 'announcements', label: t('Announcements'), icon: <Megaphone size={18} /> },
     { id: 'jobs', label: t('Job Board'), icon: <Briefcase size={18} /> },
     { id: 'contact', label: t('Contact Us'), icon: <PhoneCall size={18} /> },

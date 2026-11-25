@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { createPortal } from 'react-dom';
 import { useT } from '@/lib/preferences';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -64,7 +65,7 @@ export function Pagination({
             onClick={() => setPage(page - 1)}
             disabled={page <= 1}
             className="p-2 rounded-lg hover:bg-muted disabled:opacity-40"
-            aria-label="Previous page"
+            aria-label={tr("Previous page")}
           >
             <ChevronLeft size={16} />
           </button>
@@ -84,7 +85,7 @@ export function Pagination({
             onClick={() => setPage(page + 1)}
             disabled={page >= pages}
             className="p-2 rounded-lg hover:bg-muted disabled:opacity-40"
-            aria-label="Next page"
+            aria-label={tr("Next page")}
           >
             <ChevronRight size={16} />
           </button>

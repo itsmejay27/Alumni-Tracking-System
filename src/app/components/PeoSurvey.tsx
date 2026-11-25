@@ -49,7 +49,7 @@ export function PeoSurveyForm({
 
       {SURVEY_SECTIONS.map((section) => (
         <fieldset key={section.title} className="space-y-4">
-          <legend className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-2">{section.title}</legend>
+          <legend className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-2">{t(section.title)}</legend>
           {section.questions.map((q, i) => (
             <QuestionField key={q.id} q={q} n={i + 1} answers={answers} set={set} setMany={setMany} missing={missing.some((m) => m.id === q.id)} />
           ))}
@@ -80,7 +80,7 @@ function QuestionField({
   const label = (
     <p className="text-sm font-medium">
       {q.kind === 'likert' || q.kind === 'single' || q.kind === 'multi' || q.kind === 'scale' ? `${n}. ` : ''}
-      {q.label}
+      {t(q.label)}
       {q.kind !== 'text' && <span className="text-red-600"> *</span>}
     </p>
   );
@@ -92,7 +92,7 @@ function QuestionField({
           className={`flex items-start gap-2 text-sm cursor-pointer rounded-lg ${cols ? `px-3 py-1.5 border ${v === o ? 'border-primary bg-primary/10 font-semibold' : 'border-border'}` : ''}`}
         >
           <input type="radio" name={name} checked={v === o} onChange={() => set(q.id, o)} className={cols ? 'sr-only' : 'mt-1'} />
-          <span>{o}</span>
+          <span>{t(o)}</span>
         </label>
       ))}
     </div>
@@ -122,7 +122,7 @@ function QuestionField({
         <>
           {radio(q.options)}
           {q.specify && (
-            <input value={(answers[`${q.id}Other`] as string) || ''} onChange={(e) => set(`${q.id}Other`, e.target.value)} className={box} placeholder={q.specify} aria-label={q.specify} />
+            <input value={(answers[`${q.id}Other`] as string) || ''} onChange={(e) => set(`${q.id}Other`, e.target.value)} className={box} placeholder={t(q.specify)} aria-label={t(q.specify)} />
           )}
         </>
       )}
@@ -135,7 +135,7 @@ function QuestionField({
               return (
                 <label key={o} className="flex items-start gap-2 text-sm cursor-pointer">
                   <input type="checkbox" className="mt-1" checked={on} onChange={() => set(q.id, on ? list.filter((x) => x !== o) : [...list, o])} />
-                  <span>{o}</span>
+                  <span>{t(o)}</span>
                 </label>
               );
             })}

@@ -42,7 +42,7 @@ export function CollegeOfficialsDirectory() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t('Directory')}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t('Officials')}</h2>
         <p className="text-muted-foreground mt-1 text-sm">{t('Alumni Affairs and your program chair')}</p>
       </div>
 

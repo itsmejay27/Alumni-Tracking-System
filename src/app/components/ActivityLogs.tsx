@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { Search, RefreshCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { roleLabel } from '@/lib/programs';
@@ -102,19 +103,19 @@ export function ActivityLogs() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Activity Logs</h2>
-          <p className="text-muted-foreground mt-1">Who signed in and what changed in the system</p>
+          <h2 className="text-2xl font-bold tracking-tight">{tr("Activity Logs")}</h2>
+          <p className="text-muted-foreground mt-1">{tr("Who signed in and what changed in the system")}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> {tr("Refresh")}
           </button>
           <button
             onClick={exportCsv}
             disabled={!visible.length}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
           >
-            <Download size={16} /> Export CSV
+            <Download size={16} /> {tr("Export CSV")}
           </button>
         </div>
       </div>
@@ -140,23 +141,23 @@ export function ActivityLogs() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search email, action or name..."
+              placeholder={tr("Search email, action or name...")}
               className="w-full pl-9 pr-3 py-2 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="filter-select md:w-44" aria-label="Type of activity">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="filter-select md:w-44" aria-label={tr("Type of activity")}>
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.label}
+                {tr(c.label)}
               </option>
             ))}
           </select>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            From
+            {tr("From")}
             <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className="filter-select" />
           </label>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            To
+            {tr("To")}
             <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="filter-select" />
           </label>
           {filtersOn ? (
@@ -169,7 +170,7 @@ export function ActivityLogs() {
               }}
               className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
             >
-              Clear filters
+              {tr("Clear filters")}
             </button>
           ) : (
             <span />
@@ -177,7 +178,7 @@ export function ActivityLogs() {
         </div>
 
         {loading && !entries.length ? (
-          <LoadingState label="Loading activity..." />
+          <LoadingState label={tr("Loading activity...")} />
         ) : error ? (
           <ErrorState message={error} />
         ) : (
@@ -186,10 +187,10 @@ export function ActivityLogs() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">Date</th>
-                    <th className="px-4 py-3 font-medium">Who</th>
-                    <th className="px-4 py-3 font-medium">Activity</th>
-                    <th className="px-4 py-3 font-medium">Details</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap">{tr("Date")}</th>
+                    <th className="px-4 py-3 font-medium">{tr("Who")}</th>
+                    <th className="px-4 py-3 font-medium">{tr("Activity")}</th>
+                    <th className="px-4 py-3 font-medium">{tr("Details")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -217,7 +218,7 @@ export function ActivityLogs() {
                 </tbody>
               </table>
             </div>
-            {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No activity found.</p>}
+            {visible.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">{tr("No activity found.")}</p>}
             {entries.length >= LIMIT && (
               <p className="px-4 py-3 text-xs text-muted-foreground border-t border-border">
                 Showing the latest {LIMIT} entries. Choose dates to look further back.

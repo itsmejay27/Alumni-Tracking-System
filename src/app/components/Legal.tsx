@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { tr } from '@/lib/preferences';
 import { X, FileText, ShieldCheck } from 'lucide-react';
 
 export type LegalDoc = 'terms' | 'privacy';
@@ -113,7 +114,7 @@ export function LegalModal({ doc, onClose }: { doc: LegalDoc; onClose: () => voi
             {isTerms ? <FileText size={18} /> : <ShieldCheck size={18} />}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-[#002060]">{isTerms ? 'Terms of Use' : 'Privacy Policy'}</h2>
+            <h2 className="font-bold text-[#002060]">{isTerms ? tr('Terms of Use') : tr('Privacy Policy')}</h2>
             <p className="text-xs text-slate-500">Last updated {UPDATED}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="p-2 rounded-full hover:bg-slate-100 text-slate-500">

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { Req } from './RequiredMark';
 import { salaryInPesos } from '@/lib/money';
 import { useT } from '@/lib/preferences';
@@ -512,7 +513,7 @@ function JobDetails({ job, onClose, onExplain }: { job: JobPosting; onClose: () 
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <JobTypeBadge type={job.type} />
-            <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
               <X size={18} />
             </button>
           </div>
@@ -613,14 +614,13 @@ function AssistantModal({
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="AI Job Assistant">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={tr("AI Job Assistant")}>
       <div className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-200" onClick={onClose} />
       <div className="relative w-full max-w-6xl max-h-[96vh] overflow-y-auto rounded-2xl bg-background shadow-2xl p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center gap-2 mb-4 pr-10">
           {(
             [
-              ['explain', t('Explain a job'), <Sparkles key="s" size={15} />],
-              ['search', t('Find jobs online'), <Globe key="g" size={15} />],
+              ['explain', t('Explain a job'), <Sparkles key="s" size={15} />], ['search', t('Find jobs online'), <Globe key="g" size={15} />],
             ] as const
           ).map(([value, label, icon]) => (
             <button
@@ -639,7 +639,7 @@ function AssistantModal({
           <JobAssistant key={explainText} userId={userId} initialText={explainText || undefined} onClose={onClose} onPost={onPost} />
         ) : (
           <>
-            <button onClick={onClose} aria-label="Close" className="absolute right-3 top-3 sm:right-5 sm:top-5 p-2 rounded-lg text-muted-foreground hover:bg-muted">
+            <button onClick={onClose} aria-label={tr("Close")} className="absolute right-3 top-3 sm:right-5 sm:top-5 p-2 rounded-lg text-muted-foreground hover:bg-muted">
               <X size={18} />
             </button>
             <JobSearch
@@ -803,7 +803,7 @@ function JobPostingForm({
   const chosen = splitPrograms(formData.program);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Post a job">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={tr("Post a job")}>
       <div className="absolute inset-0 bg-slate-900/40 animate-in fade-in duration-200" onClick={() => !submitting && onClose()} />
       <div className="relative w-full max-w-5xl max-h-[92vh] overflow-hidden bg-card rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col">
         {/* Header band */}
@@ -824,7 +824,7 @@ function JobPostingForm({
               )}
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-white/80 hover:bg-white/10" aria-label="Close">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-white/80 hover:bg-white/10" aria-label={tr("Close")}>
             <X size={18} />
           </button>
         </div>
@@ -837,19 +837,19 @@ function JobPostingForm({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={label} htmlFor="job-title">{t('Job Title')} <Req /></label>
-                    <input id="job-title" type="text" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className={field} placeholder="e.g. Software Engineer" />
+                    <input id="job-title" type="text" required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} className={field} placeholder={tr("e.g. Software Engineer")} />
                   </div>
                   <div>
                     <label className={label} htmlFor="job-company">{t('Company')} <Req /></label>
-                    <input id="job-company" type="text" required value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} className={field} placeholder="e.g. TechHub Philippines" />
+                    <input id="job-company" type="text" required value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} className={field} placeholder={tr("e.g. TechHub Philippines")} />
                   </div>
                   <div>
                     <label className={label} htmlFor="job-location">{t('Location')} <Req /></label>
-                    <input id="job-location" type="text" required value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className={field} placeholder="e.g. Mamburao, Occidental Mindoro" />
+                    <input id="job-location" type="text" required value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className={field} placeholder={tr("e.g. Mamburao, Occidental Mindoro")} />
                   </div>
                   <div>
                     <label className={label} htmlFor="job-salary">{t('Salary Range (Optional)')}</label>
-                    <input id="job-salary" type="text" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: e.target.value })} className={field} placeholder="e.g. ₱25,000 - ₱35,000/month" />
+                    <input id="job-salary" type="text" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: e.target.value })} className={field} placeholder={tr("e.g. ₱25,000 - ₱35,000/month")} />
                   </div>
                 </div>
                 <div>
@@ -906,7 +906,7 @@ function JobPostingForm({
                 </div>
                 <div>
                   <label className={label} htmlFor="job-email">{t('Contact Email (Optional)')}</label>
-                  <input id="job-email" type="email" value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} className={field} placeholder="e.g. hr@company.com" />
+                  <input id="job-email" type="email" value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} className={field} placeholder={tr("e.g. hr@company.com")} />
                 </div>
               </Section>
 

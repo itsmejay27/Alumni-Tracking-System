@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Send, Table2, LineChart as LineIcon, CheckCircle2, UserCheck, UserX, Clock } from 'lucide-react';
 import { Pagination, usePaged } from './Pagination';
@@ -104,32 +105,33 @@ export function Analytics({ userRole }: AnalyticsProps) {
     };
   });
 
-  if (loading) return <LoadingState label="Loading analytics..." />;
+  if (loading) return <LoadingState label={tr("Loading analytics...")} />;
   if (error) return <ErrorState message={error} />;
 
-  const scopeText = scope ? `${scope} graduates` : program === 'all' ? 'All programs' : program;
+  const scopeText = scope ? tr('{program} graduates', { program: scope }) : program === 'all' ? tr('All programs') : program;
+  const yearText = year === 'all' ? tr('all batches') : tr('class of {year}', { year });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header + filters (one row) */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Analytics</h2>
-          <p className="text-muted-foreground text-sm mt-1">{scopeText} · {year === 'all' ? 'all batches' : `class of ${year}`}</p>
+          <h2 className="text-2xl font-bold tracking-tight">{tr("Analytics")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{scopeText} · {yearText}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {!scope && (
             <select value={program} onChange={(e) => setProgram(e.target.value)} className="filter-select">
-              <option value="all">All programs</option>
+              <option value="all">{tr("All programs")}</option>
               {PROGRAMS.map((p) => (
                 <option key={p.code} value={p.code}>{p.code}</option>
               ))}
             </select>
           )}
           <select value={year} onChange={(e) => setYear(e.target.value)} className="filter-select">
-            <option value="all">All batches</option>
+            <option value="all">{tr("All batches")}</option>
             {years.map((y) => (
-              <option key={y} value={y}>Class of {y}</option>
+              <option key={y} value={y}>{tr('Class of {year}', { year: y })}</option>
             ))}
           </select>
         </div>
@@ -137,17 +139,17 @@ export function Analytics({ userRole }: AnalyticsProps) {
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Stat label="Graduates on file" value={total} note={`${tracked} with employment status`} />
-        <Stat label="Employed" value={employed} note={`${rate}% of those who responded`} />
-        <Stat label="Unemployed" value={unemployed} />
-        <Stat label="Not tracked" value={notTracked} note="no employment status yet" />
-        <Stat label="Government / Private" value={`${gov} / ${priv}`} note={`${jobs.filter((j) => !j.employerType || j.employerType === 'Not specified').length} not specified yet`} />
-        <Stat label="Response rate" value={`${responseRate}%`} note={`${responded} of ${total} updated their own record`} />
+        <Stat label={tr("Graduates on file")} value={total} note={tr('{n} with employment status', { n: tracked })} />
+        <Stat label={tr("Employed")} value={employed} note={tr("{n}% of those who responded", { n: rate })} />
+        <Stat label={tr("Unemployed")} value={unemployed} />
+        <Stat label={tr("Not tracked")} value={notTracked} note={tr("no employment status yet")} />
+        <Stat label={tr("Government / Private")} value={`${gov} / ${priv}`} note={tr('{n} not specified yet', { n: jobs.filter((j) => !j.employerType || j.employerType === 'Not specified').length })} />
+        <Stat label={tr("Response rate")} value={`${responseRate}%`} note={tr('{a} of {b} updated their own record', { a: responded, b: total })} />
       </div>
 
       <ResponsesPanel records={filtered} />
 
-      <Breakdown records={filtered} subtitle={`${scopeText} · ${year === 'all' ? 'all batches' : `class of ${year}`}`} />
+      <Breakdown records={filtered} subtitle={`${scopeText} · ${yearText}`} />
 
       <IndustryPanel records={filtered} />
 
@@ -157,8 +159,8 @@ export function Analytics({ userRole }: AnalyticsProps) {
       <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
           <div>
-            <h3 className="font-semibold">Program comparison by graduation year</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Each line is one program</p>
+            <h3 className="font-semibold">{tr("Program comparison by graduation year")}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{tr("Each line is one program")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-lg bg-muted p-1">
@@ -170,7 +172,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                     metric === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {m.label}
+                  {tr(m.label)}
                 </button>
               ))}
             </div>
@@ -178,7 +180,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
               onClick={() => setShowTable((v) => !v)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted"
             >
-              {showTable ? <LineIcon size={14} /> : <Table2 size={14} />} {showTable ? 'Chart' : 'Table'}
+              {showTable ? <LineIcon size={14} /> : <Table2 size={14} />} {showTable ? tr('Chart') : tr('Table')}
             </button>
           </div>
         </div>
@@ -196,13 +198,13 @@ export function Analytics({ userRole }: AnalyticsProps) {
         </div>
 
         {programsWithData.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-16 text-center">No tracer data yet for this selection.</p>
+          <p className="text-sm text-muted-foreground py-16 text-center">{tr("No tracer data yet for this selection.")}</p>
         ) : showTable ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Year graduated</th>
+                  <th className="py-2 pr-4 font-medium">{tr("Year graduated")}</th>
                   {programsWithData.map((p) => (
                     <th key={p.code} className="py-2 px-3 font-medium text-right">{p.code}</th>
                   ))}
@@ -222,9 +224,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
               </tbody>
             </table>
           </div>
-        ) : (
-          // select-none: clicking the chart shouldn't highlight the program labels. The hover line and
-          // tooltip disappear as soon as the pointer leaves the chart (or shortly after a tap).
+        ) : ( // select-none: clicking the chart shouldn't highlight the program labels. The hover line and // tooltip disappear as soon as the pointer leaves the chart (or shortly after a tap).
           <div
             className="h-[320px] select-none outline-none [&_*]:outline-none"
             onMouseEnter={() => setChartHover(true)}
@@ -274,22 +274,22 @@ export function Analytics({ userRole }: AnalyticsProps) {
       <div className="grid grid-cols-1 gap-6">
         {/* Program comparison table */}
         <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-          <h3 className="font-semibold">Employment by program</h3>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-4">Current status, {year === 'all' ? 'all batches' : `class of ${year}`}</p>
+          <h3 className="font-semibold">{tr("Employment by program")}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-4">{tr('Current status')}, {yearText}</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Program</th>
-                  <th className="py-2 px-2 font-medium text-right">Graduates</th>
-                  <th className="py-2 px-2 font-medium text-right">Responded</th>
-                  <th className="py-2 px-2 font-medium text-right">Employed</th>
-                  <th className="py-2 px-2 font-medium text-right">Unemployed</th>
-                  <th className="py-2 px-2 font-medium text-right">Not tracked</th>
-                  <th className="py-2 px-2 font-medium text-right">Government</th>
-                  <th className="py-2 px-2 font-medium text-right">Private</th>
-                  <th className="py-2 px-2 font-medium text-right">NGO/INGO</th>
-                  <th className="py-2 pl-2 font-medium text-right">Other / not specified</th>
+                  <th className="py-2 pr-3 font-medium">{tr("Program")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Graduates")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Responded")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Employed")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Unemployed")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Not tracked")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Government")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("Private")}</th>
+                  <th className="py-2 px-2 font-medium text-right">{tr("NGO/INGO")}</th>
+                  <th className="py-2 pl-2 font-medium text-right">{tr("Other / not specified")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -345,7 +345,7 @@ function ChartTooltip({ active, payload, label, metric }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl bg-card shadow-lg border border-border px-3 py-2 text-xs">
-      <p className="font-semibold mb-1">Class of {label}</p>
+      <p className="font-semibold mb-1">{tr('Class of {year}', { year: label })}</p>
       {payload
         .filter((p: any) => p.value != null)
         .sort((a: any, b: any) => b.value - a.value)
@@ -428,14 +428,14 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Alumni responses</h3>
+          <h3 className="font-semibold">{tr("Alumni responses")}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            A graduate counts once they sign in and <b>save</b> their own record (signing in alone does not count). The goal is 100%: every graduate on file has updated.
+            {tr('A graduate counts once they sign in and save their own record (signing in alone does not count). The goal is 100%: every graduate on file has updated.')}
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <p className="text-sm font-semibold tabular-nums">
-            {done.length} / {records.length} updated · {pct}%
+            {tr('{a} / {b} updated · {pct}%', { a: done.length, b: records.length, pct })}
           </p>
           <button
             type="button"
@@ -443,7 +443,7 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
             disabled={!list.length}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted disabled:opacity-50"
           >
-            Download list (CSV)
+            {tr("Download list (CSV)")}
           </button>
         </div>
       </div>
@@ -451,36 +451,36 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search name or email..."
+          placeholder={tr("Search name or email...")}
           className="filter-select w-full"
-          aria-label="Search graduates"
+          aria-label={tr("Search graduates")}
         />
         {programs.length > 1 ? (
-          <select value={fProgram} onChange={(e) => setFProgram(e.target.value)} className="filter-select w-full" aria-label="Program">
-            <option value="all">All programs</option>
+          <select value={fProgram} onChange={(e) => setFProgram(e.target.value)} className="filter-select w-full" aria-label={tr("Program")}>
+            <option value="all">{tr("All programs")}</option>
             {programs.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
         ) : null}
-        <select value={fYear} onChange={(e) => setFYear(e.target.value)} className="filter-select w-full" aria-label="Class of">
-          <option value="all">All batches</option>
+        <select value={fYear} onChange={(e) => setFYear(e.target.value)} className="filter-select w-full" aria-label={tr("Class of")}>
+          <option value="all">{tr("All batches")}</option>
           {years.map((y) => (
-            <option key={y} value={y}>Class of {y}</option>
+            <option key={y} value={y}>{tr('Class of {year}', { year: y })}</option>
           ))}
         </select>
-        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="filter-select w-full" aria-label="Status">
-          <option value="all">All statuses</option>
-          <option value="Employed">Employed</option>
-          <option value="Self-Employed">Self-Employed</option>
-          <option value="Unemployed">Unemployed</option>
-          <option value="Not Tracked">Not tracked</option>
+        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="filter-select w-full" aria-label={tr("Status")}>
+          <option value="all">{tr("All statuses")}</option>
+          <option value="Employed">{tr("Employed")}</option>
+          <option value="Self-Employed">{tr("Self-Employed")}</option>
+          <option value="Unemployed">{tr("Unemployed")}</option>
+          <option value="Not Tracked">{tr("Not tracked")}</option>
         </select>
-        <select value={fAccount} onChange={(e) => setFAccount(e.target.value)} className="filter-select w-full" aria-label="Account">
-          <option value="all">All accounts</option>
-          <option value="updated">Updated their record</option>
-          <option value="signed-up">Signed up, follow up update</option>
-          <option value="no-account">No account yet</option>
+        <select value={fAccount} onChange={(e) => setFAccount(e.target.value)} className="filter-select w-full" aria-label={tr("Account")}>
+          <option value="all">{tr("All accounts")}</option>
+          <option value="updated">{tr("Updated their record")}</option>
+          <option value="signed-up">{tr("Signed up, follow up update")}</option>
+          <option value="no-account">{tr("No account yet")}</option>
         </select>
       </div>
       {active > 0 && (
@@ -499,15 +499,15 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><CheckCircle2 size={14} /> Updated their record</p>
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><CheckCircle2 size={14} /> {tr("Updated their record")}</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{done.length}</p>
         </div>
         <div className="rounded-xl border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserCheck size={14} /> Signed up, follow up update</p>
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserCheck size={14} /> {tr("Signed up, follow up update")}</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{signedUpOnly}</p>
         </div>
         <div className="rounded-xl border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserX size={14} /> No account yet</p>
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5"><UserX size={14} /> {tr("No account yet")}</p>
           <p className="text-xl font-bold tabular-nums mt-0.5">{noAccount}</p>
         </div>
       </div>
@@ -515,8 +515,8 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
       <div className="flex gap-2">
         {(
           [
-            ['responded', `Responded (${done.length})`],
-            ['waiting', `Not yet (${waiting.length})`],
+            ['responded', tr('Responded ({n})', { n: done.length })],
+            ['waiting', tr('Not yet ({n})', { n: waiting.length })],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -533,18 +533,18 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
 
       {list.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          {view === 'responded' ? 'No graduate has updated their record yet.' : 'Everyone on file has responded.'}
+          {view === 'responded' ? tr('No graduate has updated their record yet.') : tr('Everyone on file has responded.')}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Graduate</th>
-                <th className="py-2 px-2 font-medium">Program</th>
-                <th className="py-2 px-2 font-medium">Class of</th>
-                <th className="py-2 px-2 font-medium">Status</th>
-                <th className="py-2 pl-2 font-medium text-right">{view === 'responded' ? 'Responded on' : 'Account'}</th>
+                <th className="py-2 pr-3 font-medium">{tr("Graduate")}</th>
+                <th className="py-2 px-2 font-medium">{tr("Program")}</th>
+                <th className="py-2 px-2 font-medium">{tr("Class of")}</th>
+                <th className="py-2 px-2 font-medium">{tr("Status")}</th>
+                <th className="py-2 pl-2 font-medium text-right">{view === 'responded' ? tr('Responded on') : tr('Account')}</th>
               </tr>
             </thead>
             <tbody>
@@ -553,21 +553,21 @@ function ResponsesPanel({ records: all }: { records: AlumniRecord[] }) {
                   <td className="py-2.5 pr-3 font-medium">{`${r.givenName} ${r.lastName}`.trim() || '—'}</td>
                   <td className="py-2.5 px-2">{r.course}</td>
                   <td className="py-2.5 px-2 tabular-nums">{r.yearGraduated || '—'}</td>
-                  <td className="py-2.5 px-2">{r.status}</td>
+                  <td className="py-2.5 px-2">{tr(r.status)}</td>
                   <td className="py-2.5 pl-2 text-right whitespace-nowrap">
                     {view === 'responded' ? (
                       <span className="inline-flex items-center gap-1"><Clock size={13} className="text-muted-foreground" /> {when(r.respondedAt)}</span>
                     ) : r.accountLinked ? (
-                      <span className="font-medium">Signed up</span>
+                      <span className="font-medium">{tr("Signed up")}</span>
                     ) : (
-                      <span className="text-muted-foreground">No account</span>
+                      <span className="text-muted-foreground">{tr("No account")}</span>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <Pagination {...paged} label="graduates" inline />
+          <Pagination {...paged} label={tr("graduates")} inline />
         </div>
       )}
     </div>
@@ -606,9 +606,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
   const send = async () => {
     const target = minYears === '0' ? 'all alumni with an account' : `alumni who haven't updated in ${minYears}+ year(s)`;
     const ok = await confirmDialog({
-      title: 'Send update reminder?',
+      title: tr('Send update reminder?'),
       message: `An email will be sent to ${course} ${target}.`,
-      confirmLabel: 'Send reminder',
+      confirmLabel: tr('Send reminder'),
     });
     if (!ok) return;
     setSending(true);
@@ -633,9 +633,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-      <h3 className="font-semibold">Ask alumni to update their data</h3>
+      <h3 className="font-semibold">{tr("Ask alumni to update their data")}</h3>
       <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-        Sends an email to alumni of the program who have an account. {last && `Last sent ${mdy(last.created_at)} to ${last.recipients} alumni.`}
+        {tr('Sends an email to alumni of the program who have an account.')} {last && tr('Last sent {date} to {n} alumni.', { date: mdy(last.created_at), n: last.recipients })}
       </p>
       <div className="grid gap-3 md:grid-cols-[auto_auto_1fr_auto] md:items-center">
         {!scope && (
@@ -646,15 +646,15 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
           </select>
         )}
         <select value={minYears} onChange={(e) => setMinYears(e.target.value)} className="filter-select">
-          <option value="1">Follow up update: 1+ year</option>
-          <option value="2">Follow up update: 2+ years</option>
-          <option value="3">Follow up update: 3+ years</option>
-          <option value="0">Everyone in the program</option>
+          <option value="1">{tr("Follow up update: 1+ year")}</option>
+          <option value="2">{tr("Follow up update: 2+ years")}</option>
+          <option value="3">{tr("Follow up update: 3+ years")}</option>
+          <option value="0">{tr("Everyone in the program")}</option>
         </select>
         <input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Optional note to include"
+          placeholder={tr("Optional note to include")}
           className="px-3 py-2 rounded-lg bg-input-background border border-border text-sm"
         />
         <button
@@ -662,7 +662,7 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
           disabled={sending}
           className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-60"
         >
-          <Send size={15} /> {sending ? 'Sending...' : 'Send reminder'}
+          <Send size={15} /> {sending ? tr('Sending...') : tr('Send reminder')}
         </button>
       </div>
     </div>
@@ -700,40 +700,40 @@ function Breakdown({ records, subtitle }: { records: AlumniRecord[]; subtitle: s
   const job = (r: AlumniRecord) => (isEmployed(r) ? currentJob(r) : null);
   const charts: { title: string; note: string; data: Slice[] }[] = [
     {
-      title: 'Employment status',
-      note: 'All graduates on file',
+      title: tr('Employment status'),
+      note: tr('All graduates on file'),
       data: slices(records, (r) => (r.status === 'Not Tracked' ? 'Not tracked' : r.status), ['Employed', 'Self-Employed', 'Unemployed', 'Not tracked']),
     },
     {
-      title: 'Type of employer',
-      note: 'Employed graduates, current job',
+      title: tr('Type of employer'),
+      note: tr('Employed graduates, current job'),
       data: slices(records, (r) => (job(r) ? job(r)!.employerType || 'Not specified' : null), ['Government', 'Private', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business', 'Not specified']),
     },
     {
-      title: 'Kind of employment',
-      note: 'Employed graduates, current job',
+      title: tr('Kind of employment'),
+      note: tr('Employed graduates, current job'),
       data: slices(records, (r) => (job(r) ? job(r)!.employmentStatus || 'Not specified' : null), ['Permanent', 'Probationary', 'Contractual', 'Job Order', 'Self-Employed', 'Not specified']),
     },
     {
-      title: 'Job related to course',
-      note: 'Employed graduates, current job',
+      title: tr('Job related to course'),
+      note: tr('Employed graduates, current job'),
       data: slices(records, (r) => (job(r) ? job(r)!.relatedToCourse || 'Not answered' : null), ['Yes', 'No', 'Not answered']),
     },
   ];
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-      <h3 className="font-semibold">Breakdown by category</h3>
-      <p className="text-xs text-muted-foreground mt-0.5 mb-5">{subtitle}. Click a slice or a row to see who is in it.</p>
+      <h3 className="font-semibold">{tr("Breakdown by category")}</h3>
+      <p className="text-xs text-muted-foreground mt-0.5 mb-5">{subtitle}. {tr("Click a slice or a row to see who is in it.")}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6">
         {charts.map((c) => {
           const total = c.data.reduce((n, d) => n + d.value, 0);
           return (
             <div key={c.title} className="min-w-0">
-              <p className="text-sm font-semibold">{c.title}</p>
-              <p className="text-xs text-muted-foreground">{c.note} · {total} {total === 1 ? 'graduate' : 'graduates'}</p>
+              <p className="text-sm font-semibold">{tr(c.title)}</p>
+              <p className="text-xs text-muted-foreground">{tr(c.note)} · {total} {tr(total === 1 ? 'graduate' : 'graduates')}</p>
               {total === 0 ? (
-                <p className="text-sm text-muted-foreground py-10 text-center">No data yet</p>
+                <p className="text-sm text-muted-foreground py-10 text-center">{tr("No data yet")}</p>
               ) : (
                 <>
                   <div className="h-[170px]">
@@ -769,7 +769,7 @@ function Breakdown({ records, subtitle }: { records: AlumniRecord[]; subtitle: s
                           className="w-full flex items-center gap-2 text-xs rounded-md px-1.5 py-1 hover:bg-muted text-left"
                         >
                           <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
-                          <span className="flex-1 min-w-0 truncate">{d.name}</span>
+                          <span className="flex-1 min-w-0 truncate">{tr(d.name)}</span>
                           <span className="tabular-nums font-semibold">{d.value}</span>
                           <span className="tabular-nums text-muted-foreground w-10 text-right">{Math.round((d.value / total) * 100)}%</span>
                         </button>
@@ -801,13 +801,13 @@ function SliceList({ chart, slice, onClose }: { chart: string; slice: Slice; onC
       <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-muted-foreground">{chart}</p>
+            <p className="text-xs text-muted-foreground">{tr(chart)}</p>
             <h3 className="font-semibold text-lg">
-              {slice.name} · {slice.value} {slice.value === 1 ? 'graduate' : 'graduates'}
+              {tr(slice.name)} · {slice.value} {tr(slice.value === 1 ? 'graduate' : 'graduates')}
             </h3>
           </div>
-          <button type="button" onClick={onClose} className="px-2 py-1 rounded-lg text-sm text-muted-foreground hover:bg-muted" aria-label="Close">
-            Close
+          <button type="button" onClick={onClose} className="px-2 py-1 rounded-lg text-sm text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
+            {tr("Close")}
           </button>
         </div>
         <ul className="divide-y divide-border">
@@ -824,7 +824,7 @@ function SliceList({ chart, slice, onClose }: { chart: string; slice: Slice; onC
             );
           })}
         </ul>
-        <Pagination {...paged} label="graduates" />
+        <Pagination {...paged} label={tr("graduates")} />
       </div>
     </div>
   );
@@ -843,23 +843,23 @@ function IndustryPanel({ records }: { records: AlumniRecord[] }) {
 
   return (
     <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
-      <h3 className="font-semibold">Employed graduates by industry</h3>
+      <h3 className="font-semibold">{tr("Employed graduates by industry")}</h3>
       <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-        Current job, compared by batch. {answered} of {employed.length} employed graduates have given their industry; the rest show as Not specified until they update. Click a row to see who.
+        {tr('Current job, compared by batch. {a} of {b} employed graduates have given their industry; the rest show as Not specified until they update. Click a row to see who.', { a: answered, b: employed.length })}
       </p>
       {!employed.length ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">No employed graduates in this selection.</p>
+        <p className="text-sm text-muted-foreground py-6 text-center">{tr("No employed graduates in this selection.")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Industry</th>
+                <th className="py-2 pr-3 font-medium">{tr("Industry")}</th>
                 {years.map((y) => (
-                  <th key={y} className="py-2 px-2 font-medium text-right whitespace-nowrap">Class of {y}</th>
+                  <th key={y} className="py-2 px-2 font-medium text-right whitespace-nowrap">{tr('Class of {year}', { year: y })}</th>
                 ))}
-                <th className="py-2 px-2 font-medium text-right">Total</th>
-                <th className="py-2 pl-2 font-medium w-[22%]"><span className="sr-only">Share</span></th>
+                <th className="py-2 px-2 font-medium text-right">{tr("Total")}</th>
+                <th className="py-2 pl-2 font-medium w-[22%]"><span className="sr-only">{tr("Share")}</span></th>
               </tr>
             </thead>
             <tbody>
@@ -871,7 +871,7 @@ function IndustryPanel({ records }: { records: AlumniRecord[] }) {
                     className="border-t border-border/60 cursor-pointer hover:bg-muted/50"
                     onClick={() => setOpen({ name: n, value: people.length, color: '', people })}
                   >
-                    <td className={`py-2 pr-3 ${n === 'Not specified' ? 'text-muted-foreground' : 'font-medium'}`}>{n}</td>
+                    <td className={`py-2 pr-3 ${n === 'Not specified' ? 'text-muted-foreground' : 'font-medium'}`}>{tr(n)}</td>
                     {years.map((y) => {
                       const c = people.filter((r) => r.yearGraduated === y).length;
                       return (

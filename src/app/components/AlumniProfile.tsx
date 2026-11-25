@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import { mdy, todayIso, serviceLength, formatMonths } from '@/lib/dates';
@@ -464,12 +465,12 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const tabs: { id: SectionId; label: string; saveLabel: string; done: boolean; optional?: boolean }[] = [
     {
       id: 'personal',
-      label: 'Personal information',
+      label: tr('Personal information'),
       saveLabel: 'Save personal information',
       done: validateSafe('personal'),
     },
-    { id: 'education', label: 'Education', saveLabel: 'Save education', done: !!course && !!yearGraduated },
-    { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: validateSafe('employment') },
+    { id: 'education', label: tr('Education'), saveLabel: 'Save education', done: !!course && !!yearGraduated },
+    { id: 'employment', label: tr('Employment'), saveLabel: 'Save employment', done: validateSafe('employment') },
     { id: 'feedback', label: needsSurvey ? 'Survey & feedback' : 'Feedback', saveLabel: 'Save', done: needsSurvey ? surveyDone : !!suggestions.trim(), optional: true },
   ];
   const tabIndex = tabs.findIndex((x) => x.id === tab);
@@ -507,7 +508,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }}
         />
         <div className="relative flex flex-col md:flex-row md:items-center gap-6 p-6 sm:p-8">
-          <label className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden shrink-0 cursor-pointer self-center md:self-auto" title="Change photo">
+          <label className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-white/20 bg-white/10 overflow-hidden shrink-0 cursor-pointer self-center md:self-auto" title={tr("Change photo")}>
             <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
             {avatarUrl ? (
               <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
@@ -602,26 +603,26 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {/* PERSONAL */}
           {tab === 'personal' && (
             <>
-              <Group title="Name">
+              <Group title={tr("Name")}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} onBlur={(e) => setGivenName(capitalizeWords(e.target.value))} className={input} /></Field>
-                  <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} onBlur={(e) => setMiddleName(capitalizeWords(e.target.value))} className={input} /></Field>
-                  <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} onBlur={(e) => setLastName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label={tr("First name *")}><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} onBlur={(e) => setGivenName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label={tr("Middle name")}><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} onBlur={(e) => setMiddleName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label={tr("Last name *")}><input required value={lastName} onChange={(e) => setLastName(e.target.value)} onBlur={(e) => setLastName(capitalizeWords(e.target.value))} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Personal details">
+              <Group title={tr("Personal details")}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="Sex *">
+                  <Field label={tr("Sex *")}>
                     <select value={sex} onChange={(e) => setSex(e.target.value as any)} className={input}>
                       <option value="Female">{t('Female')}</option>
                       <option value="Male">{t('Male')}</option>
                     </select>
                   </Field>
-                  <Field label="Date of birth *">
+                  <Field label={tr("Date of birth *")}>
                     <input type="date" required min="1940-01-01" max={MAX_BIRTH_DATE} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={input} />
                   </Field>
-                  <Field label="Civil status *">
+                  <Field label={tr("Civil status *")}>
                     <select value={civilStatus} onChange={(e) => setCivilStatus(e.target.value as any)} className={input}>
                       <option value="Single">{t('Single')}</option>
                       <option value="Married">{t('Married')}</option>
@@ -632,35 +633,35 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 </div>
               </Group>
 
-              <Group title="Contact">
+              <Group title={tr("Contact")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label="Email"><input readOnly value={currentUser?.email || ''} className={`${input} bg-muted text-muted-foreground`} /></Field>
-                  <Field label="Mobile number *"><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
+                  <Field label={tr("Mobile number *")}><PhoneInput required value={mobileNo} onChange={setMobileNo} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Address">
+              <Group title={tr("Address")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Present address *"><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
-                  <Field label="Permanent address *"><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Present address *")}><input required value={presentAddress} onChange={(e) => setPresentAddress(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Permanent address *")}><input required value={permanentAddress} onChange={(e) => setPermanentAddress(e.target.value)} className={input} /></Field>
                 </div>
               </Group>
 
-              <Group title="Social media">
+              <Group title={tr("Social media")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Facebook name"><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
-                  <Field label="Twitter / X"><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder="@username" /></Field>
-                  <Field label="Other social network"><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
-                  <Field label="Other social network ID"><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
+                  <Field label={tr("Facebook name")}><input value={facebookName} onChange={(e) => setFacebookName(e.target.value)} className={input} /></Field>
+                  <Field label={tr("Twitter / X")}><input value={twitter} onChange={(e) => setTwitter(e.target.value)} className={input} placeholder={tr("@username")} /></Field>
+                  <Field label={tr("Other social network")}><input value={otherSocialNetwork} onChange={(e) => setOtherSocialNetwork(e.target.value)} className={input} placeholder={t('e.g. Instagram, LinkedIn')} /></Field>
+                  <Field label={tr("Other social network ID")}><input value={otherSocialId} onChange={(e) => setOtherSocialId(e.target.value)} className={input} placeholder={t('Username or link')} /></Field>
                 </div>
               </Group>
 
-              <Group title="Parents">
+              <Group title={tr("Parents")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Father's name *"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} onBlur={(e) => setFatherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full name')} /></Field>
-                  <Field label="Father's contact number *"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-                  <Field label="Mother's name *"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} onBlur={(e) => setMotherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full maiden name')} /></Field>
-                  <Field label="Mother's contact number *"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
+                  <Field label={tr("Father's name *")}><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} onBlur={(e) => setFatherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full name')} /></Field>
+                  <Field label={tr("Father's contact number *")}><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
+                  <Field label={tr("Mother's name *")}><input value={motherName} onChange={(e) => setMotherName(e.target.value)} onBlur={(e) => setMotherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full maiden name')} /></Field>
+                  <Field label={tr("Mother's contact number *")}><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
                 </div>
               </Group>
             </>
@@ -668,16 +669,16 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
           {/* EDUCATION */}
           {tab === 'education' && (
-            <Group title="Degree finished from OMSU">
+            <Group title={tr("Degree finished from OMSU")}>
               <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
-                <Field label="Program *">
+                <Field label={tr("Program *")}>
                   <select value={course} disabled onChange={(e) => setCourse(e.target.value as Course)} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {PROGRAMS.map((p) => (
                       <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Year graduated *">
+                <Field label={tr("Year graduated *")}>
                   <select value={yearGraduated} disabled onChange={(e) => setYearGraduated(Number(e.target.value))} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {GRAD_YEARS.map((y) => (
                       <option key={y} value={y}>{y - 1}-{y}</option>
@@ -692,7 +693,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
             </Group>
           )}
           {tab === 'education' && (
-            <Group title="Other degrees and further studies">
+            <Group title={tr("Other degrees and further studies")}>
               <p className="text-sm text-muted-foreground mb-3">{t("Add any other degree you finished or are taking, for example a master's degree or a second bachelor's degree.")}</p>
               <div className="space-y-3">
                 {otherDegrees.map((d, i) => {
@@ -730,7 +731,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {/* EMPLOYMENT */}
           {tab === 'employment' && (
             <>
-              <Group title="Current status">
+              <Group title={tr("Current status")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
                     {(['Employed', 'Self-Employed', 'Unemployed'] as const).map((st) => (
@@ -754,7 +755,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 </div>
               </Group>
 
-              <Group title="Current job">
+              <Group title={tr("Current job")}>
                 {status === 'Unemployed' ? (
                   <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
                     {t("You're marked as unemployed, so no job details are needed.")}
@@ -780,7 +781,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
               </Group>
 
               {previousJobs.length > 0 && (
-                <Group title="Previous jobs">
+                <Group title={tr("Previous jobs")}>
                   <button type="button" onClick={() => setShowPrevious((v) => !v)} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     <ChevronDown size={16} className={`transition-transform ${showPrevious ? 'rotate-180' : ''}`} />
                     {showPrevious ? t('Hide previous jobs') : t('Show previous jobs')} ({previousJobs.length})
@@ -815,11 +816,11 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {tab === 'feedback' && (
             <>
               {needsSurvey && (
-                <Group title="Survey">
+                <Group title={tr("Survey")}>
                   <PeoSurveyForm answers={survey} onChange={setSurvey} completedAt={record?.peoSurvey?.completedAt} />
                 </Group>
               )}
-              <Group title="Suggestions">
+              <Group title={tr("Suggestions")}>
                 <p className="text-sm text-muted-foreground mb-3">
                   {t('Your suggestions go to the Alumni Affairs Office and your program chair. They use them to improve the programs, services for alumni, and this tracer study. Earlier feedback is kept, so writing new feedback does not erase the old.')}
                 </p>
@@ -828,7 +829,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                     {t('Answer all the survey questions above first. The suggestions box opens when the survey is complete.')}
                   </p>
                 )}
-                <Field label="Suggestions & feedback">
+                <Field label={tr("Suggestions & feedback")}>
                   <textarea
                     rows={4}
                     value={suggestions}
@@ -852,7 +853,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                   </details>
                 )}
               </Group>
-              <Group title="Privacy">
+              <Group title={tr("Privacy")}>
                 <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-border p-4">
                   <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-1 w-4 h-4" />
                   <span className="text-sm">
@@ -1070,7 +1071,7 @@ function JobModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Job details">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={tr("Job details")}>
       <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-5">
         <div className="flex items-start justify-between gap-3">
@@ -1078,14 +1079,14 @@ function JobModal({
             <h3 className="font-semibold text-lg">{isNew ? t('Add job') : locked ? t('Job details') : t('Edit job')}</h3>
             {locked && <p className="text-xs text-muted-foreground mt-0.5">{t("Saved jobs are kept as history and can't be edited, but you can still attach the proof of employment.")}</p>}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label="Close">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted" aria-label={tr("Close")}>
             <X size={18} />
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Position / job title *"><input autoFocus={!locked} disabled={locked} value={draft.position} onChange={(e) => set({ position: e.target.value })} className={input} /></Field>
-          <Field label="Company / agency *"><input disabled={locked} value={draft.company} onChange={(e) => set({ company: e.target.value })} className={input} /></Field>
-          <Field label="Employment status *">
+          <Field label={tr("Position / job title *")}><input autoFocus={!locked} disabled={locked} value={draft.position} onChange={(e) => set({ position: e.target.value })} className={input} /></Field>
+          <Field label={tr("Company / agency *")}><input disabled={locked} value={draft.company} onChange={(e) => set({ company: e.target.value })} className={input} /></Field>
+          <Field label={tr("Employment status *")}>
             <select disabled={locked} value={draft.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })} className={input}>
               {EMPLOYMENT_STATUSES.map((x) => <option key={x}>{x}</option>)}
             </select>
@@ -1096,13 +1097,13 @@ function JobModal({
               {INDUSTRIES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
             </select>
           </Field>
-          <Field label="Employer type *">
+          <Field label={tr("Employer type *")}>
             <select disabled={locked} value={draft.employerType} onChange={(e) => set({ employerType: e.target.value })} className={input}>
               {EMPLOYER_TYPES.map((x) => <option key={x}>{x}</option>)}
             </select>
           </Field>
           <Field label={!draft.endDate && draft.employerType !== 'Self-Employed / Own Business' ? 'Employer address *' : 'Employer address'}><input disabled={locked} value={draft.employerAddress || ''} onChange={(e) => set({ employerAddress: e.target.value })} className={input} /></Field>
-          <Field label="Employer contact no.">
+          <Field label={tr("Employer contact no.")}>
             <input
               disabled={locked}
               inputMode="tel"
@@ -1115,11 +1116,11 @@ function JobModal({
           <Field label={isNew ? 'Date started *' : 'Date started'}>
             <input type="date" disabled={locked} max={todayIso()} value={draft.startDate || ''} onChange={(e) => set({ startDate: e.target.value })} className={input} />
           </Field>
-          <Field label="Date ended">
+          <Field label={tr("Date ended")}>
             <input type="date" disabled={locked} min={draft.startDate || undefined} max={todayIso()} value={draft.endDate || ''} onChange={(e) => set({ endDate: e.target.value || null })} className={input} />
             <span className="block text-[11px] text-muted-foreground mt-1">{t('Leave empty if you still work here.')}</span>
           </Field>
-          <Field label="Length of service">
+          <Field label={tr("Length of service")}>
             {draft.startDate ? (
               <p className={`${input} bg-muted/40`} aria-live="polite">{t(serviceLength(draft.startDate, draft.endDate)) || '—'}</p>
             ) : (
@@ -1134,7 +1135,7 @@ function JobModal({
             </select>
           </Field>
           <div className="md:col-span-2">
-            <Field label="Job description">
+            <Field label={tr("Job description")}>
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
             </Field>
           </div>

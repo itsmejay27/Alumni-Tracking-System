@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { Globe, ExternalLink, Sparkles } from 'lucide-react';
 import { fetchMyRecord } from '@/lib/alumni';
 import { PROGRAMS } from '@/lib/programs';
@@ -33,14 +34,14 @@ function siteSearches(words: string, location: string, remote: boolean) {
   const where = encodeURIComponent(location || 'Philippines');
   const google = (site: string) => `https://www.google.com/search?q=${encodeURIComponent(`site:${site} ${words} ${location}`)}`;
   return [
-    { name: 'Indeed Philippines', note: 'ph.indeed.com', url: `https://ph.indeed.com/jobs?q=${q}&l=${where}` },
-    { name: 'LinkedIn Jobs', note: 'linkedin.com/jobs', url: `https://www.linkedin.com/jobs/search/?keywords=${q}&location=${where}` },
-    { name: 'JobStreet', note: 'ph.jobstreet.com', url: google('ph.jobstreet.com') },
-    { name: 'Kalibrr', note: 'kalibrr.com', url: google('kalibrr.com') },
-    { name: 'PhilJobNet (government)', note: 'philjobnet.gov.ph', url: google('philjobnet.gov.ph') },
-    { name: 'Google Jobs', note: 'google.com', url: `https://www.google.com/search?q=${encodeURIComponent(`${words} jobs ${location}`)}&ibp=htl;jobs` },
+    { name: 'Indeed Philippines', note: tr('ph.indeed.com'), url: `https://ph.indeed.com/jobs?q=${q}&l=${where}` },
+    { name: 'LinkedIn Jobs', note: tr('linkedin.com/jobs'), url: `https://www.linkedin.com/jobs/search/?keywords=${q}&location=${where}` },
+    { name: 'JobStreet', note: tr('ph.jobstreet.com'), url: google('ph.jobstreet.com') },
+    { name: 'Kalibrr', note: tr('kalibrr.com'), url: google('kalibrr.com') },
+    { name: 'PhilJobNet (government)', note: tr('philjobnet.gov.ph'), url: google('philjobnet.gov.ph') },
+    { name: 'Google Jobs', note: tr('google.com'), url: `https://www.google.com/search?q=${encodeURIComponent(`${words} jobs ${location}`)}&ibp=htl;jobs` },
     ...(remote
-      ? [{ name: 'OnlineJobs.ph (work from home)', note: 'onlinejobs.ph', url: `https://www.google.com/search?q=${encodeURIComponent(`site:onlinejobs.ph ${words}`)}` }]
+      ? [{ name: 'OnlineJobs.ph (work from home)', note: tr('onlinejobs.ph'), url: `https://www.google.com/search?q=${encodeURIComponent(`site:onlinejobs.ph ${words}`)}` }]
       : []),
   ];
 }
@@ -100,7 +101,7 @@ export function JobSearch({
           </label>
           <label className="block">
             <span className="block text-sm font-medium mb-1.5">{t('Where')}</span>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className={field} placeholder="e.g. San Jose, Occidental Mindoro" />
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className={field} placeholder={tr("e.g. San Jose, Occidental Mindoro")} />
           </label>
           <label className="block">
             <span className="block text-sm font-medium mb-1.5">{t('Job title or keywords (optional)')}</span>

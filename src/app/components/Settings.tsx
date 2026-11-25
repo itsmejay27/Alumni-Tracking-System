@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { tr } from '@/lib/preferences';
 import { RequiredLabel } from './RequiredMark';
 import {
   ShieldCheck,
@@ -520,7 +521,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
                 >
-                  Google Authenticator · Android
+                  {tr("Google Authenticator · Android")}
                 </a>
                 <a
                   href="https://apps.apple.com/app/google-authenticator/id388497605"
@@ -528,7 +529,7 @@ function TwoStepCard({ enabled, emailOn, onChange }: { enabled: boolean | null; 
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
                 >
-                  Google Authenticator · iPhone
+                  {tr("Google Authenticator · iPhone")}
                 </a>
               </div>
               <p className="text-xs text-muted-foreground">{t('Already have Microsoft Authenticator or Authy? You can use that instead.')}</p>
@@ -946,8 +947,8 @@ function AppearancePanel() {
     { id: 'system', icon: <Monitor size={16} />, label: t('System'), preview: 'bg-gradient-to-r from-[#f8f9fa] from-50% to-[#0b1221] to-50%' },
   ];
   const langs: { id: Lang; label: string; sample: string }[] = [
-    { id: 'en', label: 'English', sample: 'Welcome back! Update your tracer record.' },
-    { id: 'fil', label: 'Filipino', sample: 'Maligayang pagbabalik! I-update ang iyong tracer record.' },
+    { id: 'en', label: tr('English'), sample: 'Welcome back! Update your tracer record.' },
+    { id: 'fil', label: tr('Filipino'), sample: 'Maligayang pagbabalik! I-update ang iyong tracer record.' },
   ];
 
   return (
