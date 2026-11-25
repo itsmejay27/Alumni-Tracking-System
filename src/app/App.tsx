@@ -5,6 +5,7 @@ import { LandingPage } from './components/LandingPage';
 import { LoadingState } from './components/DataState';
 import { SetNewPassword } from './components/SetNewPassword';
 import { LinkAlumniRecord } from './components/LinkAlumniRecord';
+import { NotificationBell } from './components/NotificationBell';
 import { Home as HomeView } from './components/Home';
 
 // Pages load when first opened, so the first screen downloads much less (panel: slow loading)
@@ -478,12 +479,15 @@ function AppInner() {
               <p className="text-[11px] text-white/60 mt-0.5">{t('Graduate Track')}</p>
             </div>
           </div>
-          <button 
-            onClick={() => setMobileMenuOpen(true)}
-            className="p-1.5 border border-white/20 rounded-lg hover:bg-white/10"
-          >
-            <Menu size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUser && !isSuper && <NotificationBell userId={currentUser.id} onOpenTab={goTab} tone="dark" />}
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-1.5 border border-white/20 rounded-lg hover:bg-white/10"
+            >
+              <Menu size={20} />
+            </button>
+          </div>
         </header>
 
         {/* Mobile Navigation Drawer Overlay */}
@@ -565,6 +569,12 @@ function AppInner() {
 
         {/* 3. UNIFIED CONTENT VIEWPORT */}
         <main className="relative flex-1 overflow-y-auto min-w-0 flex flex-col">
+          {/* Notification bell (desktop); on phones it sits in the top bar */}
+          {currentUser && !isSuper && (
+            <div className="hidden md:flex justify-end px-8 pt-5 -mb-4 relative z-30">
+              <NotificationBell userId={currentUser.id} onOpenTab={goTab} />
+            </div>
+          )}
           <div className="flex-1 px-6 py-6 md:px-8 md:py-8">
           <Suspense fallback={<LoadingState />}>
           {isSuper ? (

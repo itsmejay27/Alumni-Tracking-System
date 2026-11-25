@@ -787,6 +787,25 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
     }
   };
 
+  // In-app notifications (the bell) on or off
+  const [inApp, setInApp] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('profiles').select('app_notifications').eq('id', userId).single().then(({ data }) => setInApp(data?.app_notifications ?? true));
+  }, [userId]);
+  const toggleInApp = async () => {
+    if (inApp == null || !userId) return;
+    const value = !inApp;
+    setInApp(value);
+    const { error } = await supabase.from('profiles').update({ app_notifications: value }).eq('id', userId);
+    if (error) {
+      setInApp(!value);
+      return toast.error(`${t('Could not save')}: ${error.message}`);
+    }
+    window.dispatchEvent(new Event('omsu-notifications-changed'));
+    toast.success(value ? t('Notifications in the system turned on') : t('Notifications in the system turned off'));
+  };
+
   const filtersDirty =
     !!prefs &&
     !!saved &&
@@ -823,6 +842,17 @@ function NotificationsPanel({ userId, isAlumni }: { userId?: string; isAlumni: b
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+      <Card icon={<Bell size={18} />} title={t('Notifications in the system')} sub={t('The bell at the top shows new jobs, announcements and decisions on your job posts.')}>
+        <div className="py-2 flex items-start gap-4">
+          <span className="w-9 h-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0"><Bell size={18} /></span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">{t('Show the notification bell')}</p>
+            <p className="text-sm text-muted-foreground">{t('Turn off to hide the bell. Emails are set separately below.')}</p>
+          </div>
+          {inApp != null && <Switch on={inApp} onClick={toggleInApp} label={t('Show the notification bell')} />}
+        </div>
+      </Card>
+
       <Card icon={<Bell size={18} />} title={t('Email notifications')} sub={t('Choose which emails the OMSU Alumni Track sends you.')}>
         <div className="divide-y divide-border/70 -my-2">
           {rows.map((r) => (
