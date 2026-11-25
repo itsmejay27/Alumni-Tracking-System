@@ -452,6 +452,15 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
   return (
     <div className="w-full space-y-6 pb-12 animate-in fade-in duration-300">
+      {record?.verification === 'pending' && (
+        <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+          <p className="font-semibold">{t('Waiting for verification')}</p>
+          <p className="mt-0.5">
+            {t('Your account matched a graduate record by name only, so Alumni Affairs will check that it is yours. Until then, the details saved earlier stay hidden. Fill in your profile below; your answers are kept.')}
+          </p>
+        </div>
+      )}
+
       {/* Profile header */}
       <section className="relative overflow-hidden rounded-2xl bg-[#002060] text-white">
         <div
@@ -620,14 +629,14 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
             <Group title="Degree finished from OMSU">
               <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4">
                 <Field label="Program *">
-                  <select value={course} onChange={(e) => setCourse(e.target.value as Course)} className={input}>
+                  <select value={course} disabled onChange={(e) => setCourse(e.target.value as Course)} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {PROGRAMS.map((p) => (
                       <option key={p.code} value={p.code}>{p.code} – {p.name}</option>
                     ))}
                   </select>
                 </Field>
                 <Field label="Year graduated *">
-                  <select value={yearGraduated} onChange={(e) => setYearGraduated(Number(e.target.value))} className={input}>
+                  <select value={yearGraduated} disabled onChange={(e) => setYearGraduated(Number(e.target.value))} className={`${input} disabled:opacity-70 disabled:cursor-not-allowed`}>
                     {GRAD_YEARS.map((y) => (
                       <option key={y} value={y}>{y - 1}-{y}</option>
                     ))}
@@ -635,6 +644,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
                 </Field>
                 <Field label="Campus"><input value={campus} onChange={(e) => setCampus(e.target.value)} className={input} placeholder={t('e.g. San Jose (Main)')} /></Field>
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                {t('Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.')}
+              </p>
             </Group>
           )}
 

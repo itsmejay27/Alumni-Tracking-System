@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { LoadingState, ErrorState } from './DataState';
 import { supabase } from '@/lib/supabase';
 import { mdy } from '@/lib/dates';
+import { toast } from 'sonner';
+import { confirmDialog } from './ConfirmDialog';
 import { useAlumniRecords, AlumniRecord, currentJob, isEmployed, ageFrom } from '@/lib/alumni';
 
 const statusClass = (s: string) =>
@@ -64,11 +66,14 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     const matchesCourse = courseScope ? true : (filterCourse === 'all' || record.course === filterCourse);
 
     // 5. Status Filter
-    const matchesStatus = filterStatus === 'all' || record.status === filterStatus;
+    const matchesStatus =
+      filterStatus === 'all' ||
+      (filterStatus === 'pending' ? record.verification === 'pending' : record.status === filterStatus);
 
     return matchesSearch && matchesBatch && matchesCourse && matchesStatus;
   });
 
+  const pendingCount = records.filter((r) => r.verification === 'pending' && (!courseScope || r.course === courseScope)).length;
   const paged = usePaged(filteredRecords, 15);
   const feedback = usePaged(filteredRecords.filter((r) => r.suggestions), 10);
 
@@ -253,6 +258,7 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                   <option value="Self-Employed">Self-Employed</option>
                   <option value="Unemployed">Unemployed</option>
                   <option value="Not Tracked">Not tracked</option>
+                  <option value="pending">Waiting for verification{pendingCount ? ` (${pendingCount})` : ''}</option>
                 </select>
               </div>
             </div>
@@ -340,6 +346,11 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
                           >
                             {record.status}
                           </span>
+                          {record.verification === 'pending' && (
+                            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-800 border-amber-300 whitespace-nowrap">
+                              Needs verification
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           {isEmployed(record) ? (
@@ -443,13 +454,17 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
         <RecordDetailModal
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
+          onChanged={() => {
+            setSelectedRecord(null);
+            reload();
+          }}
         />
       )}
     </div>
   );
 }
 
-function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose: () => void }) {
+function RecordDetailModal({ record, onClose, onChanged }: { record: AlumniRecord; onClose: () => void; onChanged: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-card rounded-2xl p-5 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-lg relative my-auto" onClick={(e) => e.stopPropagation()}>
@@ -484,6 +499,8 @@ function RecordDetailModal({ record, onClose }: { record: AlumniRecord; onClose:
         </div>
 
         <div className="space-y-6 pt-6">
+          {record.verification === 'pending' && <VerifyClaim record={record} onDone={onChanged} />}
+
           {/* PERSONAL INFRASTRUCTURE DETAILS */}
           <div className="space-y-4">
             <h4 className="font-extrabold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
@@ -757,5 +774,112 @@ function ProofLink({ path, name }: { path: string; name?: string }) {
     <button onClick={open} disabled={opening} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60">
       <FileText size={13} /> {opening ? 'Opening...' : `Proof of employment${name ? `: ${name}` : ''}`}
     </button>
+  );
+}
+
+/**
+ * An account matched this record by name only. Staff compare what the account entered with the
+ * details on file (kept hidden from the account), then approve or reject the link.
+ */
+function VerifyClaim({ record, onDone }: { record: AlumniRecord; onDone: () => void }) {
+  const [held, setHeld] = useState<Partial<AlumniRecord> | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from('alumni_link_holds')
+      .select('held_data')
+      .eq('record_id', record.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setLoadError(error.message);
+        else setHeld((data?.held_data as Partial<AlumniRecord>) || {});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [record.id]);
+
+  const review = async (approve: boolean) => {
+    const ok = await confirmDialog(
+      approve
+        ? { title: 'Approve this graduate?', message: 'The account gets this record, including the details saved earlier.', confirmLabel: 'Approve' }
+        : { title: 'Reject this link?', message: 'The account is removed from this record and the earlier details are restored. The person can try again or contact the office.', confirmLabel: 'Reject', danger: true }
+    );
+    if (!ok) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('review_record_link', { p_record_id: record.id, p_approve: approve });
+    setBusy(false);
+    if (error) return toast.error(`Couldn't save: ${error.message}`);
+    if (data === 'not_pending') toast.info('Someone already reviewed this graduate.');
+    else toast.success(approve ? 'Graduate verified' : 'Link rejected');
+    onDone();
+  };
+
+  const rows: [string, string | undefined, string | undefined][] = [
+    ['Birthday', held?.dateOfBirth, record.dateOfBirth],
+    ['Sex', held?.sex, record.sex],
+    ['Mobile no.', held?.mobileNo, record.mobileNo],
+    ['Present address', held?.presentAddress, record.presentAddress],
+    ['Email', held?.email, record.email],
+  ];
+
+  return (
+    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 space-y-4 text-amber-950">
+      <div>
+        <p className="font-bold">Waiting for verification</p>
+        <p className="text-sm mt-1">
+          This account matched the record by name only, because the record has no birthday or sex on file. The details saved
+          earlier stay hidden from the account until you approve. Compare them, and check the person&apos;s ID if needed.
+        </p>
+      </div>
+      {loadError ? (
+        <p className="text-sm text-red-700">Couldn't load the earlier details: {loadError}</p>
+      ) : !held ? (
+        <p className="text-sm">Loading earlier details…</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-amber-800">
+                <th className="py-1 pr-4 font-semibold"></th>
+                <th className="py-1 pr-4 font-semibold">On file</th>
+                <th className="py-1 font-semibold">Entered by the account</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, a, b]) => (
+                <tr key={label} className="border-t border-amber-200">
+                  <td className="py-1.5 pr-4 font-medium whitespace-nowrap">{label}</td>
+                  <td className="py-1.5 pr-4 break-words">{a || '—'}</td>
+                  <td className="py-1.5 break-words">{b || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => review(true)}
+          className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold disabled:opacity-60"
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => review(false)}
+          className="px-4 py-2 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 text-sm font-semibold disabled:opacity-60"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
   );
 }

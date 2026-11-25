@@ -507,4 +507,9 @@ export const FIL: Record<string, string> = {
   "Turn on": "I-on",
   "Off. When it is on, signing in needs your password and a code from your phone, so a stolen password alone is not enough.": "Naka-off. Kapag naka-on, kailangan ang password at code mula sa iyong telepono sa pag-sign in, kaya hindi sapat ang nanakaw na password lang.",
   "Extra protection: after your password, you also type a code from your phone.": "Dagdag na proteksyon: pagkatapos ng password, mag-type ka rin ng code mula sa iyong telepono.",
+  "Waiting for verification": "Hinihintay ang beripikasyon",
+  "Your account matched a graduate record by name only, so Alumni Affairs will check that it is yours. Until then, the details saved earlier stay hidden. Fill in your profile below; your answers are kept.":
+    "Pangalan lang ang tumugma sa rekord ng nagtapos, kaya susuriin ng Alumni Affairs kung ikaw nga ito. Habang hinihintay, nakatago ang mga naunang detalye. Punan ang iyong profile sa ibaba; mase-save ang iyong mga sagot.",
+  "Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.":
+    "Ang iyong programa at taon ay mula sa opisyal na listahan ng mga nagtapos. Kung mali, hilingin sa iyong program chair o sa Alumni Affairs Office na itama ito.",
 };

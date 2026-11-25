@@ -61,6 +61,11 @@ export interface AlumniRecord {
   respondedAt?: string;
   /** Read-only: the record is linked to an alumni account. Not saved in the record data. */
   accountLinked?: boolean;
+  /**
+   * 'pending' while Alumni Affairs or the program chair checks an account that matched this
+   * record by name only. The database keeps the earlier details hidden until then.
+   */
+  verification?: 'pending';
   suggestions?: string;
   isPublic?: boolean;
 

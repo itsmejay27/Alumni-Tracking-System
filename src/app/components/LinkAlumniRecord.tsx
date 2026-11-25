@@ -37,6 +37,9 @@ export function LinkAlumniRecord({
     if (data === 'ok' || data === 'already_linked') {
       toast.success('Your account is now linked to your graduate record');
       onLinked();
+    } else if (data === 'pending') {
+      toast.success('Account linked. Alumni Affairs will verify that this record is yours.');
+      onLinked();
     } else if (data === 'taken') {
       setError('This graduate record is already linked to another account. Contact your program chair or the Alumni Affairs Office.');
     } else {
