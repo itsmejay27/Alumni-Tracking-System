@@ -1322,4 +1322,7 @@ export const FIL: Record<string, string> = {
   "Cancel the invitation for {name}?": "Kanselahin ang imbitasyon para kay {name}?",
   "Remove {name}'s account?": "Tanggalin ang account ni {name}?",
   "(no name)": "(walang pangalan)",
+  "This link is a list of jobs. Open one job, then copy the link of that job and paste it here.": "Listahan po ng mga trabaho ang link na ito. Buksan ang isang trabaho, saka kopyahin at i-paste dito ang link ng trabahong iyon.",
+  "That job site doesn't let apps read its pages. Copy the job text and use Paste text, or upload a screenshot instead.": "Hindi po pinapayagan ng job site na ito na basahin ng app ang page nila. Kopyahin ang text ng trabaho at gamitin ang Paste text, o mag-upload ng screenshot.",
+  "The website refused the request (403). Paste the job text or upload a screenshot instead.": "Tinanggihan po ng website ang request (403). I-paste na lang ang text ng trabaho o mag-upload ng screenshot.",
 };

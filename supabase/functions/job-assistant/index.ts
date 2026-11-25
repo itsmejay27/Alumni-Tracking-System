@@ -105,8 +105,23 @@ function pageToText(html: string): string {
   return parts.join('\n\n');
 }
 
+/** Job sites' search-result pages list many jobs; the AI needs the link of one job. */
+function assertSingleJobLink(url: URL) {
+  const host = url.hostname.replace(/^www\./, '');
+  const path = url.pathname;
+  const listPage =
+    (/jobstreet\./.test(host) && !/^\/(?:[a-z-]+\/)?job\/\d+/.test(path) && !url.searchParams.get('jobId')) ||
+    (/indeed\./.test(host) && !/viewjob|\/rc\/clk|\/pagead/.test(path) && !url.searchParams.get('jk') && !url.searchParams.get('vjk')) ||
+    (/linkedin\.com$/.test(host) && /^\/jobs\/(search|collections)/.test(path) && !url.searchParams.get('currentJobId'));
+  if (listPage) throw new Error('This link is a list of jobs. Open one job, then copy the link of that job and paste it here.');
+}
+
+/** Error from readJobPage that the site itself blocked or could not be read; Google may still read it. */
+class PageBlocked extends Error {}
+
 async function readJobPage(rawUrl: string): Promise<string> {
   let url = await assertPublicUrl(rawUrl);
+  assertSingleJobLink(url);
   let res: Response | null = null;
   // Follow up to 3 redirects, checking each target
   for (let i = 0; i < 4; i++) {
@@ -124,12 +139,12 @@ async function readJobPage(rawUrl: string): Promise<string> {
     }
     break;
   }
-  if (!res || !res.ok) throw new Error(`The website refused the request (${res?.status ?? 'no response'}). Paste the job text or upload a screenshot instead.`);
+  if (!res || !res.ok) throw new PageBlocked(`The website refused the request (${res?.status ?? 'no response'}). Paste the job text or upload a screenshot instead.`);
   const type = res.headers.get('content-type') || '';
   if (!/html|text/.test(type)) throw new Error('That link is not a web page. Upload the file instead.');
   const text = pageToText(await res.text());
   if (text.length < 200) {
-    throw new Error("Couldn't read the job details from that page (it may need a login or load with JavaScript). Paste the job text or upload a screenshot instead.");
+    throw new PageBlocked("Couldn't read the job details from that page (it may need a login or load with JavaScript). Paste the job text or upload a screenshot instead.");
   }
   if (text.length > MAX_PAGE_CHARS) {
     throw new Error('That page is too long to read. Paste only the job description instead.');
@@ -295,9 +310,12 @@ function pickModels(list: string[] | null, configured: string[]) {
 async function callGeminiFull(
   system: string,
   parts: Part[],
-  opts: { schema?: unknown; search?: boolean; deadline?: number } = {}
+  opts: { schema?: unknown; search?: boolean; readUrl?: boolean; deadline?: number } = {}
 ): Promise<{ text: string; sources: Source[] }> {
-  const { schema, search } = opts;
+  const { search, readUrl } = opts;
+  // Google's page reader can't be combined with JSON mode: the JSON shape is asked for in the prompt instead
+  const schema = readUrl ? undefined : opts.schema;
+  const wantJson = opts.schema;
   const deadline = opts.deadline ?? Date.now() + TIME_BUDGET_MS;
   // Main key first, then backup keys GEMINI_API_KEY1 ... GEMINI_API_KEY9
   const keys = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -307,7 +325,7 @@ async function callGeminiFull(
   const preferred = Deno.env.get('GEMINI_MODEL');
   const models = preferred ? [preferred, ...FALLBACK_MODELS.filter((m) => m !== preferred)] : FALLBACK_MODELS;
   // Gemma only for plain text (no web search, no uploaded file)
-  const gemmaOk = !search && parts.every((p) => 'text' in p);
+  const gemmaOk = !search && !readUrl && parts.every((p) => 'text' in p);
 
   // For each key: the Gemini models, then Gemma. Busy models are not retried right away, because
   // Google can take half a minute to say a model is busy; the next model is tried instead.
@@ -319,8 +337,8 @@ async function callGeminiFull(
       ...(gemmaOk ? picked.gemma.map((model) => ({ key, model, gemma: true, label: `key${k || ''} ${model}` })) : []),
     ];
   });
-  const jsonHint = schema
-    ? `\n\nReply with ONLY one JSON object, with no markdown and no other text, shaped like this example (replace every value):\n${JSON.stringify(schemaTemplate(schema))}`
+  const jsonHint = wantJson
+    ? `\n\nReply with ONLY one JSON object, with no markdown and no other text, shaped like this example (replace every value):\n${JSON.stringify(schemaTemplate(wantJson))}`
     : '';
 
   let lastError = '';
@@ -339,12 +357,12 @@ async function callGeminiFull(
           generationConfig: { temperature: schema ? 0.3 : 0.6 },
         }
       : {
-          systemInstruction: { parts: [{ text: system }] },
+          systemInstruction: { parts: [{ text: readUrl ? system + jsonHint : system }] },
           contents: [{ role: 'user', parts }],
-          ...(search ? { tools: [{ google_search: {} }] } : {}),
+          ...(search ? { tools: [{ google_search: {} }] } : readUrl ? { tools: [{ url_context: {} }] } : {}),
           generationConfig: schema
             ? { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.3 }
-            : { temperature: search ? 0.2 : 0.6 },
+            : { temperature: search || readUrl ? 0.2 : 0.6 },
         };
     let res: Response;
     try {
@@ -392,8 +410,8 @@ async function callGeminiFull(
       console.error(`[gemini] ${label}: empty answer (${cand?.finishReason || 'no reason given'})`);
       continue; // next model
     }
-    if (gemma && schema) {
-      // Gemma has no JSON mode: keep only the JSON object from its answer
+    if ((gemma || readUrl) && wantJson) {
+      // No JSON mode here: keep only the JSON object from the answer
       const from = text.indexOf('{');
       const to = text.lastIndexOf('}');
       try {
@@ -404,6 +422,12 @@ async function callGeminiFull(
         console.error(`[gemini] ${label}: answer was not JSON`);
         continue;
       }
+    }
+    if (readUrl) {
+      const got = (cand?.urlContextMetadata?.urlMetadata || cand?.url_context_metadata?.url_metadata || []) as any[];
+      const ok = got.some((m) => /SUCCESS/.test(String(m?.urlRetrievalStatus || m?.url_retrieval_status || '')));
+      // Google says whether it could open the page; stop early when it could not
+      if (got.length && !ok) throw new Error('UNREADABLE_PAGE');
     }
     const sources: Source[] = (cand?.groundingMetadata?.groundingChunks || [])
       .map((c: any) => ({ title: String(c?.web?.title || ''), uri: String(c?.web?.uri || '') }))
@@ -548,10 +572,18 @@ Rules:
     // action: analyze
     const parts: Part[] = [];
     let source = '';
+    let viaGoogle = false;
     if (body.url) {
-      const page = await readJobPage(String(body.url));
-      parts.push({ text: `Job posting from ${body.url}:\n\n${page}` });
-      source = 'url';
+      try {
+        const page = await readJobPage(String(body.url));
+        parts.push({ text: `Job posting from ${body.url}:\n\n${page}` });
+      } catch (err) {
+        // The site blocks automated readers (e.g. JobStreet): let Google read the page instead
+        if (!(err instanceof PageBlocked)) throw err;
+        parts.push({ text: `Read the job posting at this link: ${new URL(String(body.url)).toString()}` });
+        viaGoogle = true;
+      }
+      source = viaGoogle ? 'url-google' : 'url';
     } else if (body.file?.data && body.file?.mimeType) {
       const mime = String(body.file.mimeType);
       if (!/^image\/(png|jpe?g|webp|heic|heif)$|^application\/pdf$/.test(mime)) {
@@ -577,7 +609,17 @@ Rules:
 - Skills check: compare the requirements with the applicant profile. If the profile is empty, use verdict "Not enough information" and give general advice.
 - Warnings: flag scam signs (fees to apply, requests for IDs or bank details early, unrealistic pay, vague employer, chat-app-only contact). Use an empty list if none.
 - If the input is not a job posting, set isJobPosting to false and explain briefly in the summary.`;
-    const raw = await callGemini(system, parts, deadline, ANALYSIS_SCHEMA);
+    let raw: string;
+    try {
+      raw = viaGoogle
+        ? (await callGeminiFull(system, parts, { schema: ANALYSIS_SCHEMA, readUrl: true, deadline })).text
+        : await callGemini(system, parts, deadline, ANALYSIS_SCHEMA);
+    } catch (err) {
+      if (viaGoogle && err instanceof Error && /UNREADABLE_PAGE|could not answer/.test(err.message)) {
+        throw new Error("That job site doesn't let apps read its pages. Copy the job text and use Paste text, or upload a screenshot instead.");
+      }
+      throw err;
+    }
     let analysis: unknown;
     try {
       // Every field the page shows is filled in, even if the AI left one out
