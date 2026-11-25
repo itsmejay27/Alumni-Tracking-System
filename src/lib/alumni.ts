@@ -38,6 +38,8 @@ export interface AlumniRecord {
   yearGraduated: number;
   sex: 'Female' | 'Male' | '';
   dateOfBirth: string;
+  /** Birthday text from the graduate list that could not be read as a date (kept for staff). */
+  dateOfBirthImported?: string;
   civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
   mobileNo: string;
   facebookName: string;

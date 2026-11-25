@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { friendlyError } from '@/lib/errors';
 import { plural } from '@/lib/text';
 import { tr } from '@/lib/preferences';
 import { Upload, X, FileSpreadsheet, Download, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import { AlumniRecord, Course } from '@/lib/alumni';
+import { AlumniRecord, Course, patchRecord } from '@/lib/alumni';
 import { PROGRAMS } from '@/lib/programs';
 import { Cell, ParsedRow, parseTracerTable, yearFromFileName } from '@/lib/importParser';
 
@@ -62,6 +62,85 @@ const TEMPLATE_HEADERS = [
 const THIS_YEAR = new Date().getFullYear();
 const key = (r: { lastName: string; givenName: string; course: string | null; yearGraduated: number }) =>
   `${r.lastName}|${r.givenName}|${r.course}|${r.yearGraduated}`.toUpperCase();
+/** Letters only, so "Avrielle Joy" and "AVRIELLE-JOY" compare the same (like sign-up does). */
+const nk = (s: string | undefined) => (s || '').toUpperCase().replace(/[^A-ZÑ]/g, '');
+/** Ways a graduate can be matched: first name alone, or first + middle name (two-word first names). */
+const nameKeys = (r: { lastName?: string; givenName?: string; middleName?: string; course?: string | null; yearGraduated?: number }) => {
+  const tail = `|${nk(r.lastName)}|${r.course}|${r.yearGraduated}`;
+  return [...new Set([nk(r.givenName) + tail, nk((r.givenName || '') + (r.middleName || '')) + tail])];
+};
+
+// Details compared when a graduate in the file is already in the system
+const COMPARE: { field: keyof ParsedRow & string; label: string }[] = [
+  { field: 'middleName', label: 'Middle name' },
+  { field: 'sex', label: 'Sex' },
+  { field: 'dateOfBirth', label: 'Birthday' },
+  { field: 'civilStatus', label: 'Civil status' },
+  { field: 'mobileNo', label: 'Mobile number' },
+  { field: 'email', label: 'Email' },
+  { field: 'presentAddress', label: 'Present address' },
+  { field: 'permanentAddress', label: 'Permanent address' },
+  { field: 'facebookName', label: 'Facebook' },
+  { field: 'twitter', label: 'Twitter' },
+  { field: 'campus', label: 'Campus' },
+  { field: 'fatherName', label: "Father's name" },
+  { field: 'fatherContact', label: "Father's contact" },
+  { field: 'motherName', label: "Mother's name" },
+  { field: 'motherContact', label: "Mother's contact" },
+];
+const same = (a: unknown, b: unknown) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase();
+
+interface RawRecord {
+  id: string;
+  user_id: string | null;
+  data: Record<string, any>;
+}
+interface FieldChange {
+  field: string;
+  label: string;
+  from: string;
+  to: string;
+}
+/** What the file would change on a graduate already in the system. */
+interface RecordUpdate {
+  id: string;
+  name: string;
+  /** The graduate has an account and keeps their own details: only empty details are filled */
+  ownRecord: boolean;
+  fills: FieldChange[];
+  changes: FieldChange[];
+  /** Employment from the file, added only when the system has none */
+  employment: ParsedRow | null;
+}
+
+/** The job from a file row, or null when the graduate isn't working. */
+function jobFrom(r: ParsedRow) {
+  const employed = r.status === 'Employed' || r.status === 'Self-Employed';
+  if (!employed) return null;
+  return {
+    id: crypto.randomUUID(),
+    position: r.position,
+    company: r.company,
+    // The sheet may not say; don't guess "Private"
+    employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Not specified',
+    employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
+    employerAddress: r.employerAddress || undefined,
+    employerContact: r.employerContact || undefined,
+    lengthOfService: r.lengthOfService || undefined,
+    jobDescription: r.jobDescription || undefined,
+    recordedAt: new Date().toISOString(),
+  };
+}
+const employmentFields = (job: ReturnType<typeof jobFrom>) => ({
+  currentPosition: job?.position,
+  currentCompany: job?.company,
+  employerType: job?.employerType,
+  employerAddress: job?.employerAddress,
+  employerContact: job?.employerContact,
+  lengthOfService: job?.lengthOfService,
+  jobDescription: job?.jobDescription,
+  employmentHistory: job ? [job] : [],
+});
 
 /** One uploaded file and the choices made for it. */
 interface FileEntry {
@@ -163,31 +242,94 @@ export function CsvImport({
     addFiles(list);
   };
 
-  // Apply each file's year/program, and leave out graduates already in the system or repeated
-  // in another file
-  const existingKeys = new Set(existing.map((r) => key(r)));
-  const existingEmails = new Set(existing.map((r) => (r.email || '').toLowerCase()).filter(Boolean));
+  // Apply each file's year/program. Graduates already in the system are compared with the file
+  // instead of being added again; graduates repeated in another file are left out.
+  const existingIdByKey = new Map<string, string>();
+  for (const r of existing) for (const k of nameKeys(r)) if (!existingIdByKey.has(k)) existingIdByKey.set(k, r.id);
+  const existingIdByEmail = new Map(existing.filter((r) => r.email).map((r) => [(r.email || '').toLowerCase(), r.id] as const));
   const seenKeys = new Set<string>();
   const seenEmails = new Set<string>();
+  const seenIds = new Set<string>();
   const perFile = files.map((f) => {
     const finalRows = f.rows.map((r) => ({
       ...r,
       course: (scope || r.course || f.program) as Course,
       yearGraduated: f.hasYearColumn ? r.yearGraduated : f.year,
     }));
-    const ready = finalRows.filter((r) => {
-      const k = key(r);
-      const dup = existingKeys.has(k) || seenKeys.has(k) || (!!r.email && (existingEmails.has(r.email) || seenEmails.has(r.email)));
-      seenKeys.add(k);
+    const ready: typeof finalRows = [];
+    const matched: { row: (typeof finalRows)[number]; id: string }[] = [];
+    let repeated = 0;
+    for (const r of finalRows) {
+      const keys = nameKeys(r);
+      const id = keys.map((k) => existingIdByKey.get(k)).find(Boolean) || (r.email ? existingIdByEmail.get(r.email) : undefined);
+      if (id) {
+        if (seenIds.has(id)) repeated++;
+        else {
+          seenIds.add(id);
+          matched.push({ row: r, id });
+        }
+      } else if (keys.some((k) => seenKeys.has(k)) || (!!r.email && seenEmails.has(r.email))) repeated++;
+      else ready.push(r);
+      keys.forEach((k) => seenKeys.add(k));
       if (r.email) seenEmails.add(r.email);
-      return !dup;
-    });
-    return { file: f, ready, duplicates: finalRows.length - ready.length };
+    }
+    return { file: f, ready, matched, repeated };
   });
+
+  // The stored details of matched graduates (the list on screen fills in display defaults)
+  const [rawById, setRawById] = useState<Record<string, RawRecord>>({});
+  const [loadingRaw, setLoadingRaw] = useState(false);
+  const matchedIds = perFile.flatMap((p) => p.matched.map((m) => m.id));
+  const missingIds = matchedIds.filter((id) => !rawById[id]).join(',');
+  useEffect(() => {
+    if (!missingIds) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingRaw(true);
+      const ids = missingIds.split(',');
+      const found: Record<string, RawRecord> = {};
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await supabase.from('alumni_records').select('id, user_id, data').in('id', ids.slice(i, i + 200));
+        (data || []).forEach((r: any) => (found[r.id] = r));
+      }
+      if (!cancelled) {
+        setRawById((cur) => ({ ...cur, ...found }));
+        setLoadingRaw(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [missingIds]);
+
+  const [replaceChanged, setReplaceChanged] = useState(false);
+  const updates: RecordUpdate[] = perFile.flatMap((p) =>
+    p.matched.flatMap(({ row, id }) => {
+      const raw = rawById[id];
+      if (!raw) return [];
+      const d = raw.data || {};
+      const fills: FieldChange[] = [];
+      const changes: FieldChange[] = [];
+      for (const { field, label } of COMPARE) {
+        const to = String((row as any)[field] ?? '').trim();
+        const from = String(d[field] ?? (field === 'email' ? '' : '')).trim();
+        if (!to || same(from, to)) continue;
+        (from ? changes : fills).push({ field, label, from, to });
+      }
+      const hasJob = (Array.isArray(d.employmentHistory) && d.employmentHistory.length > 0) || ['Employed', 'Self-Employed', 'Unemployed'].includes(d.status);
+      const employment = !hasJob && row.status !== 'Not Tracked' ? row : null;
+      if (!fills.length && !changes.length && !employment) return [];
+      const name = `${d.givenName || row.givenName} ${d.lastName || row.lastName}`.trim();
+      return [{ id, name, ownRecord: !!raw.user_id, fills, changes, employment }];
+    })
+  );
+  const updatesToApply = updates.filter((u) => u.fills.length || u.employment || (replaceChanged && !u.ownRecord && u.changes.length));
+  const withChanges = updates.filter((u) => u.changes.length);
+  const upToDate = matchedIds.filter((id) => rawById[id]).length - updates.length;
   const toImport = perFile.flatMap((p) => p.ready.map((r) => ({ ...r, fileName: p.file.name })));
   // Rows without a birthday or sex: sign-up matches them by name and fills the missing details in
   const missingSignUp = toImport.filter((r) => !r.dateOfBirth || !r.sex).length;
-  const duplicates = perFile.reduce((n, p) => n + p.duplicates, 0);
+  const repeated = perFile.reduce((n, p) => n + p.repeated, 0);
   const counts = {
     employed: toImport.filter((r) => r.status === 'Employed' || r.status === 'Self-Employed').length,
     unemployed: toImport.filter((r) => r.status === 'Unemployed').length,
@@ -198,22 +340,7 @@ export function CsvImport({
     setImporting(true);
     const now = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     const payload = toImport.map((r) => {
-      const employed = r.status === 'Employed' || r.status === 'Self-Employed';
-      const job = employed
-        ? {
-            id: crypto.randomUUID(),
-            position: r.position,
-            company: r.company,
-            // The sheet may not say; don't guess "Private"
-            employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Not specified',
-            employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
-            employerAddress: r.employerAddress || undefined,
-            employerContact: r.employerContact || undefined,
-            lengthOfService: r.lengthOfService || undefined,
-            jobDescription: r.jobDescription || undefined,
-            recordedAt: new Date().toISOString(),
-          }
-        : null;
+      const job = jobFrom(r);
       return {
         email: r.email,
         course: r.course,
@@ -238,14 +365,7 @@ export function CsvImport({
           motherContact: r.motherContact,
           facebookName: r.facebookName,
           status: r.status,
-          currentPosition: job?.position,
-          currentCompany: job?.company,
-          employerType: job?.employerType,
-          employerAddress: job?.employerAddress,
-          employerContact: job?.employerContact,
-          lengthOfService: job?.lengthOfService,
-          jobDescription: job?.jobDescription,
-          employmentHistory: job ? [job] : [],
+          ...employmentFields(job),
           isIP: r.isIP,
           suggestions: r.suggestions,
           lastUpdated: now,
@@ -266,10 +386,36 @@ export function CsvImport({
       }
       done += chunk.length;
     }
+
+    // Graduates already in the system: fill empty details (and replace changed ones if chosen)
+    let updated = 0;
+    const failed: string[] = [];
+    const todo = updatesToApply;
+    for (let i = 0; i < todo.length; i += 5) {
+      await Promise.all(
+        todo.slice(i, i + 5).map(async (u) => {
+          const items = [...u.fills, ...(replaceChanged && !u.ownRecord ? u.changes : [])];
+          const patch: Record<string, unknown> = {};
+          for (const c of items) patch[c.field] = c.to;
+          // A real birthday replaces the unreadable one kept from an earlier list
+          if (patch.dateOfBirth) patch.dateOfBirthImported = undefined;
+          if (u.employment) {
+            const job = jobFrom(u.employment);
+            Object.assign(patch, { status: u.employment.status, ...employmentFields(job) });
+          }
+          patch.lastUpdated = now;
+          const res = await patchRecord(u.id, patch as any, 'email' in patch ? { email: (patch.email as string) || null } : {});
+          if (res.ok) updated++;
+          else failed.push(u.name);
+        })
+      );
+    }
     setImporting(false);
-    toast.success(tr(plural(done, 'Imported {n} graduate.', 'Imported {n} graduates.'), { n: done }));
+    if (done) toast.success(tr(plural(done, 'Imported {n} graduate.', 'Imported {n} graduates.'), { n: done }));
+    if (updated) toast.success(tr(plural(updated, 'Updated {n} graduate already in the system.', 'Updated {n} graduates already in the system.'), { n: updated }));
+    if (failed.length) toast.error(tr('Could not update: {names}', { names: failed.slice(0, 5).join(', ') + (failed.length > 5 ? ' …' : '') }));
     onDone();
-    onClose();
+    if (!failed.length) onClose();
   };
 
   const downloadTemplate = () => {
@@ -329,7 +475,7 @@ export function CsvImport({
 
         {files.length > 0 && (
           <div className="space-y-3">
-            {perFile.map(({ file: f, ready, duplicates: dup }) => (
+            {perFile.map(({ file: f, ready, matched, repeated: rep }) => (
               <div key={f.id} className="rounded-xl border border-border p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   <FileSpreadsheet className={f.problem ? 'text-red-600 shrink-0' : 'text-primary shrink-0'} size={20} />
@@ -339,8 +485,10 @@ export function CsvImport({
                       <p className="text-xs text-red-700 mt-0.5">{f.problem}</p>
                     ) : (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {ready.length} to import{dup > 0 ? ` · ${dup} already in the system` : ''}
-                        {f.format === 'tracer-sheet' ? ' · official Graduate Tracer sheet' : ''}
+                        {tr(plural(ready.length, '{n} new graduate', '{n} new graduates'), { n: ready.length })}
+                        {matched.length > 0 && ` · ${tr(plural(matched.length, '{n} already in the system', '{n} already in the system'), { n: matched.length })}`}
+                        {rep > 0 && ` · ${tr(plural(rep, '{n} repeated', '{n} repeated'), { n: rep })}`}
+                        {f.format === 'tracer-sheet' ? ` · ${tr('official Graduate Tracer sheet')}` : ''}
                       </p>
                     )}
                   </div>
@@ -388,7 +536,7 @@ export function CsvImport({
             ))}
 
             {toImport.length > 0 && (
-              <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1">
+              <div className="rounded-xl bg-muted/50 p-4 text-sm space-y-1" data-testid="new-summary">
                 <p className="font-semibold">
                   {tr(plural(toImport.length, '{n} graduate ready to import', '{n} graduates ready to import'), { n: toImport.length })}{' '}
                   {tr(plural(perFile.filter((p) => p.ready.length).length, 'from {n} file', 'from {n} files'), { n: perFile.filter((p) => p.ready.length).length })}
@@ -396,13 +544,80 @@ export function CsvImport({
                 <p className="text-muted-foreground">
                   {counts.employed} employed · {counts.unemployed} unemployed · {counts.notTracked} not tracked (no status yet)
                 </p>
-                {duplicates > 0 && <p className="text-muted-foreground">{duplicates} already in the system or repeated in another file will be skipped.</p>}
+                {repeated > 0 && <p className="text-muted-foreground">{tr(plural(repeated, '{n} graduate repeated in another file is left out.', '{n} graduates repeated in another file are left out.'), { n: repeated })}</p>}
                 {missingSignUp > 0 && (
                   <p className="text-muted-foreground">
-                    {missingSignUp} have no birthday or sex in the file. They can still create an account with their first and last name, and the birthday and sex they enter are then saved to their record.
+                    {tr(plural(missingSignUp, '{n} has no birthday or sex in the file. They can still create an account with their first and last name; the program chair approves the link.', '{n} have no birthday or sex in the file. They can still create an account with their first and last name; the program chair approves the link.'), { n: missingSignUp })}
                   </p>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {matchedIds.length > 0 && (
+          <div className="rounded-xl border border-border p-4 text-sm space-y-3" data-testid="update-summary">
+            <p className="font-semibold">{tr('Graduates already in the system')}</p>
+            {loadingRaw ? (
+              <p className="text-muted-foreground inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" /> {tr('Comparing the file with the system...')}
+              </p>
+            ) : (
+              <>
+                <ul className="text-muted-foreground space-y-0.5">
+                  {updates.filter((u) => u.fills.length || u.employment).length > 0 && (
+                    <li>
+                      {tr(plural(updates.filter((u) => u.fills.length || u.employment).length, '{n} has details the system is missing (for example a birthday). These are filled in.', '{n} have details the system is missing (for example a birthday). These are filled in.'), {
+                        n: updates.filter((u) => u.fills.length || u.employment).length,
+                      })}
+                    </li>
+                  )}
+                  {withChanges.length > 0 && (
+                    <li>{tr(plural(withChanges.length, '{n} has details that are different from the system.', '{n} have details that are different from the system.'), { n: withChanges.length })}</li>
+                  )}
+                  {upToDate > 0 && <li>{tr(plural(upToDate, '{n} is already up to date.', '{n} are already up to date.'), { n: upToDate })}</li>}
+                </ul>
+                {withChanges.length > 0 && (
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={replaceChanged} onChange={(e) => setReplaceChanged(e.target.checked)} />
+                    <span>
+                      {tr('Also replace the different details with the ones in the file')}
+                      <span className="block text-xs text-muted-foreground">
+                        {tr("Graduates who updated their own profile keep their answers; only their empty details are filled in.")}
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {updates.length > 0 && (
+                  <details className="rounded-lg bg-muted/40 p-3">
+                    <summary className="cursor-pointer font-medium">{tr('See what will change')}</summary>
+                    <ul className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                      {updates.map((u) => (
+                        <li key={u.id}>
+                          <p className="font-semibold">
+                            {u.name}
+                            {u.ownRecord && <span className="ml-2 text-xs font-normal text-muted-foreground">({tr('updated by the graduate')})</span>}
+                          </p>
+                          <ul className="text-xs text-muted-foreground pl-3">
+                            {u.fills.map((c) => (
+                              <li key={c.field}>
+                                {tr(c.label)}: <span className="text-emerald-700">{c.to}</span> <span>({tr('was empty')})</span>
+                              </li>
+                            ))}
+                            {u.employment && <li>{tr('Employment')}: <span className="text-emerald-700">{tr(u.employment.status)}{u.employment.company ? ` · ${u.employment.company}` : ''}</span> <span>({tr('was empty')})</span></li>}
+                            {u.changes.map((c) => (
+                              <li key={c.field} className={replaceChanged && !u.ownRecord ? '' : 'opacity-60'}>
+                                {tr(c.label)}: {c.from} → <span className={replaceChanged && !u.ownRecord ? 'text-amber-700' : ''}>{c.to}</span>
+                                {(!replaceChanged || u.ownRecord) && <span> ({tr('kept as is')})</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
             )}
           </div>
         )}
@@ -415,10 +630,16 @@ export function CsvImport({
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted">{tr("Cancel")}</button>
           <button
             onClick={runImport}
-            disabled={!toImport.length || importing}
+            disabled={(!toImport.length && !updatesToApply.length) || importing || loadingRaw}
             className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-50"
           >
-            {importing ? 'Importing...' : `Import ${toImport.length || ''} graduates`}
+            {importing
+              ? tr('Importing...')
+              : toImport.length && updatesToApply.length
+                ? tr('Add {a} and update {b}', { a: toImport.length, b: updatesToApply.length })
+                : updatesToApply.length
+                  ? tr(plural(updatesToApply.length, 'Update {n} graduate', 'Update {n} graduates'), { n: updatesToApply.length })
+                  : tr(plural(toImport.length, 'Import {n} graduate', 'Import {n} graduates'), { n: toImport.length })}
           </button>
         </div>
       </div>
