@@ -1,0 +1,312 @@
+import { useCallback, useEffect, useState } from 'react';
+import { supabase } from './supabase';
+
+export type Course = 'BSIT' | 'BEED' | 'BSBA-FM' | 'BSBA-OM' | 'BSOA';
+
+/** One job in an alumnus's employment history. New updates are added, never overwritten. */
+export interface EmploymentEntry {
+  id: string;
+  position: string;
+  company: string;
+  employerType: string;
+  employmentStatus: string; // Permanent, Probationary, Contractual, Job Order, Self-Employed
+  jobLevel?: string; // no longer collected; kept so older records still load
+  employerAddress?: string;
+  employerContact?: string;
+  jobDescription?: string;
+  lengthOfService?: string; // as written, e.g. "1 year 3 months"
+  /** Proof of employment in the private 'employment-proofs' storage (contract, company ID, permit) */
+  proofPath?: string;
+  proofName?: string;
+  /** Industry of the employer, one of INDUSTRIES */
+  industry?: string;
+  /** Answer to "Is this job related to your course?" */
+  relatedToCourse?: 'Yes' | 'No';
+  startDate?: string; // YYYY-MM
+  endDate?: string | null; // YYYY-MM, empty = current job
+  recordedAt: string; // ISO date the entry was added
+}
+
+export interface AlumniRecord {
+  id: string;
+  lastName: string;
+  givenName: string;
+  middleName: string;
+  name: string;
+  email: string;
+  batch: string;
+  yearGraduated: number;
+  sex: 'Female' | 'Male' | '';
+  dateOfBirth: string;
+  /** Birthday text from the graduate list that could not be read as a date (kept for staff). */
+  dateOfBirthImported?: string;
+  civilStatus: '' | 'Single' | 'Married' | 'Separated' | 'Widowed';
+  mobileNo: string;
+  facebookName: string;
+  twitter?: string;
+  otherSocialNetwork?: string;
+  otherSocialId?: string;
+  campus?: string;
+  employerContact?: string;
+  presentAddress: string;
+  permanentAddress: string;
+  course: Course;
+
+  status: 'Employed' | 'Self-Employed' | 'Unemployed' | 'Not Tracked';
+  employmentStatus?: 'PERMANENT' | 'CONTRACTUAL' | 'DAILY WAGE';
+  currentPosition?: string;
+  currentCompany?: string;
+  employerType?: 'Private' | 'Semi-Private' | 'Government' | 'NGO/INGO';
+  employerAddress?: string;
+  jobDescription?: string;
+  lengthOfService?: string;
+  employmentStartDate?: string;
+
+  lastUpdated: string;
+  /** When the graduate last saved their own record in the system (ISO). Set only by the alumnus. */
+  respondedAt?: string;
+  /** Read-only: the record is linked to an alumni account. Not saved in the record data. */
+  accountLinked?: boolean;
+  /**
+   * 'pending' while Alumni Affairs or the program chair checks an account that matched this
+   * record by name only. The database keeps the earlier details hidden until then.
+   */
+  verification?: 'pending';
+  /** Removed by staff (wrong entry). Hidden from lists and reports; staff can restore it. */
+  archived?: boolean;
+  suggestions?: string;
+  /** Other degrees or further studies (e.g. a master's), besides the OMSU program on file. */
+  otherDegrees?: { degree: string; school: string; year?: string; status: 'Graduated' | 'Ongoing' }[];
+  /** BSIT PEO survey answers (see lib/survey.ts) */
+  peoSurvey?: import('./survey').PeoSurvey;
+  /** Every piece of feedback the graduate has sent, oldest first (new feedback never replaces old). */
+  feedbackHistory?: { text: string; at: string }[];
+  isPublic?: boolean;
+
+  jobLevel?: string;
+  isIP?: boolean; // member of an Indigenous Peoples group
+  ipGroup?: string;
+  employmentHistory?: EmploymentEntry[];
+
+  fatherName?: string;
+  fatherContact?: string;
+  motherName?: string;
+  motherContact?: string;
+}
+
+/** Age in years from a YYYY-MM-DD birth date, or null if unknown. */
+export function ageFrom(dateOfBirth: string | undefined): number | null {
+  if (!dateOfBirth) return null;
+  const d = new Date(dateOfBirth);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 120 ? age : null;
+}
+
+const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACTUAL: 'Contractual', 'DAILY WAGE': 'Job Order' };
+
+/** The alumnus's current job, from the newest history entry or the older single-job fields. */
+export function currentJob(r: AlumniRecord): EmploymentEntry | null {
+  const current = (r.employmentHistory || []).filter((e) => !e.endDate);
+  // Two or more current jobs: reports count the permanent one (panel), else the newest
+  const permanent = current.filter((e) => e.employmentStatus === 'Permanent');
+  if (permanent.length) return permanent[permanent.length - 1];
+  if (current.length) return current[current.length - 1];
+  if (isEmployed(r) && (r.currentPosition || r.currentCompany)) {
+    return {
+      id: 'legacy',
+      position: r.currentPosition || '',
+      company: r.currentCompany || '',
+      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Not specified',
+      employmentStatus: r.status === 'Self-Employed' ? 'Self-Employed' : LEGACY_STATUS[r.employmentStatus || ''] || r.employmentStatus || '',
+      jobLevel: r.jobLevel || (r.employmentStatus === 'DAILY WAGE' ? 'Job Order' : 'Rank and File'),
+      employerAddress: r.employerAddress,
+      jobDescription: r.jobDescription,
+      recordedAt: '',
+    };
+  }
+  return null;
+}
+
+export const isEmployed = (r: AlumniRecord) => r.status === 'Employed' || r.status === 'Self-Employed';
+/** Graduates whose employment status is known (they answered the tracer). */
+export const isTracked = (r: AlumniRecord) => r.status !== 'Not Tracked';
+
+interface AlumniRow {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  course: Course;
+  batch: string;
+  data: Partial<AlumniRecord>;
+}
+
+export function rowToRecord(row: AlumniRow): AlumniRecord {
+  const d = row.data || {};
+  const givenName = d.givenName || '';
+  const lastName = d.lastName || '';
+  return {
+    middleName: '',
+    sex: '', // unknown stays unknown (913 imported records have no sex on file)
+    dateOfBirth: '',
+    civilStatus: '', // unknown stays unknown (the import used to fill in "Single")
+    mobileNo: '',
+    facebookName: '',
+    presentAddress: '',
+    permanentAddress: '',
+    status: 'Unemployed',
+    lastUpdated: '',
+    yearGraduated: Number((row.batch || '').split('-')[1]) || 0,
+    ...d,
+    givenName,
+    lastName,
+    name: `${givenName} ${lastName}`.trim(),
+    id: row.id,
+    email: row.email || d.email || '',
+    course: row.course,
+    batch: row.batch,
+    accountLinked: !!row.user_id,
+  } as AlumniRecord;
+}
+
+/** Loads every tracer record the signed-in user is allowed to see (row level security does the scoping). */
+export function useAlumniRecords(options: { includeRemoved?: boolean } = {}) {
+  const [records, setRecords] = useState<AlumniRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    // The database sends at most 1000 rows per request, so load the records page by page
+    const PAGE = 1000;
+    const all: AlumniRow[] = [];
+    let failed: string | null = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('alumni_records')
+        .select('id, user_id, email, course, batch, data')
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        failed = error.message;
+        break;
+      }
+      all.push(...((data as AlumniRow[]) || []));
+      if (!data || data.length < PAGE) break;
+    }
+    if (failed) {
+      setError(failed);
+    } else {
+      setError(null);
+      const recs = all.map(rowToRecord);
+      setRecords(options.includeRemoved ? recs : recs.filter((r) => !r.archived));
+    }
+    setLoading(false);
+  }, [options.includeRemoved]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  return { records, loading, error, reload };
+}
+
+/** The signed-in alumnus's own tracer record, if one exists. */
+export async function fetchMyRecord(userId: string): Promise<AlumniRecord | null> {
+  const { data, error } = await supabase
+    .from('alumni_records')
+    .select('id, user_id, email, course, batch, data')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToRecord(data as AlumniRow) : null;
+}
+
+export async function saveMyRecord(userId: string, record: Omit<AlumniRecord, 'id' | 'name'> & { id?: string }) {
+  const { id, accountLinked: _linked, ...data } = record;
+  const payload = {
+    user_id: userId,
+    email: record.email.toLowerCase(),
+    course: record.course,
+    batch: record.batch,
+    data,
+    updated_at: new Date().toISOString(),
+  };
+  if (id) {
+    const { error } = await supabase.from('alumni_records').update(payload).eq('id', id);
+    if (error) throw error;
+    return id;
+  }
+  const { data: inserted, error } = await supabase.from('alumni_records').insert(payload).select('id').single();
+  if (error) throw error;
+  return inserted.id as string;
+}
+
+export function courseScopeForRole(role: string): Course | null {
+  switch (role) {
+    case 'admin.beed': return 'BEED';
+    case 'admin.bsit': return 'BSIT';
+    case 'admin.bsba-fm': return 'BSBA-FM';
+    case 'admin.bsba-om': return 'BSBA-OM';
+    case 'admin.bsoa': return 'BSOA';
+    default: return null;
+  }
+}
+
+/**
+ * What a graduate still has to fill in before using the rest of the system (empty = complete).
+ * Mirrors the required fields of My Alumni Profile.
+ */
+export function missingProfileFields(r: AlumniRecord | null): string[] {
+  if (!r) return ['Your alumni profile'];
+  const missing: string[] = [];
+  const blank = (v?: string | null) => !v || !String(v).trim();
+  if (blank(r.givenName) || blank(r.lastName)) missing.push('First and last name');
+  if (!/^09\d{9}$/.test(r.mobileNo || '')) missing.push('Mobile number');
+  if (r.sex !== 'Male' && r.sex !== 'Female') missing.push('Sex');
+  const age = ageFrom(r.dateOfBirth);
+  if (age == null || age < 15) missing.push('Date of birth');
+  if (blank(r.civilStatus)) missing.push('Civil status');
+  if (blank(r.presentAddress)) missing.push('Present address');
+  if (blank(r.permanentAddress)) missing.push('Permanent address');
+  if (blank(r.fatherName) || !/^09\d{9}$/.test(r.fatherContact || '')) missing.push("Father's name and contact number");
+  if (blank(r.motherName) || !/^09\d{9}$/.test(r.motherContact || '')) missing.push("Mother's name and contact number");
+  if (!r.yearGraduated) missing.push('Year graduated');
+  if (!r.status || r.status === 'Not Tracked') missing.push('Employment status');
+  else if (r.status !== 'Unemployed') {
+    const hasJob = (r.employmentHistory || []).some((h) => !h.endDate) || !blank(r.currentPosition);
+    if (!hasJob) missing.push('Current job');
+    else if ((r.employmentHistory || []).some((h) => !h.endDate && !h.proofPath)) missing.push('Proof of employment');
+  }
+  return missing;
+}
+
+/**
+ * Staff change only the given fields of a record's data (and optionally its program/batch/email).
+ * Reads the stored data first so display defaults are never written back. A field set to
+ * undefined is removed. Resolves false when the database refused the change.
+ */
+export async function patchRecord(
+  id: string,
+  patch: Partial<Record<keyof AlumniRecord, unknown>>,
+  columns: { course?: Course; batch?: string; email?: string | null } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: row, error: readError } = await supabase.from('alumni_records').select('data').eq('id', id).maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!row) return { ok: false, error: "You can't change this record." };
+  const data: Record<string, unknown> = { ...(row.data as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete data[k];
+    else data[k] = v;
+  }
+  const { data: saved, error } = await supabase
+    .from('alumni_records')
+    .update({ ...columns, data, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  if (!saved?.length) return { ok: false, error: "You can't change this record." };
+  return { ok: true };
+}
