@@ -116,7 +116,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       return;
     }
 
-    if (data.emailSent) toast.success(`Invitation sent to ${email}`);
+    if (data.emailSent) toast.success(tr('Invitation sent to {email}.', { email }));
     // Only when the email could not be sent do we show the password, so it can be shared another way
     else setResult({ email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
     setGivenName('');
@@ -140,7 +140,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       toast.error(friendlyError(error, 'Could not change the role.'));
       return;
     }
-    toast.success(`${acc.email} is now ${roleLabel(newRole)}. They need to sign in again to see the change.`);
+    toast.success(tr('{email} is now {role}. They need to sign in again to see the change.', { email: acc.email, role: tr(roleLabel(newRole)) }));
     load();
   };
 
@@ -159,8 +159,8 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     if (data.emailSent)
       toast.success(
         data.samePassword
-          ? `Invitation sent again to ${acc.email} with the same temporary password (it stays the same until ${until}).`
-          : `Invitation sent to ${acc.email} with a new temporary password${until ? ` (resending before ${until} keeps the same one)` : ''}.`
+          ? tr('Invitation sent again to {email} with the same temporary password (it stays the same until {until}).', { email: acc.email, until })
+          : until ? tr('Invitation sent to {email} with a new temporary password (resending before {until} keeps the same one).', { email: acc.email, until }) : tr('Invitation sent to {email} with a new temporary password.', { email: acc.email })
       );
     else setResult({ email: acc.email, tempPassword: data.tempPassword, emailSent: false, emailError: data.emailError });
   };
@@ -173,12 +173,12 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     const ok = await confirmDialog(
       deactivate
         ? {
-            title: `Deactivate ${name}'s account?`,
+            title: tr("Deactivate {name}'s account?", { name }),
             message: tr("They won't be able to sign in until you activate the account again. Their data is kept."),
             confirmLabel: tr('Deactivate'),
             danger: true,
           }
-        : { title: `Activate ${name}'s account?`, message: tr('They will be able to sign in again.'), confirmLabel: tr('Activate') }
+        : { title: tr("Activate {name}'s account?", { name }), message: tr('They will be able to sign in again.'), confirmLabel: tr('Activate') }
     );
     if (!ok) return;
     setToggling(acc.id);
@@ -191,7 +191,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
       return;
     }
     setAccounts((list) => list.map((x) => (x.id === acc.id ? { ...x, deactivated_at: deactivate ? new Date().toISOString() : null } : x)));
-    toast.success(deactivate ? `${name}'s account is deactivated` : `${name}'s account is active again`);
+    toast.success(deactivate ? tr("{name}'s account is deactivated.", { name }) : tr("{name}'s account is active again.", { name }));
   };
 
   const handleRemove = async (acc: Account) => {
@@ -200,14 +200,14 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
     const ok = await confirmDialog(
       pending
         ? {
-            title: `Cancel the invitation for ${name}?`,
+            title: tr('Cancel the invitation for {name}?', { name }),
             message: tr('Their account will be deleted and the temporary password will stop working.'),
             confirmLabel: tr('Cancel invitation'),
             cancelLabel: tr('Keep'),
             danger: true,
           }
         : {
-            title: `Remove ${name}'s account?`,
+            title: tr("Remove {name}'s account?", { name }),
             message: tr('They will no longer be able to sign in. Their tracer record, if any, is kept.'),
             confirmLabel: tr('Remove account'),
             danger: true,
@@ -431,7 +431,7 @@ export function AccountsManager({ currentUserId, mode = 'affairs' }: { currentUs
             <div key={a.id} className="p-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold truncate">
-                  {`${a.given_name} ${a.last_name}`.trim() || '(no name)'}
+                  {`${a.given_name} ${a.last_name}`.trim() || tr('(no name)')}
                   {a.id === currentUserId && <span className="ml-2 text-xs text-muted-foreground">{tr("(you)")}</span>}
                 </p>
                 <p className="text-sm text-muted-foreground truncate">{a.email}</p>
