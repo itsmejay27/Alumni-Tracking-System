@@ -720,9 +720,12 @@ function RecordDetailModal({
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">{tr("Date of Birth")}</p>
                 <p className="font-bold text-foreground mt-0.5">
-                  {record.dateOfBirth}
-                  {ageFrom(record.dateOfBirth) != null && <span className="font-medium text-muted-foreground"> · {ageFrom(record.dateOfBirth)} yrs old</span>}
+                  {record.dateOfBirth || tr('Not given')}
+                  {ageFrom(record.dateOfBirth) != null && <span className="font-medium text-muted-foreground"> · {tr('{n} yrs old', { n: ageFrom(record.dateOfBirth) as number })}</span>}
                 </p>
+                {!record.dateOfBirth && record.dateOfBirthImported && (
+                  <p className="text-xs text-amber-700 mt-1">{tr('The graduate list had "{value}", which could not be read. Use Edit record to enter the correct birthday.', { value: record.dateOfBirthImported })}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold">{tr("Sex")}</p>

@@ -98,6 +98,54 @@ const text = (v: Cell) => {
   return String(v).replace(/\s+/g, ' ').trim();
 };
 
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const editDistance = (a: string, b: string) => {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+};
+/** Month number (1-12) from a month name, allowing common typos ("Aoril", "Febuary", "Augsut"). */
+const monthOf = (word: string) => {
+  const w = word.toLowerCase().replace(/[^a-z]/g, '');
+  if (w.length < 3) return 0;
+  const exact = MONTHS.findIndex((m) => m.startsWith(w) || w.startsWith(m));
+  if (exact >= 0) return exact + 1;
+  let best = 0;
+  let bestDist = 3;
+  MONTHS.forEach((m, i) => {
+    const dist = editDistance(w, m);
+    if (dist < bestDist) [best, bestDist] = [i + 1, dist];
+  });
+  return best;
+};
+/**
+ * A birthday as YYYY-MM-DD, or '' when it can't be read. Sheets type birthdays in many ways:
+ * real dates, "04/20/2004", "April 20,2004", "Aoril 20 2004", Excel day numbers. Placeholders
+ * such as 01/01/1900 are treated as unknown.
+ */
+export function toBirthDate(raw: string): string {
+  const s = raw.trim();
+  if (!s) return '';
+  let y = 0;
+  let m = 0;
+  let d = 0;
+  let hit: RegExpMatchArray | null;
+  if ((hit = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) [y, m, d] = [+hit[1], +hit[2], +hit[3]];
+  else if ((hit = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/))) [m, d, y] = [+hit[1], +hit[2], +hit[3]];
+  else if ((hit = s.match(/^([A-Za-z]+)\.?\s*(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{2,4})$/))) [m, d, y] = [monthOf(hit[1]), +hit[2], +hit[3]];
+  else if ((hit = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?\s*,?\s*(\d{4})$/))) [d, m, y] = [+hit[1], monthOf(hit[2]), +hit[3]];
+  else if (/^\d{5}$/.test(s)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Number(s) * 86400000);
+    [y, m, d] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
+  }
+  if (y > 0 && y < 100) y += y > new Date().getFullYear() % 100 ? 1900 : 2000;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const ok = m >= 1 && m <= 12 && d >= 1 && date.getUTCMonth() === m - 1 && y >= 1940 && y <= new Date().getFullYear() - 14;
+  return ok ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : '';
+}
+
 export function detectProgram(v: string): Course | null {
   const s = v.toUpperCase();
   if (s.includes('INFORMATION TECH') || /\bBSIT\b/.test(s)) return 'BSIT';
@@ -247,7 +295,7 @@ export function parseTracerTable(table: Cell[][], opts: { defaultYear: number; f
       lastName: lastName.toUpperCase(),
       yearGraduated: toYear(get(r, 'yearGraduated')) || opts.defaultYear,
       sex: /^f/i.test(sexText) ? 'Female' : /^m/i.test(sexText) ? 'Male' : currentSex,
-      dateOfBirth: get(r, 'dateOfBirth').slice(0, 10),
+      dateOfBirth: toBirthDate(get(r, 'dateOfBirth')),
       civilStatus: get(r, 'civilStatus'),
       mobileNo: toPhone(get(r, 'mobileNo')),
       presentAddress: get(r, 'presentAddress'),
