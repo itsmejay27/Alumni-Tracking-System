@@ -589,4 +589,12 @@ export const FIL: Record<string, string> = {
   "Notifications in the system turned on": "Naka-on ang mga abiso sa system",
   "Notifications in the system turned off": "Naka-off ang mga abiso sa system",
   Announcement: "Anunsyo",
+  "The job": "Ang trabaho",
+  "Who it is for": "Para kanino",
+  Details: "Mga detalye",
+  "Share it": "Ibahagi",
+  Preview: "Silip",
+  "Job title": "Pangalan ng trabaho",
+  more: "pa",
+  "This is how alumni will see your post on the Job Board.": "Ganito makikita ng alumni ang iyong post sa Job Board.",
 };
