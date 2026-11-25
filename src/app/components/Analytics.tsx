@@ -9,6 +9,7 @@ import { mdy } from '@/lib/dates';
 import { AlumniRecord, Course, courseScopeForRole, currentJob, isEmployed, isTracked, useAlumniRecords } from '@/lib/alumni';
 import { PROGRAMS } from '@/lib/programs';
 import { LoadingState, ErrorState } from './DataState';
+import { SurveyResults } from './SurveyResults';
 
 interface AnalyticsProps {
   userRole: string;
@@ -147,6 +148,8 @@ export function Analytics({ userRole }: AnalyticsProps) {
       <ResponsesPanel records={filtered} />
 
       <Breakdown records={filtered} subtitle={`${scopeText} · ${year === 'all' ? 'all batches' : `class of ${year}`}`} />
+
+      <SurveyResults records={filtered} />
 
       {/* Line chart */}
       <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">

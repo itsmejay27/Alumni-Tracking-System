@@ -73,6 +73,8 @@ export interface AlumniRecord {
   suggestions?: string;
   /** Other degrees or further studies (e.g. a master's), besides the OMSU program on file. */
   otherDegrees?: { degree: string; school: string; year?: string; status: 'Graduated' | 'Ongoing' }[];
+  /** BSIT PEO survey answers (see lib/survey.ts) */
+  peoSurvey?: import('./survey').PeoSurvey;
   /** Every piece of feedback the graduate has sent, oldest first (new feedback never replaces old). */
   feedbackHistory?: { text: string; at: string }[];
   isPublic?: boolean;

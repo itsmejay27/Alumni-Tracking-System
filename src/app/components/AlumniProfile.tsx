@@ -3,6 +3,8 @@ import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
 import { mdy, todayIso, serviceLength, formatMonths } from '@/lib/dates';
 import { capitalizeWords } from '@/lib/text';
+import { SurveyAnswers, surveyApplies, unansweredQuestions } from '@/lib/survey';
+import { PeoSurveyForm } from './PeoSurvey';
 import {
   Save,
   Trash2,
@@ -98,6 +100,8 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const [page, setPage] = useState(0);
 
   const [suggestions, setSuggestions] = useState('');
+  // BSIT alumni answer the PEO survey before giving suggestions (panel: Ma'am Faye)
+  const [survey, setSurvey] = useState<SurveyAnswers>({});
   const [isPublic, setIsPublic] = useState(true);
 
   useEffect(() => {
@@ -140,6 +144,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         setHistory(h);
         setSavedIds(new Set(h.map((e) => e.id)));
         setSuggestions(rec.suggestions || '');
+        setSurvey(rec.peoSurvey?.answers || {});
         setIsPublic(rec.isPublic ?? true);
       })
       .catch((err) => toast.error(`Could not load your record: ${err.message}`))
@@ -242,7 +247,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       jobDescription: employed ? latest!.jobDescription : undefined,
     };
   };
-  const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic });
+  const needsSurvey = surveyApplies(course);
+  const surveyDone = needsSurvey && unansweredQuestions(survey).length === 0;
+  const feedbackSlice = () => ({ suggestions: suggestions.trim(), isPublic, ...(needsSurvey ? { peoSurvey: { answers: survey } } : {}) });
 
   // Which sections have changes that are not saved yet (compared with what was loaded or last saved)
   const snapshot = (section: SectionId) =>
@@ -277,6 +284,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
       if (age == null || age < 15) return 'Please enter your correct date of birth';
       if (!presentAddress.trim() || !permanentAddress.trim()) return 'Enter your present and permanent address';
     }
+    if (section === 'feedback' && needsSurvey && suggestions.trim() && !surveyDone && suggestions.trim() !== (record?.suggestions || '').trim()) {
+      return 'Answer all the survey questions first, then write your suggestions';
+    }
     if (section === 'employment') {
       if (status !== 'Unemployed' && !history.some((h) => !h.endDate)) return 'Add your current job, or choose Unemployed';
       if (history.some((h) => !h.position.trim() || !h.company.trim())) return 'Each job needs a position and a company';
@@ -291,7 +301,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
   const draftState = {
     givenName, middleName, lastName, sex, dateOfBirth, civilStatus, mobileNo, facebookName, twitter,
     otherSocialNetwork, otherSocialId, presentAddress, permanentAddress, fatherName, fatherContact,
-    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic, otherDegrees,
+    motherName, motherContact, course, campus, yearGraduated, status, history, suggestions, isPublic, otherDegrees, survey,
   };
   const [draftReady, setDraftReady] = useState(false);
   // Restore once, right after the saved record has loaded
@@ -325,6 +335,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
         if (Array.isArray(v.history)) setHistory(v.history);
         if ('suggestions' in v) setSuggestions(v.suggestions);
         if (Array.isArray(v.otherDegrees)) setOtherDegrees(v.otherDegrees);
+        if (v.survey && typeof v.survey === 'object') setSurvey(v.survey);
         if ('isPublic' in v) setIsPublic(v.isPublic);
         if (d.tab) setTab(d.tab);
       }
@@ -376,9 +387,17 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     if (!feedbackHistory.length && prevText) feedbackHistory.push({ text: prevText, at: record?.respondedAt || '' });
     const newText = suggestions.trim();
     if (newText && newText !== (feedbackHistory[feedbackHistory.length - 1]?.text || '')) feedbackHistory.push({ text: newText, at: nowIso });
+    const peoSurvey = needsSurvey
+      ? {
+          answers: survey,
+          completedAt: surveyDone ? record?.peoSurvey?.completedAt || nowIso : undefined,
+          updatedAt: nowIso,
+        }
+      : record?.peoSurvey;
     const next = {
       ...base,
       ...patch,
+      peoSurvey,
       feedbackHistory: feedbackHistory.length ? feedbackHistory : undefined,
       id: record?.id,
       email: currentUser.email,
@@ -451,7 +470,7 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
     },
     { id: 'education', label: 'Education', saveLabel: 'Save education', done: !!course && !!yearGraduated },
     { id: 'employment', label: 'Employment', saveLabel: 'Save employment', done: validateSafe('employment') },
-    { id: 'feedback', label: 'Feedback', saveLabel: 'Save', done: !!suggestions.trim(), optional: true },
+    { id: 'feedback', label: needsSurvey ? 'Survey & feedback' : 'Feedback', saveLabel: 'Save', done: needsSurvey ? surveyDone : !!suggestions.trim(), optional: true },
   ];
   const tabIndex = tabs.findIndex((x) => x.id === tab);
   const anyDirty = Object.values(dirty).some(Boolean);
@@ -795,16 +814,27 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
           {/* FEEDBACK */}
           {tab === 'feedback' && (
             <>
+              {needsSurvey && (
+                <Group title="Survey">
+                  <PeoSurveyForm answers={survey} onChange={setSurvey} completedAt={record?.peoSurvey?.completedAt} />
+                </Group>
+              )}
               <Group title="Suggestions">
                 <p className="text-sm text-muted-foreground mb-3">
                   {t('Your suggestions go to the Alumni Affairs Office and your program chair. They use them to improve the programs, services for alumni, and this tracer study. Earlier feedback is kept, so writing new feedback does not erase the old.')}
                 </p>
+                {needsSurvey && !surveyDone && (
+                  <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 px-3 py-2 mb-3">
+                    {t('Answer all the survey questions above first. The suggestions box opens when the survey is complete.')}
+                  </p>
+                )}
                 <Field label="Suggestions & feedback">
                   <textarea
                     rows={4}
                     value={suggestions}
                     onChange={(e) => setSuggestions(e.target.value)}
-                    className={`${input} resize-none`}
+                    disabled={needsSurvey && !surveyDone}
+                    className={`${input} resize-none disabled:opacity-60 disabled:cursor-not-allowed`}
                     placeholder={t('How can OMSU improve its programs or this tracer study?')}
                   />
                 </Field>

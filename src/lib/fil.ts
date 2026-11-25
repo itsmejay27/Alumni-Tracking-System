@@ -548,4 +548,18 @@ export const FIL: Record<string, string> = {
   Year: "Taon",
   "Employment status not answered yet": "Hindi pa nasasagot ang katayuan sa trabaho",
   "Enter the employer address": "Ilagay ang address ng employer",
+  "BSIT Program Educational Objectives (PEO) Survey": "Survey sa Program Educational Objectives (PEO) ng BSIT",
+  "Dear alumni, as a graduate of the BS Information Technology program, please answer this survey on the Program Educational Objectives. Your answers help us see how well the program prepared you for your career and improve the curriculum for future IT professionals. All responses are kept confidential and used only for academic and program evaluation.":
+    "Mahal na alumni, bilang nagtapos ng BS Information Technology, pakisagot ang survey na ito tungkol sa Program Educational Objectives. Makatutulong ang iyong mga sagot para malaman kung gaano ka inihanda ng programa sa iyong karera at para mapabuti ang kurikulum para sa mga susunod na IT professional. Lahat ng sagot ay kumpidensyal at gagamitin lamang para sa akademiko at pagsusuri ng programa.",
+  "BSIT Program Chair, Occidental Mindoro State College": "BSIT Program Chair, Occidental Mindoro State College",
+  answered: "nasagot",
+  "Survey submitted. You can still change your answers and save again.": "Naipasa na ang survey. Maaari mo pa ring baguhin ang mga sagot at i-save muli.",
+  "Number of months": "Bilang ng buwan",
+  "months (0 if hired right after graduation)": "buwan (0 kung natanggap agad pagkatapos magtapos)",
+  "Other (please specify)": "Iba pa (pakisabi)",
+  "Leave empty if none yet": "Iwanang blangko kung wala pa",
+  "Answer all the survey questions above first. The suggestions box opens when the survey is complete.": "Sagutin muna ang lahat ng tanong sa survey sa itaas. Magbubukas ang kahon ng mungkahi kapag kumpleto na ang survey.",
+  "Answer all the survey questions first, then write your suggestions": "Sagutin muna ang lahat ng tanong sa survey, saka isulat ang iyong mga mungkahi",
+  "Survey & feedback": "Survey at puna",
+  Survey: "Survey",
 };
