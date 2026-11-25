@@ -115,7 +115,7 @@ export function currentJob(r: AlumniRecord): EmploymentEntry | null {
       id: 'legacy',
       position: r.currentPosition || '',
       company: r.currentCompany || '',
-      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Private',
+      employerType: r.status === 'Self-Employed' ? 'Self-Employed / Own Business' : r.employerType || 'Not specified',
       employmentStatus: r.status === 'Self-Employed' ? 'Self-Employed' : LEGACY_STATUS[r.employmentStatus || ''] || r.employmentStatus || '',
       jobLevel: r.jobLevel || (r.employmentStatus === 'DAILY WAGE' ? 'Job Order' : 'Rank and File'),
       employerAddress: r.employerAddress,

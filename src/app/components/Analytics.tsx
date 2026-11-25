@@ -141,7 +141,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
         <Stat label="Employed" value={employed} note={`${rate}% of those who responded`} />
         <Stat label="Unemployed" value={unemployed} />
         <Stat label="Not tracked" value={notTracked} note="no employment status yet" />
-        <Stat label="Government / Private" value={`${gov} / ${priv}`} note="NGO/INGO and others shown below" />
+        <Stat label="Government / Private" value={`${gov} / ${priv}`} note={`${jobs.filter((j) => !j.employerType || j.employerType === 'Not specified').length} not specified yet`} />
         <Stat label="Response rate" value={`${responseRate}%`} note={`${responded} of ${total} updated their own record`} />
       </div>
 
@@ -287,7 +287,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
                   <th className="py-2 px-2 font-medium text-right">Government</th>
                   <th className="py-2 px-2 font-medium text-right">Private</th>
                   <th className="py-2 px-2 font-medium text-right">NGO/INGO</th>
-                  <th className="py-2 pl-2 font-medium text-right">Other</th>
+                  <th className="py-2 pl-2 font-medium text-right">Other / not specified</th>
                 </tr>
               </thead>
               <tbody>
@@ -672,7 +672,9 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
 type Slice = { name: string; value: number; color: string; people: AlumniRecord[] };
 
 // Categorical colors, checked for contrast on light and dark cards; slices also list counts in text
-const SLICE_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#6250d6', '#94a3b8'];
+const SLICE_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#6250d6', '#0f9fb5', '#c2417a', '#7a8f2a'];
+// "Unknown" kinds of answers are always grey, so they never look like a real category
+const UNKNOWN = new Set(['Not specified', 'Not answered', 'Not tracked']);
 
 function slices(records: AlumniRecord[], keyOf: (r: AlumniRecord) => string | null, order: string[]): Slice[] {
   const groups = new Map<string, AlumniRecord[]>();
@@ -682,7 +684,13 @@ function slices(records: AlumniRecord[], keyOf: (r: AlumniRecord) => string | nu
     groups.set(k, [...(groups.get(k) || []), r]);
   }
   const keys = [...order.filter((k) => groups.has(k)), ...[...groups.keys()].filter((k) => !order.includes(k))];
-  return keys.map((k, i) => ({ name: k, value: groups.get(k)!.length, color: SLICE_COLORS[i % SLICE_COLORS.length], people: groups.get(k)! }));
+  let next = 0;
+  return keys.map((k) => ({
+    name: k,
+    value: groups.get(k)!.length,
+    color: UNKNOWN.has(k) ? '#94a3b8' : SLICE_COLORS[next++ % SLICE_COLORS.length],
+    people: groups.get(k)!,
+  }));
 }
 
 function Breakdown({ records, subtitle }: { records: AlumniRecord[]; subtitle: string }) {
@@ -697,12 +705,12 @@ function Breakdown({ records, subtitle }: { records: AlumniRecord[]; subtitle: s
     {
       title: 'Type of employer',
       note: 'Employed graduates, current job',
-      data: slices(records, (r) => job(r)?.employerType || null, ['Government', 'Private', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business']),
+      data: slices(records, (r) => (job(r) ? job(r)!.employerType || 'Not specified' : null), ['Government', 'Private', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business', 'Not specified']),
     },
     {
       title: 'Kind of employment',
       note: 'Employed graduates, current job',
-      data: slices(records, (r) => job(r)?.employmentStatus || null, ['Permanent', 'Probationary', 'Contractual', 'Job Order', 'Self-Employed']),
+      data: slices(records, (r) => (job(r) ? job(r)!.employmentStatus || 'Not specified' : null), ['Permanent', 'Probationary', 'Contractual', 'Job Order', 'Self-Employed', 'Not specified']),
     },
     {
       title: 'Job related to course',

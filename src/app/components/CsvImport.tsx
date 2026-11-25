@@ -201,7 +201,8 @@ export function CsvImport({
             id: crypto.randomUUID(),
             position: r.position,
             company: r.company,
-            employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Private',
+            // The sheet may not say; don't guess "Private"
+            employerType: /gov/i.test(r.employerType) ? 'Government' : r.employerType || 'Not specified',
             employmentStatus: r.employmentType || (r.status === 'Self-Employed' ? 'Self-Employed' : ''),
             employerAddress: r.employerAddress || undefined,
             employerContact: r.employerContact || undefined,
