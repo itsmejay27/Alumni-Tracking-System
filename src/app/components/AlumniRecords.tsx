@@ -111,6 +111,43 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
     window.URL.revokeObjectURL(url);
   };
 
+  // Full backup (panel: back up the system): every table Alumni Affairs can read, as one JSON file.
+  // The database is also backed up daily by Supabase; this is an extra copy kept by the office.
+  const [backingUp, setBackingUp] = useState(false);
+  const handleBackup = async () => {
+    setBackingUp(true);
+    try {
+      const readAll = async (table: string, orderBy: string) => {
+        const rows: unknown[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from(table).select('*').order(orderBy).range(from, from + 999);
+          if (error) throw new Error(`${table}: ${error.message}`);
+          rows.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        return rows;
+      };
+      // Each table with a column that gives a stable order for paging
+      const tables: [string, string][] = [
+        ['alumni_records', 'id'], ['alumni_record_history', 'id'], ['jobs', 'id'], ['announcements', 'id'],
+        ['batch_totals', 'year_graduated'], ['site_settings', 'key'], ['profiles', 'id'],
+      ];
+      const backup: Record<string, unknown> = { createdAt: new Date().toISOString(), note: 'OMSU Alumni Track backup. Contains personal data: store it securely.' };
+      for (const [t, orderBy] of tables) backup[t] = await readAll(t, orderBy);
+      const blob = new Blob([JSON.stringify(backup, null, 1)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OMSU_Alumni_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Backup downloaded. Keep it in a safe place: it contains personal data.');
+    } catch (err) {
+      toast.error(`Backup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    setBackingUp(false);
+  };
+
   const generateCSV = (records: AlumniRecord[]) => {
     const headers = [
       'Last Name', 'Given Name', 'Middle Name', 'Email', 'Sex', 'Date of Birth',
@@ -184,6 +221,17 @@ export function AlumniRecords({ userRole }: AlumniRecordsProps) {
             <Download size={18} />
             Export CSV
           </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleBackup}
+              disabled={backingUp}
+              title="Download every record, job and announcement as one file to keep a copy"
+              className="flex items-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-muted/70 disabled:opacity-60"
+            >
+              <Download size={16} />
+              {backingUp ? 'Preparing…' : 'Full backup'}
+            </button>
+          )}
         </div>
       </div>
 
