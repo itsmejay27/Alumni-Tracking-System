@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Send, Table2, LineChart as LineIcon, CheckCircle2, UserCheck, UserX, Clock } from 'lucide-react';
 import { Pagination, usePaged } from './Pagination';
 import { toast } from 'sonner';
@@ -23,6 +23,7 @@ const METRICS: { id: Metric; label: string }[] = [
 ];
 
 const isGovernment = (t?: string) => t === 'Government';
+const isPrivate = (t?: string) => t === 'Private';
 
 interface BatchTotal {
   course: Course;
@@ -57,7 +58,7 @@ export function Analytics({ userRole }: AnalyticsProps) {
   // Response = the graduate signed in and saved their own record
   const responded = filtered.filter((r) => !!r.respondedAt).length;
   const responseRate = total ? Math.round((responded / total) * 100) : 0;
-  const priv = jobs.length - gov;
+  const priv = jobs.filter((j) => isPrivate(j.employerType)).length;
 
   // Line chart: one line per program, x = year graduated
   const chartData = useMemo(() => {
@@ -96,7 +97,9 @@ export function Analytics({ userRole }: AnalyticsProps) {
       unemployed: t - e,
       untracked: rs.length - t,
       gov: js.filter((j) => isGovernment(j.employerType)).length,
-      priv: js.filter((j) => !isGovernment(j.employerType)).length,
+      priv: js.filter((j) => isPrivate(j.employerType)).length,
+      ngo: js.filter((j) => j.employerType === 'NGO/INGO').length,
+      other: js.filter((j) => !isGovernment(j.employerType) && !isPrivate(j.employerType) && j.employerType !== 'NGO/INGO').length,
     };
   });
 
@@ -137,11 +140,13 @@ export function Analytics({ userRole }: AnalyticsProps) {
         <Stat label="Employed" value={employed} note={`${rate}% of those who responded`} />
         <Stat label="Unemployed" value={unemployed} />
         <Stat label="Not tracked" value={notTracked} note="no employment status yet" />
-        <Stat label="Government / Private" value={`${gov} / ${priv}`} note="of employed alumni" />
+        <Stat label="Government / Private" value={`${gov} / ${priv}`} note="NGO/INGO and others shown below" />
         <Stat label="Response rate" value={`${responseRate}%`} note={`${responded} of ${total} updated their own record`} />
       </div>
 
       <ResponsesPanel records={filtered} />
+
+      <Breakdown records={filtered} subtitle={`${scopeText} · ${year === 'all' ? 'all batches' : `class of ${year}`}`} />
 
       {/* Line chart */}
       <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
@@ -277,7 +282,9 @@ export function Analytics({ userRole }: AnalyticsProps) {
                   <th className="py-2 px-2 font-medium text-right">Unemployed</th>
                   <th className="py-2 px-2 font-medium text-right">Not tracked</th>
                   <th className="py-2 px-2 font-medium text-right">Government</th>
-                  <th className="py-2 pl-2 font-medium text-right">Private</th>
+                  <th className="py-2 px-2 font-medium text-right">Private</th>
+                  <th className="py-2 px-2 font-medium text-right">NGO/INGO</th>
+                  <th className="py-2 pl-2 font-medium text-right">Other</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,7 +302,9 @@ export function Analytics({ userRole }: AnalyticsProps) {
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.unemployed}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.untracked}</td>
                     <td className="py-2.5 px-2 text-right tabular-nums">{p.gov}</td>
-                    <td className="py-2.5 pl-2 text-right tabular-nums">{p.priv}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{p.priv}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{p.ngo}</td>
+                    <td className="py-2.5 pl-2 text-right tabular-nums">{p.other}</td>
                   </tr>
                 ))}
               </tbody>
@@ -621,6 +630,159 @@ function ReminderPanel({ scope }: { scope: Course | null }) {
         >
           <Send size={15} /> {sending ? 'Sending...' : 'Send reminder'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Breakdown pie charts (panel: per batch, per category) ----------------
+
+type Slice = { name: string; value: number; color: string; people: AlumniRecord[] };
+
+// Categorical colors, checked for contrast on light and dark cards; slices also list counts in text
+const SLICE_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#6250d6', '#94a3b8'];
+
+function slices(records: AlumniRecord[], keyOf: (r: AlumniRecord) => string | null, order: string[]): Slice[] {
+  const groups = new Map<string, AlumniRecord[]>();
+  for (const r of records) {
+    const k = keyOf(r);
+    if (k == null) continue;
+    groups.set(k, [...(groups.get(k) || []), r]);
+  }
+  const keys = [...order.filter((k) => groups.has(k)), ...[...groups.keys()].filter((k) => !order.includes(k))];
+  return keys.map((k, i) => ({ name: k, value: groups.get(k)!.length, color: SLICE_COLORS[i % SLICE_COLORS.length], people: groups.get(k)! }));
+}
+
+function Breakdown({ records, subtitle }: { records: AlumniRecord[]; subtitle: string }) {
+  const [open, setOpen] = useState<{ chart: string; slice: Slice } | null>(null);
+  const job = (r: AlumniRecord) => (isEmployed(r) ? currentJob(r) : null);
+  const charts: { title: string; note: string; data: Slice[] }[] = [
+    {
+      title: 'Employment status',
+      note: 'All graduates on file',
+      data: slices(records, (r) => (r.status === 'Not Tracked' ? 'Not tracked' : r.status), ['Employed', 'Self-Employed', 'Unemployed', 'Not tracked']),
+    },
+    {
+      title: 'Type of employer',
+      note: 'Employed graduates, current job',
+      data: slices(records, (r) => job(r)?.employerType || null, ['Government', 'Private', 'Semi-Private', 'NGO/INGO', 'Self-Employed / Own Business']),
+    },
+    {
+      title: 'Kind of employment',
+      note: 'Employed graduates, current job',
+      data: slices(records, (r) => job(r)?.employmentStatus || null, ['Permanent', 'Probationary', 'Contractual', 'Job Order', 'Self-Employed']),
+    },
+    {
+      title: 'Job related to course',
+      note: 'Employed graduates, current job',
+      data: slices(records, (r) => (job(r) ? job(r)!.relatedToCourse || 'Not answered' : null), ['Yes', 'No', 'Not answered']),
+    },
+  ];
+
+  return (
+    <div className="bg-card rounded-2xl p-5 sm:p-6 shadow-sm">
+      <h3 className="font-semibold">Breakdown by category</h3>
+      <p className="text-xs text-muted-foreground mt-0.5 mb-5">{subtitle}. Click a slice or a row to see who is in it.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6">
+        {charts.map((c) => {
+          const total = c.data.reduce((n, d) => n + d.value, 0);
+          return (
+            <div key={c.title} className="min-w-0">
+              <p className="text-sm font-semibold">{c.title}</p>
+              <p className="text-xs text-muted-foreground">{c.note} · {total} {total === 1 ? 'graduate' : 'graduates'}</p>
+              {total === 0 ? (
+                <p className="text-sm text-muted-foreground py-10 text-center">No data yet</p>
+              ) : (
+                <>
+                  <div className="h-[170px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={c.data}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius="55%"
+                          outerRadius="90%"
+                          paddingAngle={c.data.length > 1 ? 2 : 0}
+                          stroke="var(--card)"
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                          onClick={(d: any) => d?.payload && setOpen({ chart: c.title, slice: d.payload as Slice })}
+                          className="cursor-pointer"
+                        >
+                          {c.data.map((d) => (
+                            <Cell key={d.name} fill={d.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number, n: string) => [`${v} (${Math.round((v / total) * 100)}%)`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ul className="mt-2 space-y-0.5">
+                    {c.data.map((d) => (
+                      <li key={d.name}>
+                        <button
+                          type="button"
+                          onClick={() => setOpen({ chart: c.title, slice: d })}
+                          className="w-full flex items-center gap-2 text-xs rounded-md px-1.5 py-1 hover:bg-muted text-left"
+                        >
+                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
+                          <span className="flex-1 min-w-0 truncate">{d.name}</span>
+                          <span className="tabular-nums font-semibold">{d.value}</span>
+                          <span className="tabular-nums text-muted-foreground w-10 text-right">{Math.round((d.value / total) * 100)}%</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {open && <SliceList chart={open.chart} slice={open.slice} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+function SliceList({ chart, slice, onClose }: { chart: string; slice: Slice; onClose: () => void }) {
+  const people = [...slice.people].sort((a, b) => a.lastName.localeCompare(b.lastName) || a.givenName.localeCompare(b.givenName));
+  const paged = usePaged(people, 12);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${chart}: ${slice.name}`}>
+      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted-foreground">{chart}</p>
+            <h3 className="font-semibold text-lg">
+              {slice.name} · {slice.value} {slice.value === 1 ? 'graduate' : 'graduates'}
+            </h3>
+          </div>
+          <button type="button" onClick={onClose} className="px-2 py-1 rounded-lg text-sm text-muted-foreground hover:bg-muted" aria-label="Close">
+            Close
+          </button>
+        </div>
+        <ul className="divide-y divide-border">
+          {paged.pageItems.map((r) => {
+            const j = currentJob(r);
+            return (
+              <li key={r.id} className="py-2 text-sm flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="font-medium">{r.lastName}, {r.givenName}</span>
+                  {j && isEmployed(r) && <span className="block text-xs text-muted-foreground truncate">{[j.position, j.company].filter(Boolean).join(' · ')}</span>}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">{r.course} · {r.yearGraduated || r.batch}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <Pagination {...paged} label="graduates" />
       </div>
     </div>
   );

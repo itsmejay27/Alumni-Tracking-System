@@ -18,6 +18,8 @@ export interface EmploymentEntry {
   /** Proof of employment in the private 'employment-proofs' storage (contract, company ID, permit) */
   proofPath?: string;
   proofName?: string;
+  /** Answer to "Is this job related to your course?" */
+  relatedToCourse?: 'Yes' | 'No';
   startDate?: string; // YYYY-MM
   endDate?: string | null; // YYYY-MM, empty = current job
   recordedAt: string; // ISO date the entry was added
@@ -96,6 +98,9 @@ const LEGACY_STATUS: Record<string, string> = { PERMANENT: 'Permanent', CONTRACT
 /** The alumnus's current job, from the newest history entry or the older single-job fields. */
 export function currentJob(r: AlumniRecord): EmploymentEntry | null {
   const current = (r.employmentHistory || []).filter((e) => !e.endDate);
+  // Two or more current jobs: reports count the permanent one (panel), else the newest
+  const permanent = current.filter((e) => e.employmentStatus === 'Permanent');
+  if (permanent.length) return permanent[permanent.length - 1];
   if (current.length) return current[current.length - 1];
   if (isEmployed(r) && (r.currentPosition || r.currentCompany)) {
     return {

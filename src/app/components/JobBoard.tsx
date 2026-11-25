@@ -223,7 +223,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
       {showPostForm && (
         <JobPostingForm
           posterName={posterName}
-          needsApproval={!isAffairs}
+          needsApproval={userRole === 'alumni'}
           defaultProgram={courseScopeForRole(userRole) || myProgram || ''}
           initial={postPrefill}
           onClose={() => { setShowPostForm(false); setPostPrefill(undefined); }}
@@ -338,7 +338,7 @@ export function JobBoard({ userRole, userId, posterName }: JobBoardProps) {
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }`}
           >
-            {t('Internship')}
+            {t('Trainee')}
           </button>
         </div>
       </div>
@@ -671,7 +671,7 @@ function JobTypeBadge({ type }: { type: JobPosting['type'] }) {
     'full-time': 'Full-time',
     'part-time': 'Part-time',
     'contract': 'Contract',
-    'internship': 'Internship',
+    'internship': 'Trainee',
   };
 
   return (
@@ -863,7 +863,7 @@ function JobPostingForm({
               <option value="full-time">{t('Full-time')}</option>
               <option value="part-time">{t('Part-time')}</option>
               <option value="contract">{t('Contract')}</option>
-              <option value="internship">{t('Internship')}</option>
+              <option value="internship">{t('Trainee')}</option>
             </select>
           </div>
 

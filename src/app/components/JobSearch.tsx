@@ -113,7 +113,7 @@ export function JobSearch({
               <option value="full-time">{t('Full-time')}</option>
               <option value="part-time">{t('Part-time')}</option>
               <option value="contract">{t('Contract')}</option>
-              <option value="internship">{t('Internship')}</option>
+              <option value="internship">{t('Trainee')}</option>
             </select>
           </label>
         </div>

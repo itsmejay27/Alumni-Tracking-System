@@ -14,7 +14,6 @@ import {
   Clock,
   Megaphone,
   Briefcase,
-  UserX,
   Palette,
   Sun,
   Moon,
@@ -737,7 +736,7 @@ function SignInActivityCard() {
 // ---------------- Notifications ----------------
 
 const JOB_TYPES = ['full-time', 'part-time', 'contract', 'internship'] as const;
-const JOB_TYPE_LABEL: Record<string, string> = { 'full-time': 'Full-time', 'part-time': 'Part-time', contract: 'Contract', internship: 'Internship' };
+const JOB_TYPE_LABEL: Record<string, string> = { 'full-time': 'Full-time', 'part-time': 'Part-time', contract: 'Contract', internship: 'Trainee' };
 
 interface NotifyPrefs {
   email_jobs: boolean;
@@ -974,19 +973,16 @@ function AppearancePanel() {
 
 function PrivacyPanel({ currentUser, isAlumni, onOpenProfile }: { currentUser: CurrentUser | null; isAlumni: boolean; onOpenProfile?: () => void }) {
   const t = useT();
-  const contact = useContactInfo();
   const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null);
-  const deletionMail = `mailto:${contact.email}?subject=${encodeURIComponent('Request to delete my OMSU Alumni Track account')}&body=${encodeURIComponent(
-    `Hello Alumni Affairs,\n\nI would like my OMSU Alumni Track account and personal data deleted.\n\nName: ${`${currentUser?.givenName || ''} ${currentUser?.lastName || ''}`.trim()}\nAccount email: ${currentUser?.email || ''}\n\nThank you.`,
-  )}`;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+    <div className="grid grid-cols-1 gap-6 items-stretch max-w-3xl">
       <Card icon={<FileText size={18} />} title={t('Your privacy')} sub={t('Your rights under the Data Privacy Act of 2012 (RA 10173).')}>
         <ul className="text-sm space-y-2 list-disc pl-5 text-muted-foreground mb-5">
           <li>{t('Only Alumni Affairs and your program chair can see your tracer record.')}</li>
           <li>{t('Results are published in summary form only.')}</li>
           <li>{t('You can correct your details any time in My Alumni Profile.')}</li>
+          <li>{t('To have your data removed, contact the Alumni Affairs Office.')}</li>
         </ul>
         <div className="flex flex-wrap gap-2 mt-auto">
           <button type="button" onClick={() => setLegal('privacy')} className={btnSoft}>
@@ -1000,16 +996,6 @@ function PrivacyPanel({ currentUser, isAlumni, onOpenProfile }: { currentUser: C
               {t('My Alumni Profile')} <ArrowRight size={15} />
             </button>
           )}
-        </div>
-      </Card>
-      <Card icon={<UserX size={18} />} title={t('Delete my account')} sub={t('Send a request to the Alumni Affairs Office. They will confirm before anything is removed.')}>
-        <p className="text-sm text-muted-foreground mb-5">
-          {t('Deleting your account removes your sign-in. Alumni Affairs may keep summary statistics that do not identify you.')}
-        </p>
-        <div className="flex justify-end mt-auto">
-          <a href={deletionMail} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100">
-            <Mail size={16} /> {t('Request deletion')}
-          </a>
         </div>
       </Card>
       {legal && <LegalModal doc={legal} onClose={() => setLegal(null)} />}

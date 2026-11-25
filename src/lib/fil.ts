@@ -512,4 +512,6 @@ export const FIL: Record<string, string> = {
     "Pangalan lang ang tumugma sa rekord ng nagtapos, kaya susuriin ng Alumni Affairs kung ikaw nga ito. Habang hinihintay, nakatago ang mga naunang detalye. Punan ang iyong profile sa ibaba; mase-save ang iyong mga sagot.",
   "Your program and year come from the official list of graduates. If they are wrong, ask your program chair or the Alumni Affairs Office to correct them.":
     "Ang iyong programa at taon ay mula sa opisyal na listahan ng mga nagtapos. Kung mali, hilingin sa iyong program chair o sa Alumni Affairs Office na itama ito.",
+  Trainee: 'Trainee',
+  "To have your data removed, contact the Alumni Affairs Office.": "Para ipatanggal ang iyong datos, makipag-ugnayan sa Alumni Affairs Office.",
 };

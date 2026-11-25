@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { RequiredLabel } from './RequiredMark';
 import { useT } from '@/lib/preferences';
-import { mdy, todayIso } from '@/lib/dates';
+import { mdy, todayIso, serviceLength, formatMonths } from '@/lib/dates';
+import { capitalizeWords } from '@/lib/text';
 import {
   Save,
   Trash2,
@@ -562,9 +563,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
             <>
               <Group title="Name">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} className={input} /></Field>
-                  <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} /></Field>
-                  <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} /></Field>
+                  <Field label="First name *"><input required value={givenName} onChange={(e) => setGivenName(e.target.value)} onBlur={(e) => setGivenName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label="Middle name"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} onBlur={(e) => setMiddleName(capitalizeWords(e.target.value))} className={input} /></Field>
+                  <Field label="Last name *"><input required value={lastName} onChange={(e) => setLastName(e.target.value)} onBlur={(e) => setLastName(capitalizeWords(e.target.value))} className={input} /></Field>
                 </div>
               </Group>
 
@@ -615,9 +616,9 @@ export function AlumniProfile({ currentUser, onUpdateProfile, onSaved, gate }: A
 
               <Group title="Parents">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Father's name *"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} className={input} placeholder={t('Full name')} /></Field>
+                  <Field label="Father's name *"><input value={fatherName} onChange={(e) => setFatherName(e.target.value)} onBlur={(e) => setFatherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full name')} /></Field>
                   <Field label="Father's contact number *"><PhoneInput value={fatherContact} onChange={setFatherContact} className={input} /></Field>
-                  <Field label="Mother's name *"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} className={input} placeholder={t('Full maiden name')} /></Field>
+                  <Field label="Mother's name *"><input value={motherName} onChange={(e) => setMotherName(e.target.value)} onBlur={(e) => setMotherName(capitalizeWords(e.target.value))} className={input} placeholder={t('Full maiden name')} /></Field>
                   <Field label="Mother's contact number *"><PhoneInput value={motherContact} onChange={setMotherContact} className={input} /></Field>
                 </div>
               </Group>
@@ -898,11 +899,32 @@ function JobModal({
       toast.error(t('Enter the position and the company'));
       return;
     }
+    if (isNew && !draft.startDate) {
+      toast.error(t('Enter the date you started this job'));
+      return;
+    }
+    if (draft.startDate && draft.startDate > todayIso()) {
+      toast.error(t('The start date cannot be in the future'));
+      return;
+    }
+    if (draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
+      toast.error(t('The end date must be after the start date'));
+      return;
+    }
+    if (isNew && !draft.relatedToCourse) {
+      toast.error(t('Answer whether this job is related to your course'));
+      return;
+    }
     if (!draft.endDate && !draft.proofPath) {
       toast.error(t('Attach a proof of employment (contract, company ID or business permit)'));
       return;
     }
-    onSave({ ...draft, position: draft.position.trim(), company: draft.company.trim() });
+    onSave({
+      ...draft,
+      position: capitalizeWords(draft.position, true),
+      company: draft.company.trim(),
+      lengthOfService: serviceLength(draft.startDate, draft.endDate) || draft.lengthOfService,
+    });
   };
 
   // Proof of employment goes to private storage; only the graduate and their staff can open it
@@ -973,7 +995,27 @@ function JobModal({
               placeholder={t('Phone or landline')}
             />
           </Field>
-          <Field label="Length of service"><input disabled={locked} value={draft.lengthOfService || ''} onChange={(e) => set({ lengthOfService: e.target.value })} className={input} placeholder={t('e.g. 1 year 3 months')} /></Field>
+          <Field label={isNew ? 'Date started *' : 'Date started'}>
+            <input type="date" disabled={locked} max={todayIso()} value={draft.startDate || ''} onChange={(e) => set({ startDate: e.target.value })} className={input} />
+          </Field>
+          <Field label="Date ended">
+            <input type="date" disabled={locked} min={draft.startDate || undefined} max={todayIso()} value={draft.endDate || ''} onChange={(e) => set({ endDate: e.target.value || null })} className={input} />
+            <span className="block text-[11px] text-muted-foreground mt-1">{t('Leave empty if you still work here.')}</span>
+          </Field>
+          <Field label="Length of service">
+            {draft.startDate ? (
+              <p className={`${input} bg-muted/40`} aria-live="polite">{t(serviceLength(draft.startDate, draft.endDate)) || '—'}</p>
+            ) : (
+              <ServiceInput disabled={locked} value={draft.lengthOfService || ''} onChange={(v) => set({ lengthOfService: v })} />
+            )}
+          </Field>
+          <Field label={isNew ? 'Is this job related to your course? *' : 'Is this job related to your course?'}>
+            <select disabled={locked && !!entry.relatedToCourse} value={draft.relatedToCourse || ''} onChange={(e) => set({ relatedToCourse: (e.target.value || undefined) as EmploymentEntry['relatedToCourse'] })} className={input}>
+              <option value="">{t('Choose...')}</option>
+              <option value="Yes">{t('Yes')}</option>
+              <option value="No">{t('No')}</option>
+            </select>
+          </Field>
           <div className="md:col-span-2">
             <Field label="Job description">
               <textarea rows={3} disabled={locked} value={draft.jobDescription || ''} onChange={(e) => set({ jobDescription: e.target.value })} className={`${input} resize-none`} />
@@ -1011,7 +1053,7 @@ function JobModal({
             {!isNew && !entry.endDate && (
               <button
                 type="button"
-                onClick={() => onSave({ ...draft, endDate: todayIso() })}
+                onClick={() => onSave({ ...draft, endDate: todayIso(), lengthOfService: serviceLength(draft.startDate, todayIso()) || draft.lengthOfService })}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50"
               >
                 {t('I no longer work here')}
@@ -1026,6 +1068,38 @@ function JobModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Length of service for jobs without a start date: a number, and the system adds "years" or "months". */
+function ServiceInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const t = useT();
+  const parsed = value.match(/^(\d+)\s*(year|month)/i);
+  const [num, setNum] = useState(parsed ? parsed[1] : '');
+  const [unit, setUnit] = useState<'years' | 'months'>(parsed && /month/i.test(parsed[2]) ? 'months' : 'years');
+  const update = (n: string, u: 'years' | 'months') => {
+    const clean = n.replace(/\D/g, '').slice(0, 3);
+    setNum(clean);
+    setUnit(u);
+    onChange(clean ? formatMonths(u === 'years' ? Number(clean) * 12 : Number(clean)) : '');
+  };
+  return (
+    <div className="flex gap-2">
+      <input
+        inputMode="numeric"
+        pattern="[0-9]*"
+        disabled={disabled}
+        value={num}
+        onChange={(e) => update(e.target.value, unit)}
+        className={`${input} w-24`}
+        aria-label={t('Length of service (number)')}
+        placeholder="0"
+      />
+      <select disabled={disabled} value={unit} onChange={(e) => update(num, e.target.value as 'years' | 'months')} className={input} aria-label={t('Years or months')}>
+        <option value="years">{t('years')}</option>
+        <option value="months">{t('months')}</option>
+      </select>
     </div>
   );
 }
